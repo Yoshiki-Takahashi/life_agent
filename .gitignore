@@ -7,6 +7,7 @@ local.properties
 
 # Log/OS Files
 *.log
+.DS_Store
 
 # Android Studio generated files and folders
 captures/
@@ -32,3 +33,17 @@ google-services.json
 
 # Android Profiling
 *.hprof
+
+# Python
+.venv/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.kotlin/
+
+# Environment and secrets
+.env
+.env.*
+!.env.example

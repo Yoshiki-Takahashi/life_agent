@@ -11,6 +11,7 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 - `docs/system-architecture.md`: サービス責務、連携、セキュリティ境界
 - `docs/development-infrastructure.md`: 開発環境、クラウドリソース、コスト管理
 - `docs/development-guide.md`: 開発順序、各段階の完成状態、サービス分離基準
+- `docs/coding-standards.md`: 実装時の簡潔さ、構成、品質ルール
 - `docs/decisions/`: 採用済みの技術判断
 - `docs/backlog/`: Sprintごとの作業と受け入れ条件
 
@@ -37,6 +38,13 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 - 変更に対応するテストを追加し、関連するlint・型検査・テストを実行する。
 - AI機能には「読書」「アプリ開発」「筋トレ」の回帰評価を維持する。
 - APIや設計判断を変更した場合は、同じ変更で`docs/`も更新する。
+- 実装前に`docs/coding-standards.md`を読み、不要な抽象化を追加しない。
+
+## 現在の標準コマンド
+
+- Backend: `cd backend/services/core-api && uv run ruff check . && uv run pytest`
+- Android: `cd android && ./gradlew testDebugUnitTest assembleDebug`
+- PostgreSQL: `cd backend && docker compose up -d`
 
 ## コード配置
 

@@ -1,6 +1,21 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
+}
+
+fun apiBaseUrl(environment: String): String {
+    val configFile = rootProject.file("config/api-$environment.properties")
+    val properties = Properties().apply {
+        configFile.inputStream().use(::load)
+    }
+    return requireNotNull(properties.getProperty("coreApiBaseUrl")) {
+        "coreApiBaseUrl is required in ${configFile.path}"
+    }.also { url ->
+        require(url.endsWith("/")) { "coreApiBaseUrl must end with /" }
+    }
 }
 
 android {
@@ -20,7 +35,11 @@ android {
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
+        }
         release {
+            buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("release")}\"")
             optimization {
                 enable = false
             }
@@ -31,6 +50,7 @@ android {
         targetCompatibility = JavaVersion.VERSION_11
     }
     buildFeatures {
+        buildConfig = true
         compose = true
     }
 }
@@ -44,7 +64,13 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.navigation.compose)
+    implementation(libs.kotlinx.serialization.json)
+    implementation(libs.retrofit)
+    implementation(libs.retrofit.kotlinx.serialization)
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     androidTestImplementation(libs.androidx.espresso.core)

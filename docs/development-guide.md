@@ -34,7 +34,11 @@ PostgreSQL
 
 ## 開発ロードマップ
 
+現在、Weekend 1まで実装済みです。次の作業はWeekend 2のFake計画生成です。
+
 ### Weekend 0: 開発基盤
+
+**状態:** 完了
 
 **完成状態:** AndroidとCore APIがそれぞれ起動し、Backendのhealth checkを確認できる。
 
@@ -46,6 +50,8 @@ PostgreSQL
 この段階ではDB、Firebase、OpenAIを接続しません。
 
 ### Weekend 1: 最小Goal管理
+
+**状態:** 完了
 
 **完成状態:** AndroidでGoalを入力し、保存されたGoal詳細を表示できる。
 

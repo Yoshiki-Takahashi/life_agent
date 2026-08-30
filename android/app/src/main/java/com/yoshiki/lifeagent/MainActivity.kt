@@ -19,6 +19,7 @@ import androidx.navigation.navArgument
 import com.yoshiki.lifeagent.data.Network
 import com.yoshiki.lifeagent.ui.GoalDetailScreen
 import com.yoshiki.lifeagent.ui.GoalFormScreen
+import com.yoshiki.lifeagent.ui.GoalPreviewScreen
 import com.yoshiki.lifeagent.ui.GoalViewModel
 import com.yoshiki.lifeagent.ui.theme.LifeAgentTheme
 
@@ -43,13 +44,33 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
+                LaunchedEffect(state.navigateToPreview) {
+                    if (state.navigateToPreview) {
+                        navController.navigate("preview")
+                        viewModel.consumePreviewNavigation()
+                    }
+                }
+
                 NavHost(navController = navController, startDestination = "create") {
                     composable("create") {
                         GoalFormScreen(
                             state = state,
                             onTitleChange = viewModel::updateTitle,
                             onDescriptionChange = viewModel::updateDescription,
-                            onSave = viewModel::createGoal,
+                            onTargetDateChange = viewModel::updateTargetDate,
+                            onPreview = viewModel::previewGoal,
+                        )
+                    }
+                    composable("preview") {
+                        GoalPreviewScreen(
+                            state = state,
+                            onBack = navController::navigateUp,
+                            onMetricNameChange = viewModel::updateMetricName,
+                            onMetricValueChange = viewModel::updateMetricValue,
+                            onMetricUnitChange = viewModel::updateMetricUnit,
+                            onMilestoneTitleChange = viewModel::updateMilestoneTitle,
+                            onMilestoneDateChange = viewModel::updateMilestoneDate,
+                            onConfirm = viewModel::confirmGoal,
                         )
                     }
                     composable(

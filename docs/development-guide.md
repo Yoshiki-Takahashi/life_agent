@@ -34,7 +34,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-現在、Weekend 1まで実装済みです。次の作業はWeekend 2のFake計画生成です。
+現在、Weekend 2まで実装済みです。次の作業はWeekend 3の独立Goal Plannerです。
 
 ### Weekend 0: 開発基盤
 
@@ -63,6 +63,8 @@ PostgreSQL
 Metric、Milestone、AI、ログインは対象外です。
 
 ### Weekend 2: Fake計画生成による最小製品
+
+**状態:** 完了
 
 **完成状態:** Goal入力からMetric・Milestone生成、確認、保存、表示まで一周できる。
 

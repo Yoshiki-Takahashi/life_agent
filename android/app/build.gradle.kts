@@ -1,7 +1,21 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+}
+
+fun apiBaseUrl(environment: String): String {
+    val configFile = rootProject.file("config/api-$environment.properties")
+    val properties = Properties().apply {
+        configFile.inputStream().use(::load)
+    }
+    return requireNotNull(properties.getProperty("coreApiBaseUrl")) {
+        "coreApiBaseUrl is required in ${configFile.path}"
+    }.also { url ->
+        require(url.endsWith("/")) { "coreApiBaseUrl must end with /" }
+    }
 }
 
 android {
@@ -18,11 +32,14 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        buildConfigField("String", "CORE_API_BASE_URL", "\"http://10.0.2.2:8000/\"")
     }
 
     buildTypes {
+        debug {
+            buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
+        }
         release {
+            buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("release")}\"")
             optimization {
                 enable = false
             }

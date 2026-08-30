@@ -63,6 +63,8 @@ Cloud SQLはCPU、メモリ、ストレージの継続費用が発生するた�
 3. **Cloud Integration:** Cloud Run、Cloud SQL、Firebase Auth、実OpenAIを接続
 4. **Production:** 可用性、バックアップ、監視、セキュリティを再評価して本番構成を決定
 
+AndroidのCore API接続先は、`android/config/api-debug.properties`と`api-release.properties`でビルド種別ごとに管理します。debugはEmulatorからローカルFastAPIへ、releaseはCloud Runへ接続します。Cloud Run作成後にrelease設定を発行済みHTTPS URLへ更新します。APIキーやDB接続情報はAndroidへ含めません。
+
 ## コスト管理ルール
 
 - GCPの予算アラートを低額で設定する。予算アラートは自動的な利用停止ではない点に注意する。

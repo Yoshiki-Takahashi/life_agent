@@ -33,8 +33,18 @@ uv run ruff format --check .
 uv run pytest
 ```
 
+PostgreSQLとCore APIを起動した状態で、リポジトリルートからWeekend 2のE2Eを実行できます。
+
+```bash
+cd backend/services/core-api
+CORE_API_URL=http://127.0.0.1:8000 uv run pytest ../../../tests/e2e
+```
+
 公開API:
 
 - `GET /health`
-- `POST /api/v1/goals`
+- `POST /api/v1/goals/preview`
+- `POST /api/v1/goals/confirm`
 - `GET /api/v1/goals/{goal_id}`
+
+`preview`はCore API内の決定論的Fake Plannerを呼び、DBへ保存せずに計画案を返します。`confirm`は編集済みのMetricとMilestoneを再検証し、Goalと同じTransactionで保存します。

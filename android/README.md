@@ -6,6 +6,8 @@ Kotlin + Jetpack ComposeによるLifeAgentクライアントを配置します�
 
 Backendをポート8000で起動してから、Android StudioでdebugアプリをEmulatorへ実行します。Emulatorは`config/api-debug.properties`に定義したURLでMac上のCore APIへ接続します。
 
+アプリではGoalのタイトル、説明、期限を入力してFake計画を生成し、MetricとMilestoneを編集・確定して詳細を表示できます。プレビューは保存されず、「この計画で保存する」を選んだ時だけBackendへ保存されます。
+
 ```bash
 cd android
 ./gradlew testDebugUnitTest assembleDebug

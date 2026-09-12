@@ -11,6 +11,17 @@ data class Goal(
     val milestones: List<Milestone>,
 )
 
+data class GoalSummary(
+    val id: String,
+    val title: String,
+    val targetDate: String,
+    val status: String,
+    val metricCount: Int,
+    val milestoneCount: Int,
+    val createdAt: String,
+    val updatedAt: String,
+)
+
 data class GoalPlan(
     val title: String,
     val description: String?,

@@ -117,3 +117,14 @@ class GoalResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class GoalSummary(BaseModel):
+    id: uuid.UUID
+    title: str
+    target_date: date
+    status: GoalStatus
+    metric_count: int
+    milestone_count: int
+    created_at: datetime
+    updated_at: datetime

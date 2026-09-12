@@ -12,7 +12,10 @@ def api_request(method: str, path: str, payload: dict[str, Any] | None = None) -
     request = Request(
         f"{CORE_API_URL}{path}",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer weekend-2-e2e-user",
+        },
         method=method,
     )
     with urlopen(request) as response:

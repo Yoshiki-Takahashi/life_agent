@@ -18,7 +18,10 @@ def api_request(
     request = Request(
         f"{base_url}{path}",
         data=body,
-        headers={"Content-Type": "application/json"},
+        headers={
+            "Content-Type": "application/json",
+            "Authorization": "Bearer weekend-3-e2e-user",
+        },
         method=method,
     )
     with urlopen(request) as response:

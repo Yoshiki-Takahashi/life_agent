@@ -16,7 +16,13 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.google.firebase.FirebaseApp
+import com.google.firebase.FirebaseOptions
+import com.google.firebase.auth.FirebaseAuth
+import com.yoshiki.lifeagent.data.FirebaseAuthRepository
 import com.yoshiki.lifeagent.data.Network
+import com.yoshiki.lifeagent.ui.AuthScreen
+import com.yoshiki.lifeagent.ui.AuthViewModel
 import com.yoshiki.lifeagent.ui.GoalDetailScreen
 import com.yoshiki.lifeagent.ui.GoalFormScreen
 import com.yoshiki.lifeagent.ui.GoalPreviewScreen
@@ -28,14 +34,37 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         requestLocalNetworkAccessForDebug()
+        initializeFirebase()
         setContent {
             LifeAgentTheme {
+                val authRepository = remember { FirebaseAuthRepository(FirebaseAuth.getInstance()) }
+                val authViewModel: AuthViewModel = viewModel(
+                    factory = AuthViewModel.factory(authRepository)
+                )
+                val authState by authViewModel.uiState.collectAsState()
                 val repository = remember {
-                    Network.createGoalRepository(BuildConfig.CORE_API_BASE_URL)
+                    Network.createGoalRepository(
+                        BuildConfig.CORE_API_BASE_URL,
+                        authRepository::idToken,
+                    )
                 }
-                val viewModel: GoalViewModel = viewModel(factory = GoalViewModel.factory(repository))
+                val viewModel: GoalViewModel = viewModel(
+                    key = "goals-${authState.user?.uid.orEmpty()}",
+                    factory = GoalViewModel.factory(repository),
+                )
                 val state by viewModel.uiState.collectAsState()
                 val navController = rememberNavController()
+
+                if (authState.user == null) {
+                    AuthScreen(
+                        state = authState,
+                        onEmailChange = authViewModel::updateEmail,
+                        onPasswordChange = authViewModel::updatePassword,
+                        onSignIn = authViewModel::signIn,
+                        onCreateAccount = authViewModel::createAccount,
+                    )
+                    return@LifeAgentTheme
+                }
 
                 LaunchedEffect(state.navigationGoalId) {
                     state.navigationGoalId?.let { goalId ->
@@ -59,6 +88,7 @@ class MainActivity : ComponentActivity() {
                             onDescriptionChange = viewModel::updateDescription,
                             onTargetDateChange = viewModel::updateTargetDate,
                             onPreview = viewModel::previewGoal,
+                            onSignOut = authViewModel::signOut,
                         )
                     }
                     composable("preview") {
@@ -83,6 +113,22 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    private fun initializeFirebase() {
+        if (FirebaseApp.getApps(this).isEmpty()) {
+            FirebaseApp.initializeApp(
+                this,
+                FirebaseOptions.Builder()
+                    .setProjectId(BuildConfig.FIREBASE_PROJECT_ID)
+                    .setApiKey(BuildConfig.FIREBASE_API_KEY)
+                    .setApplicationId(BuildConfig.FIREBASE_APPLICATION_ID)
+                    .build(),
+            )
+        }
+        if (BuildConfig.USE_FIREBASE_AUTH_EMULATOR) {
+            FirebaseAuth.getInstance().useEmulator("10.0.2.2", 9099)
         }
     }
 

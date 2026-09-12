@@ -28,6 +28,7 @@ class Goal(Base):
     __tablename__ = "goals"
 
     id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    owner_id: Mapped[str] = mapped_column(String(128), index=True)
     title: Mapped[str] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     target_date: Mapped[date] = mapped_column(Date)

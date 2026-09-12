@@ -22,6 +22,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import com.yoshiki.lifeagent.data.Goal
 
@@ -33,8 +34,16 @@ fun GoalFormScreen(
     onDescriptionChange: (String) -> Unit,
     onTargetDateChange: (String) -> Unit,
     onPreview: () -> Unit,
+    onSignOut: () -> Unit,
 ) {
-    Scaffold(topBar = { TopAppBar(title = { Text("LifeAgent") }) }) { padding ->
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text("LifeAgent") },
+                actions = { TextButton(onClick = onSignOut) { Text("ログアウト") } },
+            )
+        }
+    ) { padding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -80,6 +89,60 @@ fun GoalFormScreen(
             ) {
                 if (state.isPreviewing) CircularProgressIndicator() else Text("計画を作る")
             }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun AuthScreen(
+    state: AuthUiState,
+    onEmailChange: (String) -> Unit,
+    onPasswordChange: (String) -> Unit,
+    onSignIn: () -> Unit,
+    onCreateAccount: () -> Unit,
+) {
+    Scaffold(topBar = { TopAppBar(title = { Text("LifeAgent") }) }) { padding ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp, Alignment.CenterVertically),
+        ) {
+            Text("ログイン", style = MaterialTheme.typography.headlineMedium)
+            Text("自分のGoalを安全に管理するためにログインしてください")
+            OutlinedTextField(
+                value = state.email,
+                onValueChange = onEmailChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("メールアドレス") },
+                keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Email),
+                enabled = !state.isLoading,
+                singleLine = true,
+            )
+            OutlinedTextField(
+                value = state.password,
+                onValueChange = onPasswordChange,
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("パスワード") },
+                visualTransformation = PasswordVisualTransformation(),
+                enabled = !state.isLoading,
+                singleLine = true,
+            )
+            state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+            Button(
+                onClick = onSignIn,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.isLoading,
+            ) {
+                if (state.isLoading) CircularProgressIndicator() else Text("ログイン")
+            }
+            TextButton(
+                onClick = onCreateAccount,
+                modifier = Modifier.fillMaxWidth(),
+                enabled = !state.isLoading,
+            ) { Text("新しいアカウントを作る") }
         }
     }
 }

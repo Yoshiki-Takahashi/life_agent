@@ -34,7 +34,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-Weekend 3.1まで実装・検証済みです。次の作業はWeekend 4の認証です。
+Weekend 4まで実装・検証済みです。次の作業はWeekend 5のGCP開発環境です。
 
 ### Weekend 0: 開発基盤
 
@@ -104,6 +104,8 @@ Metric、Milestone、AI、ログインは対象外です。
 
 ### Weekend 4: 認証
 
+**状態:** 完了
+
 **完成状態:** ログインしたユーザーだけが、自分のGoalを操作できる。
 
 - Firebase AuthenticationをAndroidへ追加する。
@@ -111,7 +113,7 @@ Metric、Milestone、AI、ログインは対象外です。
 - 全データへ所有者IDを追加する。
 - 他ユーザーのGoalを取得できないテストを追加する。
 
-電話番号認証は使わず、Googleまたはメール認証から開始します。
+最初はメールアドレスとパスワードで開始し、電話番号認証とGoogleログインは後続にします。
 
 ### Weekend 5: GCP開発環境
 

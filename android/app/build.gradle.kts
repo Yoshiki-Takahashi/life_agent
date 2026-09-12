@@ -18,6 +18,11 @@ fun apiBaseUrl(environment: String): String {
     }
 }
 
+fun authProperties(environment: String): Properties {
+    val configFile = rootProject.file("config/auth-$environment.properties")
+    return Properties().apply { configFile.inputStream().use(::load) }
+}
+
 android {
     namespace = "com.yoshiki.lifeagent"
     compileSdk {
@@ -37,9 +42,17 @@ android {
     buildTypes {
         debug {
             buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
+            authProperties("debug").forEach { key, value ->
+                buildConfigField("String", key.toString(), "\"$value\"")
+            }
+            buildConfigField("boolean", "USE_FIREBASE_AUTH_EMULATOR", "true")
         }
         release {
             buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("release")}\"")
+            authProperties("release").forEach { key, value ->
+                buildConfigField("String", key.toString(), "\"$value\"")
+            }
+            buildConfigField("boolean", "USE_FIREBASE_AUTH_EMULATOR", "false")
             optimization {
                 enable = false
             }
@@ -56,6 +69,8 @@ android {
 }
 
 dependencies {
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)
@@ -67,6 +82,7 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(libs.androidx.navigation.compose)
     implementation(libs.kotlinx.serialization.json)
+    implementation(libs.kotlinx.coroutines.play.services)
     implementation(libs.retrofit)
     implementation(libs.retrofit.kotlinx.serialization)
     testImplementation(libs.junit)

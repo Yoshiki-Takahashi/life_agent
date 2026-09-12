@@ -24,6 +24,7 @@ DATABASE_URL=postgresql+psycopg://lifeagent:lifeagent_e2e@127.0.0.1:15432/lifeag
 DATABASE_URL=postgresql+psycopg://lifeagent:lifeagent_e2e@127.0.0.1:15432/lifeagent \
 GOAL_PLANNER_BACKEND=http \
 GOAL_PLANNER_URL=http://127.0.0.1:18001 \
+AUTH_BACKEND=fake \
     uv run uvicorn life_agent_core.main:app --host 127.0.0.1 --port 18000 &
 core_api_pid=$!
 

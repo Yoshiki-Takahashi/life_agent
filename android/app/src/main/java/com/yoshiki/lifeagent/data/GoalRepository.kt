@@ -6,14 +6,22 @@ interface GoalRepository {
     suspend fun getGoal(goalId: String): Goal
 }
 
-class HttpGoalRepository(private val api: GoalApi) : GoalRepository {
+class HttpGoalRepository(
+    private val api: GoalApi,
+    private val tokenProvider: suspend () -> String,
+) : GoalRepository {
+    private suspend fun authorization() = "Bearer ${tokenProvider()}"
+
     override suspend fun previewGoal(
         title: String,
         description: String?,
         targetDate: String,
-    ): GoalPlan = api.previewGoal(GoalPreviewRequest(title, description, targetDate)).toGoalPlan()
+    ): GoalPlan = api.previewGoal(
+        authorization(), GoalPreviewRequest(title, description, targetDate)
+    ).toGoalPlan()
 
     override suspend fun confirmGoal(plan: GoalPlan): Goal = api.confirmGoal(
+        authorization(),
         GoalConfirmRequest(
             title = plan.title,
             description = plan.description,
@@ -23,5 +31,5 @@ class HttpGoalRepository(private val api: GoalApi) : GoalRepository {
         )
     ).toGoal()
 
-    override suspend fun getGoal(goalId: String): Goal = api.getGoal(goalId).toGoal()
+    override suspend fun getGoal(goalId: String): Goal = api.getGoal(authorization(), goalId).toGoal()
 }

@@ -1,3 +1,4 @@
+import logging
 from datetime import date, timedelta
 from typing import Protocol
 
@@ -6,6 +7,8 @@ from pydantic import ValidationError
 
 from life_agent_core.config import Settings
 from life_agent_core.schemas import GoalPlan, GoalPreviewRequest, MetricDraft, MilestoneDraft
+
+logger = logging.getLogger(__name__)
 
 
 class PlannerUnavailableError(Exception):
@@ -36,6 +39,7 @@ class HttpGoalPlanner:
             response.raise_for_status()
             return GoalPlan.model_validate(response.json())
         except (httpx.HTTPError, ValidationError, ValueError, TypeError) as error:
+            logger.warning("Goal Planner request failed (%s)", type(error).__name__)
             raise PlannerUnavailableError("Goal Planner request failed") from error
 
 

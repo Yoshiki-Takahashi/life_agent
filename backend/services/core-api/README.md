@@ -60,16 +60,18 @@ CORE_API_URL=http://127.0.0.1:8000 uv run pytest ../../../tests/e2e
 公開API:
 
 - `GET /health`
+- `GET /api/v1/goals`
 - `POST /api/v1/goals/preview`
 - `POST /api/v1/goals/confirm`
 - `GET /api/v1/goals/{goal_id}`
 
-`preview`は設定されたPlannerを呼び、DBへ保存せずに計画案を返します。通常のローカル実行とテストでは決定論的Fakeを使用します。独立Goal Plannerを使う場合は次を設定します。
+Goal一覧はTokenの`uid`で所有者を絞り、更新日時の新しい順で概要を返します。`preview`は設定されたPlannerを呼び、DBへ保存せずに計画案を返します。通常のローカル実行とテストでは決定論的Fakeを使用します。独立Goal Plannerを使う場合は次を設定します。
 
 ```bash
 GOAL_PLANNER_BACKEND=http
 GOAL_PLANNER_URL=http://127.0.0.1:8001
-GOAL_PLANNER_TIMEOUT_SECONDS=5
+GOAL_PLANNER_TIMEOUT_SECONDS=25
 ```
 
 Plannerの通信障害や契約違反は`503`となり、Goalは保存されません。`confirm`は編集済みのMetricとMilestoneを再検証し、Goalと同じTransactionで保存します。
+Core APIのPlanner待機時間は、Goal Planner側のOpenAI待機時間より長く設定してください。

@@ -1,6 +1,6 @@
 import uuid
 from collections.abc import Callable, Generator
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
 from fastapi.testclient import TestClient
@@ -95,6 +95,37 @@ def test_goal_is_saved_for_authenticated_user(client: TestClient, db_session: Se
     assert goal.owner_id == "user-a"
 
 
+def test_list_goals_is_empty_for_new_user(client: TestClient) -> None:
+    response = client.get("/api/v1/goals")
+
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_goals_returns_only_owner_with_counts_and_newest_first(
+    client: TestClient, db_session: Session
+) -> None:
+    first = client.post("/api/v1/goals/confirm", json=preview(client, "本を読む")).json()
+    second = client.post("/api/v1/goals/confirm", json=preview(client, "筋トレを続ける")).json()
+    db_session.get(Goal, uuid.UUID(first["id"])).updated_at = datetime(2026, 9, 10, tzinfo=UTC)
+    db_session.get(Goal, uuid.UUID(second["id"])).updated_at = datetime(2026, 9, 11, tzinfo=UTC)
+    db_session.commit()
+    client.post(
+        "/api/v1/goals/confirm",
+        json=preview(client, "他ユーザーのGoal"),
+        headers={"Authorization": "Bearer user-b"},
+    )
+
+    response = client.get("/api/v1/goals")
+
+    assert response.status_code == 200
+    body = response.json()
+    assert [item["id"] for item in body] == [second["id"], first["id"]]
+    assert body[0]["title"] == "筋トレを続ける"
+    assert body[0]["metric_count"] == 1
+    assert body[0]["milestone_count"] == 3
+
+
 def test_other_user_cannot_get_goal(client: TestClient) -> None:
     created = client.post("/api/v1/goals/confirm", json=preview(client))
 
@@ -108,13 +139,18 @@ def test_other_user_cannot_get_goal(client: TestClient) -> None:
 
 def test_goal_endpoints_require_valid_token(unauthenticated_client: TestClient) -> None:
     assert unauthenticated_client.get("/health").status_code == 200
-    assert unauthenticated_client.post(
-        "/api/v1/goals/preview", json=request_payload()
-    ).status_code == 401
-    assert unauthenticated_client.get(
-        f"/api/v1/goals/{uuid.uuid4()}",
-        headers={"Authorization": "Bearer invalid"},
-    ).status_code == 401
+    assert (
+        unauthenticated_client.post("/api/v1/goals/preview", json=request_payload()).status_code
+        == 401
+    )
+    assert unauthenticated_client.get("/api/v1/goals").status_code == 401
+    assert (
+        unauthenticated_client.get(
+            f"/api/v1/goals/{uuid.uuid4()}",
+            headers={"Authorization": "Bearer invalid"},
+        ).status_code
+        == 401
+    )
 
 
 @pytest.mark.parametrize(
@@ -164,7 +200,7 @@ def test_missing_and_invalid_goal_ids(client: TestClient) -> None:
 
 
 def test_direct_goal_creation_is_removed(client: TestClient) -> None:
-    assert client.post("/api/v1/goals", json=request_payload()).status_code == 404
+    assert client.post("/api/v1/goals", json=request_payload()).status_code == 405
 
 
 def test_confirm_rolls_back_when_commit_fails(client: TestClient) -> None:

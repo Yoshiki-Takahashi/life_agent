@@ -9,6 +9,11 @@ import retrofit2.http.POST
 import retrofit2.http.Path
 
 interface GoalApi {
+    @GET("api/v1/goals")
+    suspend fun listGoals(
+        @Header("Authorization") authorization: String,
+    ): List<GoalSummaryResponse>
+
     @POST("api/v1/goals/preview")
     suspend fun previewGoal(
         @Header("Authorization") authorization: String,
@@ -26,6 +31,29 @@ interface GoalApi {
         @Header("Authorization") authorization: String,
         @Path("goalId") goalId: String,
     ): GoalResponse
+}
+
+@Serializable
+data class GoalSummaryResponse(
+    val id: String,
+    val title: String,
+    @SerialName("target_date") val targetDate: String,
+    val status: String,
+    @SerialName("metric_count") val metricCount: Int,
+    @SerialName("milestone_count") val milestoneCount: Int,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("updated_at") val updatedAt: String,
+) {
+    fun toGoalSummary() = GoalSummary(
+        id = id,
+        title = title,
+        targetDate = targetDate,
+        status = status,
+        metricCount = metricCount,
+        milestoneCount = milestoneCount,
+        createdAt = createdAt,
+        updatedAt = updatedAt,
+    )
 }
 
 @Serializable

@@ -1,6 +1,7 @@
 package com.yoshiki.lifeagent.data
 
 interface GoalRepository {
+    suspend fun listGoals(): List<GoalSummary>
     suspend fun previewGoal(title: String, description: String?, targetDate: String): GoalPlan
     suspend fun confirmGoal(plan: GoalPlan): Goal
     suspend fun getGoal(goalId: String): Goal
@@ -11,6 +12,9 @@ class HttpGoalRepository(
     private val tokenProvider: suspend () -> String,
 ) : GoalRepository {
     private suspend fun authorization() = "Bearer ${tokenProvider()}"
+
+    override suspend fun listGoals(): List<GoalSummary> =
+        api.listGoals(authorization()).map(GoalSummaryResponse::toGoalSummary)
 
     override suspend fun previewGoal(
         title: String,

@@ -5,7 +5,6 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
-import com.yoshiki.lifeagent.data.Goal
 import com.yoshiki.lifeagent.data.GoalPlan
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.Metric
@@ -42,9 +41,6 @@ data class GoalUiState(
     val planError: String? = null,
     val navigateToPreview: Boolean = false,
     val navigationGoalId: String? = null,
-    val detail: Goal? = null,
-    val isLoadingDetail: Boolean = false,
-    val detailError: String? = null,
 )
 
 class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
@@ -150,20 +146,8 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
         }
     }
 
-    fun consumeNavigation() = _uiState.update { it.copy(navigationGoalId = null) }
-
-    fun loadGoal(goalId: String) {
-        viewModelScope.launch {
-            _uiState.update { it.copy(isLoadingDetail = true, detailError = null) }
-            runCatching { repository.getGoal(goalId) }
-                .onSuccess { goal ->
-                    _uiState.update { it.copy(detail = goal, isLoadingDetail = false) }
-                }.onFailure {
-                    _uiState.update {
-                        it.copy(isLoadingDetail = false, detailError = "Goalを読み込めませんでした")
-                    }
-                }
-        }
+    fun resetDraft() {
+        _uiState.value = GoalUiState()
     }
 
     private fun updateMetric(index: Int, transform: (MetricEdit) -> MetricEdit) {

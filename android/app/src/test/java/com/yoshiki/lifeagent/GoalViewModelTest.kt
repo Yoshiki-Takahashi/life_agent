@@ -3,6 +3,7 @@ package com.yoshiki.lifeagent
 import com.yoshiki.lifeagent.data.Goal
 import com.yoshiki.lifeagent.data.GoalPlan
 import com.yoshiki.lifeagent.data.GoalRepository
+import com.yoshiki.lifeagent.data.GoalSummary
 import com.yoshiki.lifeagent.data.Metric
 import com.yoshiki.lifeagent.data.Milestone
 import com.yoshiki.lifeagent.ui.GoalViewModel
@@ -148,6 +149,8 @@ private class FakeGoalRepository(
     var previewCalls = 0
     var confirmCalls = 0
     var confirmedPlan: GoalPlan? = null
+
+    override suspend fun listGoals(): List<GoalSummary> = emptyList()
 
     override suspend fun previewGoal(
         title: String,

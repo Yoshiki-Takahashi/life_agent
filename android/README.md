@@ -12,7 +12,7 @@ Debug buildは`10.0.2.2:9099`のFirebase Authentication Emulatorにも接続し�
 Firebaseへ接続する前に`config/auth-release.properties`をFirebase Consoleの公開アプリ設定へ
 置き換えます。サービスアカウント鍵はAndroidへ置きません。
 
-アプリではGoalのタイトル、説明、期限を入力してFake計画を生成し、MetricとMilestoneを編集・確定して詳細を表示できます。プレビューは保存されず、「この計画で保存する」を選んだ時だけBackendへ保存されます。
+ログイン後は自分のGoal一覧がホームに表示されます。一覧から詳細へ再訪でき、新規作成ではタイトル、説明、期限から計画を生成し、MetricとMilestoneを編集・確定できます。プレビューは保存されず、「この計画で保存する」を選んだ時だけBackendへ保存されます。
 
 ```bash
 cd android

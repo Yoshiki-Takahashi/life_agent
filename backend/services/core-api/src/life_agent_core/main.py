@@ -17,7 +17,13 @@ from life_agent_core.planner import (
     HttpGoalPlanner,
     PlannerUnavailableError,
 )
-from life_agent_core.schemas import GoalConfirmRequest, GoalPlan, GoalPreviewRequest, GoalResponse
+from life_agent_core.schemas import (
+    GoalConfirmRequest,
+    GoalPlan,
+    GoalPreviewRequest,
+    GoalResponse,
+    GoalSummary,
+)
 
 app = FastAPI(title="LifeAgent Core API", version="0.1.0")
 DatabaseSession = Annotated[Session, Depends(get_db)]
@@ -74,6 +80,29 @@ def confirm_goal(payload: GoalConfirmRequest, db: DatabaseSession, user_id: Curr
         raise HTTPException(status_code=500, detail="Goalを保存できませんでした") from error
     db.refresh(goal)
     return goal
+
+
+@app.get("/api/v1/goals", response_model=list[GoalSummary])
+def list_goals(db: DatabaseSession, user_id: CurrentUserId) -> list[GoalSummary]:
+    goals = db.scalars(
+        select(Goal)
+        .options(selectinload(Goal.metrics), selectinload(Goal.milestones))
+        .where(Goal.owner_id == user_id)
+        .order_by(Goal.updated_at.desc(), Goal.id.desc())
+    ).all()
+    return [
+        GoalSummary(
+            id=goal.id,
+            title=goal.title,
+            target_date=goal.target_date,
+            status=goal.status,
+            metric_count=len(goal.metrics),
+            milestone_count=len(goal.milestones),
+            created_at=goal.created_at,
+            updated_at=goal.updated_at,
+        )
+        for goal in goals
+    ]
 
 
 @app.get("/api/v1/goals/{goal_id}", response_model=GoalResponse)

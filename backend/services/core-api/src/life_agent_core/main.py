@@ -1,4 +1,5 @@
 import uuid
+from functools import lru_cache
 from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
@@ -6,13 +7,30 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
+from life_agent_core.config import get_settings
 from life_agent_core.database import get_db
 from life_agent_core.models import Goal, Metric, Milestone
-from life_agent_core.planner import create_fake_plan
+from life_agent_core.planner import (
+    FakeGoalPlanner,
+    GoalPlanner,
+    HttpGoalPlanner,
+    PlannerUnavailableError,
+)
 from life_agent_core.schemas import GoalConfirmRequest, GoalPlan, GoalPreviewRequest, GoalResponse
 
 app = FastAPI(title="LifeAgent Core API", version="0.1.0")
 DatabaseSession = Annotated[Session, Depends(get_db)]
+
+
+@lru_cache
+def get_goal_planner() -> GoalPlanner:
+    settings = get_settings()
+    if settings.goal_planner_backend == "http":
+        return HttpGoalPlanner(settings)
+    return FakeGoalPlanner()
+
+
+Planner = Annotated[GoalPlanner, Depends(get_goal_planner)]
 
 
 @app.get("/health")
@@ -21,8 +39,14 @@ def health() -> dict[str, str]:
 
 
 @app.post("/api/v1/goals/preview", response_model=GoalPlan)
-def preview_goal(payload: GoalPreviewRequest) -> GoalPlan:
-    return create_fake_plan(payload)
+def preview_goal(payload: GoalPreviewRequest, planner: Planner) -> GoalPlan:
+    try:
+        return planner.generate(payload)
+    except PlannerUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="計画を生成できませんでした。入力内容を保持して再試行してください",
+        ) from error
 
 
 @app.post("/api/v1/goals/confirm", response_model=GoalResponse, status_code=status.HTTP_201_CREATED)

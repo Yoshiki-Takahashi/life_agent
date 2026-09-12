@@ -1,0 +1,35 @@
+services:
+  postgres:
+    image: postgres:17
+    environment:
+      POSTGRES_DB: lifeagent
+      POSTGRES_USER: lifeagent
+      POSTGRES_PASSWORD: lifeagent_e2e
+    ports:
+      - "15432:5432"
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U lifeagent -d lifeagent"]
+      interval: 1s
+      timeout: 3s
+      retries: 10
+
+  goal-planner:
+    build:
+      context: services/goal-planner
+    environment:
+      GOAL_PLANNER_PROVIDER: fake
+    ports:
+      - "18001:8001"
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/health')",
+        ]
+      interval: 1s
+      timeout: 3s
+      retries: 10

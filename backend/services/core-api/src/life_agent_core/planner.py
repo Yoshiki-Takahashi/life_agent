@@ -1,6 +1,42 @@
 from datetime import date, timedelta
+from typing import Protocol
 
+import httpx
+from pydantic import ValidationError
+
+from life_agent_core.config import Settings
 from life_agent_core.schemas import GoalPlan, GoalPreviewRequest, MetricDraft, MilestoneDraft
+
+
+class PlannerUnavailableError(Exception):
+    """The plan could not be generated safely and may be retried."""
+
+
+class GoalPlanner(Protocol):
+    def generate(self, payload: GoalPreviewRequest) -> GoalPlan: ...
+
+
+class FakeGoalPlanner:
+    def generate(self, payload: GoalPreviewRequest) -> GoalPlan:
+        return create_fake_plan(payload)
+
+
+class HttpGoalPlanner:
+    def __init__(self, settings: Settings) -> None:
+        self.url = f"{settings.goal_planner_url.rstrip('/')}/internal/v1/goal-plans"
+        self.timeout = settings.goal_planner_timeout_seconds
+
+    def generate(self, payload: GoalPreviewRequest) -> GoalPlan:
+        try:
+            response = httpx.post(
+                self.url,
+                json=payload.model_dump(mode="json"),
+                timeout=self.timeout,
+            )
+            response.raise_for_status()
+            return GoalPlan.model_validate(response.json())
+        except (httpx.HTTPError, ValidationError, ValueError, TypeError) as error:
+            raise PlannerUnavailableError("Goal Planner request failed") from error
 
 
 def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None) -> GoalPlan:

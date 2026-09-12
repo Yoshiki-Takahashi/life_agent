@@ -34,7 +34,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-現在、Weekend 2まで実装済みです。次の作業はWeekend 3の独立Goal Plannerです。
+Weekend 3.1まで実装・検証済みです。次の作業はWeekend 4の認証です。
 
 ### Weekend 0: 開発基盤
 
@@ -78,6 +78,8 @@ Metric、Milestone、AI、ログインは対象外です。
 
 ### Weekend 3: 独立Goal Planner
 
+**状態:** 完了
+
 **完成状態:** Fakeと同じ契約で、独立したGoal Planner Serviceから計画を取得できる。
 
 - Goal Plannerを個別のuvプロジェクトとして初期化する。
@@ -87,6 +89,18 @@ Metric、Milestone、AI、ログインは対象外です。
 - 障害時は保存せず、再試行可能なエラーを返す。
 
 通常テストは引き続きFakeを使い、実AI評価は明示的に実行します。
+
+### Weekend 3.1: Goal Planner開発基盤の仕上げ
+
+**状態:** 完了
+
+**完成状態:** Tokenを消費せずにCore API、独立Goal Planner、PostgreSQLを通すE2Eを一つのコマンドで再現でき、Goal Plannerコンテナが依存関係を再同期せず起動する。
+
+- 独立Goal PlannerへE2E専用の決定論的Fake Providerを追加する。
+- 通常環境とポート・DBを分離したサービス間E2Eを追加する。
+- Goal PlannerのDocker build contextと起動処理を最小化する。
+
+実AI品質評価は追加せず、明示的な既存評価以外ではOpenAI APIを呼びません。
 
 ### Weekend 4: 認証
 

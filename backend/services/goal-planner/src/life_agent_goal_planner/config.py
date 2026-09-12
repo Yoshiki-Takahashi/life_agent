@@ -5,10 +5,10 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    database_url: str = "postgresql+psycopg://lifeagent:lifeagent_local@localhost:5432/lifeagent"
-    goal_planner_backend: Literal["fake", "http"] = "fake"
-    goal_planner_url: str = "http://127.0.0.1:8001"
-    goal_planner_timeout_seconds: float = 5.0
+    goal_planner_provider: Literal["openai", "fake"] = "openai"
+    openai_api_key: str | None = None
+    openai_model: str = "gpt-5.6-luna"
+    openai_timeout_seconds: float = 20.0
 
     model_config = SettingsConfigDict(
         env_file=("../../.env", ".env"),

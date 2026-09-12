@@ -9,8 +9,9 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from life_agent_core.database import get_db
-from life_agent_core.main import app
+from life_agent_core.main import app, get_goal_planner
 from life_agent_core.models import Goal
+from life_agent_core.planner import PlannerUnavailableError
 
 
 def request_payload(title: str = "毎月4冊読む") -> dict[str, object]:
@@ -51,6 +52,21 @@ def test_fake_planner_presets_are_deterministic(
 def test_preview_does_not_save_goal(client: TestClient, db_session: Session) -> None:
     preview(client)
 
+    assert db_session.scalar(select(func.count()).select_from(Goal)) == 0
+
+
+def test_planner_failure_is_retryable_and_does_not_save_goal(
+    client: TestClient, db_session: Session
+) -> None:
+    class UnavailablePlanner:
+        def generate(self, payload: object) -> None:
+            raise PlannerUnavailableError
+
+    app.dependency_overrides[get_goal_planner] = lambda: UnavailablePlanner()
+    response = client.post("/api/v1/goals/preview", json=request_payload())
+
+    assert response.status_code == 503
+    assert "再試行" in response.json()["detail"]
     assert db_session.scalar(select(func.count()).select_from(Goal)) == 0
 
 

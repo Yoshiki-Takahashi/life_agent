@@ -1,12 +1,9 @@
-import uuid
-from datetime import date, datetime
+from datetime import date
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from life_agent_core.models import GoalStatus
 
-
-class GoalInput(BaseModel):
+class GoalPlanRequest(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
     target_date: date
@@ -31,11 +28,9 @@ class GoalInput(BaseModel):
         return value
 
 
-class GoalPreviewRequest(GoalInput):
-    pass
-
-
 class MetricDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     name: str = Field(min_length=1, max_length=100)
     target_value: float = Field(gt=0, le=1_000_000_000)
     unit: str = Field(min_length=1, max_length=30)
@@ -47,6 +42,8 @@ class MetricDraft(BaseModel):
 
 
 class MilestoneDraft(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     title: str = Field(min_length=1, max_length=120)
     target_date: date
 
@@ -56,64 +53,24 @@ class MilestoneDraft(BaseModel):
         return value.strip() if isinstance(value, str) else value
 
 
-class GoalPlan(BaseModel):
-    title: str
-    description: str | None
-    target_date: date
+class GeneratedPlan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
+    milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
+
+
+class GoalPlan(GoalPlanRequest):
     metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
     milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
 
     @model_validator(mode="after")
     def validate_milestone_dates(self) -> "GoalPlan":
-        validate_milestone_dates(self.milestones, self.target_date)
+        previous = date.today()
+        for milestone in self.milestones:
+            if milestone.target_date < date.today() or milestone.target_date > self.target_date:
+                raise ValueError("Milestone期限は今日からGoal期限までにしてください")
+            if milestone.target_date < previous:
+                raise ValueError("Milestone期限は表示順にしてください")
+            previous = milestone.target_date
         return self
-
-
-class GoalConfirmRequest(GoalInput):
-    metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
-    milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
-
-    @model_validator(mode="after")
-    def validate_milestone_dates(self) -> "GoalConfirmRequest":
-        validate_milestone_dates(self.milestones, self.target_date)
-        return self
-
-
-def validate_milestone_dates(milestones: list[MilestoneDraft], target_date: date) -> None:
-    previous = date.today()
-    for milestone in milestones:
-        if milestone.target_date < date.today() or milestone.target_date > target_date:
-            raise ValueError("Milestone期限は今日からGoal期限までにしてください")
-        if milestone.target_date < previous:
-            raise ValueError("Milestone期限は表示順にしてください")
-        previous = milestone.target_date
-
-
-class MetricResponse(MetricDraft):
-    id: uuid.UUID
-    position: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class MilestoneResponse(MilestoneDraft):
-    id: uuid.UUID
-    position: int
-    created_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)
-
-
-class GoalResponse(BaseModel):
-    id: uuid.UUID
-    title: str
-    description: str | None
-    target_date: date
-    status: GoalStatus
-    metrics: list[MetricResponse]
-    milestones: list[MilestoneResponse]
-    created_at: datetime
-    updated_at: datetime
-
-    model_config = ConfigDict(from_attributes=True)

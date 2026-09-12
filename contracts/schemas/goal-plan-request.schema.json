@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://lifeagent.local/schemas/goal-plan-request.schema.json",
+  "title": "GoalPlanRequest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["title", "description", "target_date"],
+  "properties": {
+    "title": {"type": "string", "minLength": 1, "maxLength": 120},
+    "description": {"type": ["string", "null"], "maxLength": 2000},
+    "target_date": {"type": "string", "format": "date"}
+  }
+}

@@ -12,9 +12,10 @@
 
 現在の公開契約はCore APIが生成するOpenAPIを正本とし、ローカル起動中の`http://127.0.0.1:8000/openapi.json`で確認します。
 
-Weekend 2のGoal計画:
+Weekend 2・3のGoal計画:
 
-- 内部Planner契約: `schemas/goal-plan.schema.json`
+- 内部Planner入力契約: `schemas/goal-plan-request.schema.json`
+- 内部Planner出力契約: `schemas/goal-plan.schema.json`
 - プレビュー入力: `title`、任意の`description`、`target_date`
 - Metric案: `name`、数値の`target_value`、`unit`
 - Milestone案: `title`、`target_date`
@@ -23,3 +24,5 @@ Weekend 2のGoal計画:
 - `GET /api/v1/goals/{goal_id}`
 
 確定後のMetricとMilestoneには`id`、`position`、`created_at`が加わります。Metricは1〜3個、Milestoneは3〜5個です。正確なrequest/responseとValidationはCore APIが生成するOpenAPIを参照してください。
+
+Goal Plannerの出力はPlannerとCore APIの両方で検証し、不正な計画は保存しません。

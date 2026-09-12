@@ -7,6 +7,7 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
+from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
 from life_agent_core.database import get_db
 from life_agent_core.models import Goal, Metric, Milestone
@@ -39,7 +40,7 @@ def health() -> dict[str, str]:
 
 
 @app.post("/api/v1/goals/preview", response_model=GoalPlan)
-def preview_goal(payload: GoalPreviewRequest, planner: Planner) -> GoalPlan:
+def preview_goal(payload: GoalPreviewRequest, planner: Planner, user_id: CurrentUserId) -> GoalPlan:
     try:
         return planner.generate(payload)
     except PlannerUnavailableError as error:
@@ -50,8 +51,9 @@ def preview_goal(payload: GoalPreviewRequest, planner: Planner) -> GoalPlan:
 
 
 @app.post("/api/v1/goals/confirm", response_model=GoalResponse, status_code=status.HTTP_201_CREATED)
-def confirm_goal(payload: GoalConfirmRequest, db: DatabaseSession) -> Goal:
+def confirm_goal(payload: GoalConfirmRequest, db: DatabaseSession, user_id: CurrentUserId) -> Goal:
     goal = Goal(
+        owner_id=user_id,
         title=payload.title,
         description=payload.description,
         target_date=payload.target_date,
@@ -75,11 +77,11 @@ def confirm_goal(payload: GoalConfirmRequest, db: DatabaseSession) -> Goal:
 
 
 @app.get("/api/v1/goals/{goal_id}", response_model=GoalResponse)
-def get_goal(goal_id: uuid.UUID, db: DatabaseSession) -> Goal:
+def get_goal(goal_id: uuid.UUID, db: DatabaseSession, user_id: CurrentUserId) -> Goal:
     goal = db.scalar(
         select(Goal)
         .options(selectinload(Goal.metrics), selectinload(Goal.milestones))
-        .where(Goal.id == goal_id)
+        .where(Goal.id == goal_id, Goal.owner_id == user_id)
     )
     if goal is None:
         raise HTTPException(status_code=404, detail="Goalが見つかりません")

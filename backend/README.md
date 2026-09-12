@@ -7,6 +7,9 @@ Python + FastAPIの独立サービスを配置します。各サービスのPyth
 
 ## ローカルPostgreSQL
 
+Weekend 4ではGoalへ必須の所有者IDを追加します。Weekend 3以前の開発データがある場合は、
+最初に`docker compose down --volumes`で開発DBを作り直してください。
+
 ```bash
 cd backend
 docker compose up -d

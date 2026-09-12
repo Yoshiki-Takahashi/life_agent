@@ -25,6 +25,23 @@ uv run uvicorn life_agent_core.main:app --reload
 
 APIは`http://127.0.0.1:8000`、OpenAPI UIは`http://127.0.0.1:8000/docs`です。
 
+## Authentication
+
+`/health`以外のGoal APIはFirebase ID Tokenを必要とします。Androidは各リクエストへ
+`Authorization: Bearer <ID Token>`を付け、Core APIは検証済みTokenの`uid`を
+Goalの`owner_id`として使用します。
+
+Firebase Authentication Emulatorを使うローカル起動では次を設定します。
+
+```bash
+export FIREBASE_PROJECT_ID=life-agent-local
+export FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099
+uv run uvicorn life_agent_core.main:app --reload
+```
+
+`FIREBASE_AUTH_EMULATOR_HOST`は本番環境で設定しません。`AUTH_BACKEND=fake`は
+既存のキー不要E2E専用で、通常実行と本番では既定値の`firebase`を使用します。
+
 ## Quality checks
 
 ```bash

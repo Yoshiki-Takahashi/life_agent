@@ -6,12 +6,15 @@ import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
 
 object Network {
-    fun createGoalRepository(baseUrl: String): GoalRepository {
+    fun createGoalRepository(
+        baseUrl: String,
+        tokenProvider: suspend () -> String,
+    ): GoalRepository {
         val json = Json { ignoreUnknownKeys = true }
         val retrofit = Retrofit.Builder()
             .baseUrl(baseUrl)
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-        return HttpGoalRepository(retrofit.create(GoalApi::class.java))
+        return HttpGoalRepository(retrofit.create(GoalApi::class.java), tokenProvider)
     }
 }

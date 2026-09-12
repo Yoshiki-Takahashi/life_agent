@@ -87,6 +87,36 @@ def test_preview_confirm_and_get_edited_plan(client: TestClient) -> None:
     assert fetched.json() == body
 
 
+def test_goal_is_saved_for_authenticated_user(client: TestClient, db_session: Session) -> None:
+    created = client.post("/api/v1/goals/confirm", json=preview(client))
+
+    goal = db_session.get(Goal, uuid.UUID(created.json()["id"]))
+    assert goal is not None
+    assert goal.owner_id == "user-a"
+
+
+def test_other_user_cannot_get_goal(client: TestClient) -> None:
+    created = client.post("/api/v1/goals/confirm", json=preview(client))
+
+    response = client.get(
+        f"/api/v1/goals/{created.json()['id']}",
+        headers={"Authorization": "Bearer user-b"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_goal_endpoints_require_valid_token(unauthenticated_client: TestClient) -> None:
+    assert unauthenticated_client.get("/health").status_code == 200
+    assert unauthenticated_client.post(
+        "/api/v1/goals/preview", json=request_payload()
+    ).status_code == 401
+    assert unauthenticated_client.get(
+        f"/api/v1/goals/{uuid.uuid4()}",
+        headers={"Authorization": "Bearer invalid"},
+    ).status_code == 401
+
+
 @pytest.mark.parametrize(
     "change",
     [

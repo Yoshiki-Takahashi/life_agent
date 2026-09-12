@@ -4,18 +4,28 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import retrofit2.http.Body
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
 
 interface GoalApi {
     @POST("api/v1/goals/preview")
-    suspend fun previewGoal(@Body request: GoalPreviewRequest): GoalPlanResponse
+    suspend fun previewGoal(
+        @Header("Authorization") authorization: String,
+        @Body request: GoalPreviewRequest,
+    ): GoalPlanResponse
 
     @POST("api/v1/goals/confirm")
-    suspend fun confirmGoal(@Body request: GoalConfirmRequest): GoalResponse
+    suspend fun confirmGoal(
+        @Header("Authorization") authorization: String,
+        @Body request: GoalConfirmRequest,
+    ): GoalResponse
 
     @GET("api/v1/goals/{goalId}")
-    suspend fun getGoal(@Path("goalId") goalId: String): GoalResponse
+    suspend fun getGoal(
+        @Header("Authorization") authorization: String,
+        @Path("goalId") goalId: String,
+    ): GoalResponse
 }
 
 @Serializable

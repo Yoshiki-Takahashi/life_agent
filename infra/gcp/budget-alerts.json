@@ -1,0 +1,40 @@
+{
+  "schemaVersion": 1,
+  "projectId": "lifeagent-505614",
+  "currency": "JPY",
+  "alertsOnlyBudgets": [
+    {
+      "displayName": "LifeAgent 全サービス 月額 2,000円アラート",
+      "amount": 2000,
+      "services": [],
+      "thresholds": [
+        { "percent": 0.5, "basis": "current-spend" },
+        { "percent": 0.8, "basis": "current-spend" },
+        { "percent": 1.0, "basis": "current-spend" },
+        { "percent": 1.0, "basis": "forecasted-spend" }
+      ]
+    },
+    {
+      "displayName": "LifeAgent Cloud SQL 月額 1,500円アラート",
+      "amount": 1500,
+      "services": ["services/9662-B51E-5089"],
+      "thresholds": [
+        { "percent": 0.5, "basis": "current-spend" },
+        { "percent": 0.8, "basis": "current-spend" },
+        { "percent": 1.0, "basis": "current-spend" },
+        { "percent": 1.0, "basis": "forecasted-spend" }
+      ]
+    }
+  ],
+  "consoleManagedControls": [
+    {
+      "displayName": "max2000",
+      "type": "spend-cap",
+      "projectId": "lifeagent-505614",
+      "service": "Cloud Run",
+      "amount": 2000,
+      "currency": "JPY",
+      "management": "Google Cloud Console only"
+    }
+  ]
+}

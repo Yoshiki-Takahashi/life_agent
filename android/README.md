@@ -7,6 +7,17 @@ Kotlin + Jetpack ComposeによるLifeAgentクライアントを配置します�
 Backendをポート8000で起動してから、Android StudioでdebugアプリをEmulatorへ実行します。Emulatorは`config/api-debug.properties`に定義したURLでMac上のCore APIへ接続します。
 
 Debug buildは`10.0.2.2:9099`のFirebase Authentication Emulatorにも接続します。
+
+実Firebase AuthenticationとCloud Run上のCore APIをAndroid Emulatorから確認する場合は、
+Git管理外の`config/auth-cloud-debug.properties`を用意し、次の明示オプションでDebug buildを
+インストールします。この場合だけAPI接続先も`config/api-release.properties`へ切り替わります。
+
+```bash
+./gradlew installDebug -Plifeagent.useCloudFirebase=true
+```
+
+このオプションを省略した通常のDebug buildは、引き続きAuthentication EmulatorとMac上の
+Core APIへ接続します。
 リポジトリのルートで`./scripts/start-auth-emulator.sh`を実行し、ログイン画面から
 メールアドレスと6文字以上のパスワードでアカウントを作成してください。Release buildを
 Firebaseへ接続する前に`config/auth-release.properties`をFirebase Consoleの公開アプリ設定へ
@@ -26,6 +37,6 @@ cd android
 | debug | `config/api-debug.properties` | EmulatorからMac上のFastAPIへ接続 |
 | release | `config/api-release.properties` | Cloud Run上のFastAPIへ接続 |
 
-Cloud Runのデプロイ後に、`api-release.properties`の予約URLを発行されたHTTPS URLへ置き換えてください。Retrofitの要件により、URL末尾の`/`は必須です。APIのURLは公開情報であり、APIキーなどの秘密情報はこのファイルへ記載しません。
+`api-release.properties`には発行済みCloud Run HTTPS URLを設定します。Retrofitの要件により、URL末尾の`/`は必須です。APIのURLは公開情報であり、APIキーなどの秘密情報はこのファイルへ記載しません。
 
 debugビルドだけローカルHTTPを許可します。Android 17以降では初回起動時にローカルネットワーク権限を許可してください。releaseビルドではこの権限を宣言しません。認証後も、アプリはCore API以外のBackendサービスへ直接接続しません。

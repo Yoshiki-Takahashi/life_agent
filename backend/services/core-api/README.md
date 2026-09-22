@@ -50,6 +50,31 @@ uv run ruff format --check .
 uv run pytest
 ```
 
+## Container
+
+Cloud Run向けのコンテナをローカルでbuildして、health endpointを確認します。
+
+```bash
+docker build --platform linux/amd64 -t lifeagent-core-api:local .
+docker run --rm -p 8080:8080 lifeagent-core-api:local
+curl http://127.0.0.1:8080/health
+```
+
+本番設定や秘密値はimageへ含めず、Cloud Runの環境変数とSecret Managerから渡します。
+Database migrationはコンテナ起動時には実行せず、deploy前の明示的な手順として適用します。
+
+Cloud RunではCloud SQL connectionをserviceへ追加し、次の環境変数を設定します。
+
+```text
+CLOUD_SQL_CONNECTION_NAME=lifeagent-505614:asia-northeast1:lifeagent-dev-db
+DB_USER=lifeagent_app
+DB_NAME=lifeagent
+DB_PASSWORD=<Secret Managerのlifeagent-db-password version 2>
+```
+
+`DB_PASSWORD`は通常の環境変数へ直接入力せず、Cloud RunのSecret参照として設定します。
+ローカル開発では従来どおり`DATABASE_URL`を使用します。
+
 PostgreSQLとCore APIを起動した状態で、リポジトリルートからE2Eを実行できます。
 
 ```bash

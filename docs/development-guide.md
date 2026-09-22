@@ -132,6 +132,8 @@ Metric、Milestone、AI、ログインは対象外です。
 
 **完成状態:** AndroidからCloud Run上のCore APIへ接続し、クラウドDBへGoalを保存できる。
 
+詳細な受け入れ条件は[`backlog/weekend-5.md`](backlog/weekend-5.md)、UIとCLIの実習順序は[`infra/gcp/weekend-5-runbook.md`](../infra/gcp/weekend-5-runbook.md)、進捗は[`backlog/weekend-5-status.md`](backlog/weekend-5-status.md)で管理する。
+
 - Artifact RegistryとCloud Runを作成する。
 - Secret Managerへ必要な秘密情報を登録する。
 - 最小構成のCloud SQLを必要な期間だけ作成する。

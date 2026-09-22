@@ -23,6 +23,9 @@ fun authProperties(environment: String): Properties {
     return Properties().apply { configFile.inputStream().use(::load) }
 }
 
+val useCloudFirebaseForDebug =
+    providers.gradleProperty("lifeagent.useCloudFirebase").orNull?.toBoolean() ?: false
+
 android {
     namespace = "com.yoshiki.lifeagent"
     compileSdk {
@@ -41,11 +44,17 @@ android {
 
     buildTypes {
         debug {
-            buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("debug")}\"")
-            authProperties("debug").forEach { key, value ->
+            val authEnvironment = if (useCloudFirebaseForDebug) "cloud-debug" else "debug"
+            val apiEnvironment = if (useCloudFirebaseForDebug) "release" else "debug"
+            buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl(apiEnvironment)}\"")
+            authProperties(authEnvironment).forEach { key, value ->
                 buildConfigField("String", key.toString(), "\"$value\"")
             }
-            buildConfigField("boolean", "USE_FIREBASE_AUTH_EMULATOR", "true")
+            buildConfigField(
+                "boolean",
+                "USE_FIREBASE_AUTH_EMULATOR",
+                (!useCloudFirebaseForDebug).toString(),
+            )
         }
         release {
             buildConfigField("String", "CORE_API_BASE_URL", "\"${apiBaseUrl("release")}\"")

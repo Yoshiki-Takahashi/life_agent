@@ -6,10 +6,10 @@
 
 | Field | Value |
 | --- | --- |
-| Overall Status | In progress |
-| Current Step | W5-70b GitHub Actions remote run |
-| Last Completed Step | W5-90a Final local quality and cost shutdown |
-| Next Action | 変更をcommit・pushして、ユーザーがGitHub UIでBackend Qualityの成功を確認する |
+| Overall Status | Complete |
+| Current Step | Complete |
+| Last Completed Step | W5-90 Weekend 5 completion |
+| Next Action | Weekend 6の進捗記録機能を開始する |
 | Last Updated | 2026-09-22 |
 | Blocker | None |
 
@@ -26,9 +26,9 @@ Statusは`Not started`、`In progress`、`Blocked`、`Complete`のいずれか�
 | 4. Cloud SQL | Complete | 作成、接続、migration、停止、再開を確認した |
 | 5. Cloud Run | Complete | Console確認とCodexによる構成・health確認が成功した |
 | 6. Android cloud E2E | Complete | 認証済みGoal操作が一周した |
-| 7. CIとLogging | In progress | 品質workflowと代表ログを一度確認した |
+| 7. CIとLogging | Complete | 品質workflowと代表ログを一度確認した |
 | 8. 運用確認 | Complete | scriptsと削除dry-runをCodexが検証した |
-| 9. 完了判定 | In progress | 品質検査後に課金対象を停止した |
+| 9. 完了判定 | Complete | 品質検査後に課金対象を停止した |
 
 ## Step Checklist
 
@@ -80,7 +80,7 @@ Statusは`Not started`、`In progress`、`Blocked`、`Complete`のいずれか�
 
 ### Phase 7
 
-- [ ] W5-70 Codexが品質workflowを整備し、ユーザーがGitHub UIで一度確認する
+- [x] W5-70 Codexが品質workflowを整備し、GitHub Actionsで成功を確認する
 - [x] W5-71 ユーザーが代表ログをUIで確認し、Codexが機密情報非出力を確認する
 
 ### Phase 8
@@ -89,7 +89,7 @@ Statusは`Not started`、`In progress`、`Blocked`、`Complete`のいずれか�
 
 ### Phase 9
 
-- [ ] W5-90 Codexが最終品質検査、証跡確認、Cloud SQL停止、Cloud Run縮退を行いCompleteにする
+- [x] W5-90 Codexが最終品質検査、証跡確認、Cloud SQL停止、Cloud Run縮退を行いCompleteにする
 
 ## Resource Inventory
 
@@ -186,6 +186,8 @@ Statusは`Not started`、`In progress`、`Blocked`、`Complete`のいずれか�
 | 2026-09-22 | W5-71b | Pass | Logs ExplorerでCore APIの代表requestを確認 | User / UI |
 | 2026-09-22 | W5-80 | Pass | status、start、stop scriptを検証。destroyは固定された削除対象のpreviewだけを実行し、実削除なし | Codex |
 | 2026-09-22 | W5-90a | Pass | Backend品質、両container build、サービス間E2E、Android unit test・Debug/Release buildが成功。Cloud SQLをSTOPPED / NEVERへ停止 | Codex |
+| 2026-09-22 | W5-70b | Pass | GitHub Actions `Backend Quality` run 35679646620が41秒で成功。test、container build、サービス間E2Eをremote runnerで再現 | Codex / GitHub Actions |
+| 2026-09-22 | W5-90 | Complete | Weekend 5の受け入れ条件、証跡、課金停止を確認。次の開発対象をWeekend 6の進捗記録へ更新 | Codex |
 
 ## Cost-Control Check
 

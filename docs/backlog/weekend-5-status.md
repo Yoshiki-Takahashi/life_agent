@@ -98,8 +98,10 @@ Statusは`Not started`、`In progress`、`Blocked`、`Complete`のいずれか�
 | Resource | Name or ID | Region | State | Created By | Delete/Stop Method |
 | --- | --- | --- | --- | --- | --- |
 | GCP project | lifeagent-505614 | global | ACTIVE | Existing | project deletionは対象外 |
-| Billing budget | max5000 | global | Existing / LifeAgent Cloud Run spend cap | Existing UI | Weekend 5では削除しない |
-| Billing budget | ¥2,001 1か月の予算のアラート | global | Existing / billing account alerts-only | Existing UI | Weekend 5では削除しない |
+| Billing budget | max2000 | global | Existing / LifeAgent Cloud Run spend cap | Existing UI | Weekend 5では削除しない |
+| Billing budget | ¥2,000 1か月の予算のアラート | global | Existing / billing account alerts-only | Existing UI | Weekend 5では削除しない |
+| Billing budget | LifeAgent 全サービス 月額 2,000円アラート | global | ACTIVE / project全サービス / alerts-only | CLI | Weekend 5では削除しない |
+| Billing budget | LifeAgent Cloud SQL 月額 1,500円アラート | global | ACTIVE / Cloud SQL / alerts-only | CLI | Weekend 5では削除しない |
 | Firebase project | lifeagent-505614 | global | ACTIVE / Android app registered | Existing + UI | Weekend 5では削除しない |
 | Artifact Registry | lifeagent-dev | asia-northeast1 | ACTIVE | UI | cleanup policy / repository delete |
 | Secret | lifeagent-db-password | automatic | ACTIVE / version 2 enabled、version 1 disabled | UI + CLI | version disable/destroy / secret delete |
@@ -132,11 +134,11 @@ Statusは`Not started`、`In progress`、`Blocked`、`Complete`のいずれか�
 | 2026-09-21 | W5-04a | Pass | active project=`lifeagent-505614`、Cloud Run region=`asia-northeast1`を確認 | User terminal |
 | 2026-09-21 | W5-04b | Pass | GCP project `lifeagent-505614`がACTIVEであることを確認 | User terminal |
 | 2026-09-21 | W5-04c | Pass | Billing接続が有効であることを確認 | User terminal |
-| 2026-09-21 | W5-10a | Pass | 既存budgetを確認。`max5000`はLifeAgent project対象だがCloud Runのみに限定されている | User / UI |
-| 2026-09-21 | W5-10b | Decision | `max5000`はspend cap budgetのため単一serviceが必須。Cloud Run対象のまま維持し、請求先全体のalerts-only budgetと併用する | User / UI |
+| 2026-09-21 | W5-10a | Pass | 既存budgetを確認。現在の`max2000`はLifeAgent project対象だがCloud Runのみに限定されている | User / UI |
+| 2026-09-21 | W5-10b | Decision | 現在の`max2000`はspend cap budgetのため単一serviceが必須。Cloud Run対象のまま維持し、請求先全体のalerts-only budgetと併用する | User / UI |
 | 2026-09-21 | W5-10c | Pass | 設定を変更せず予算一覧へ戻り、既存2予算を再利用することを確認 | User / UI |
-| 2026-09-21 | W5-11a | Partial | Billing Budgets APIを有効化し、CLI一覧にアラート予算1件を確認。UIの`max5000`は未表示 | User terminal |
-| 2026-09-21 | W5-11b | Pass | `max5000`はCloud Run単一サービスのSpend Cap Preview。`gcloud billing budgets list`はbillingbudgets/v1を使用し、Console専用のSpend Cap拡張設定はCLI一覧で取得できない | Official docs / User terminal |
+| 2026-09-21 | W5-11a | Partial | Billing Budgets APIを有効化し、CLI一覧にアラート予算1件を確認。UIのSpend Capは未表示 | User terminal |
+| 2026-09-21 | W5-11b | Pass | Cloud Run単一サービスのSpend Cap Previewは、`gcloud billing budgets list`が使用するbillingbudgets/v1では取得できない | Official docs / User terminal |
 | 2026-09-21 | W5-12a | Decision | FirebaseはBlazeを維持。Cloud Run利用にBilling連携が必要で、Sparkへ戻すと有料Google Cloudサービスへアクセスできなくなるため | Official docs / User |
 | 2026-09-21 | W5-12b | Pass | Firebase projectを確認。Email/Password有効、Phone未設定（無効） | User / UI |
 | 2026-09-21 | W5-13a | Pass | `firebase projects:list`で`lifeagent-505614`を確認 | User terminal |
@@ -188,6 +190,7 @@ Statusは`Not started`、`In progress`、`Blocked`、`Complete`のいずれか�
 | 2026-09-22 | W5-90a | Pass | Backend品質、両container build、サービス間E2E、Android unit test・Debug/Release buildが成功。Cloud SQLをSTOPPED / NEVERへ停止 | Codex |
 | 2026-09-22 | W5-70b | Pass | GitHub Actions `Backend Quality` run 35679646620が41秒で成功。test、container build、サービス間E2Eをremote runnerで再現 | Codex / GitHub Actions |
 | 2026-09-22 | W5-90 | Complete | Weekend 5の受け入れ条件、証跡、課金停止を確認。次の開発対象をWeekend 6の進捗記録へ更新 | Codex |
+| 2026-09-22 | Post-W5 cost control | Pass | Cloud Run Spend Capが`max2000`へ変更済み。Git管理設定からLifeAgent全サービス¥2,000、Cloud SQL¥1,500のalerts-only予算をCLI作成し、50%・80%・100%実績と100%予測通知を確認 | User / Codex |
 
 ## Cost-Control Check
 

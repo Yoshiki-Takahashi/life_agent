@@ -21,6 +21,8 @@ OPENAI_API_KEY=... uv run uvicorn life_agent_goal_planner.main:app --port 8001 -
 
 APIは`http://127.0.0.1:8001`です。`GET /health`はAPIキーなしでも利用できます。`POST /internal/v1/goal-plans`はキー未設定またはOpenAI障害時に再試行可能な`503`を返します。
 
+Cloud Runでは非公開serviceとしてdeployし、Core APIのruntime service accountだけにInvoker権限を付与します。AndroidはGoal Plannerを直接呼びません。
+
 設定:
 
 - `GOAL_PLANNER_PROVIDER`: 通常は`openai`。キー不要E2Eだけ`fake`を使用

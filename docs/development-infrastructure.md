@@ -51,6 +51,8 @@ Cloud SQLはCPU、メモリ、ストレージの継続費用が発生するた�
 
 ### 後続フェーズの候補
 
+実施枠と受け入れ条件は[Weekend 8以降の計画](backlog/weekend-8-plus.md)で管理します。開発環境の自動デプロイ、Goal Planner Cloud Run、Secret Manager上のOpenAI APIキー管理はWeekend 6へ統合します。Cloud SchedulerはWeekend 10、音声用Cloud StorageはWeekend 11、非同期処理とTerraformはWeekend 12で必要性を評価します。画像・エクスポート用Storageは当該機能の要求が出た際に別途計画化します。本番構成の判断はWeekend 14で行います。
+
 - Cloud Tasks / Pub/Sub: 非同期AI処理が必要になった場合
 - Cloud Scheduler: 定期的な振り返り処理が必要になった場合
 - Cloud Storage: 画像、音声、エクスポートファイルを扱う場合

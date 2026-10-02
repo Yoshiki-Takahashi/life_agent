@@ -93,4 +93,9 @@ class OpenAIGoalPlanner:
             raise
         except (OpenAIError, ValidationError, ValueError, TypeError) as error:
             logger.warning("Goal plan generation failed: %s", type(error).__name__)
+            if error.__cause__ is not None:
+                logger.warning(
+                    "Goal plan generation failure cause: %s",
+                    type(error.__cause__).__name__,
+                )
             raise PlannerUnavailableError("OpenAI plan generation failed") from error

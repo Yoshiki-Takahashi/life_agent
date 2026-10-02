@@ -1,0 +1,115 @@
+name: Manage Development Environment
+
+on:
+  workflow_dispatch:
+    inputs:
+      action:
+        description: Operation to run
+        required: true
+        default: status
+        type: choice
+        options:
+          - status
+          - start
+          - stop
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: manage-dev
+  cancel-in-progress: false
+
+jobs:
+  manage:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment: development
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      CORE_API_SERVICE: ${{ vars.CORE_API_SERVICE }}
+      GOAL_PLANNER_SERVICE: ${{ vars.GOAL_PLANNER_SERVICE }}
+      CLOUD_SQL_INSTANCE: lifeagent-dev-db
+
+    steps:
+      - name: Validate settings
+        run: |
+          : "${PROJECT_ID:?GCP_PROJECT_ID variable is required}"
+          : "${REGION:?GCP_REGION variable is required}"
+          : "${WIF_PROVIDER:?GCP_WORKLOAD_IDENTITY_PROVIDER variable is required}"
+          : "${DEPLOYER_SERVICE_ACCOUNT:?GCP_DEPLOYER_SERVICE_ACCOUNT variable is required}"
+          : "${CORE_API_SERVICE:?CORE_API_SERVICE variable is required}"
+          : "${GOAL_PLANNER_SERVICE:?GOAL_PLANNER_SERVICE variable is required}"
+          : "${CLOUD_SQL_INSTANCE:?CLOUD_SQL_INSTANCE is required}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Start Cloud SQL
+        if: ${{ inputs.action == 'start' }}
+        run: |
+          gcloud sql instances patch "${CLOUD_SQL_INSTANCE}" \
+            --project="${PROJECT_ID}" \
+            --activation-policy=ALWAYS \
+            --quiet
+
+      - name: Stop Cloud SQL
+        if: ${{ inputs.action == 'stop' }}
+        run: |
+          gcloud sql instances patch "${CLOUD_SQL_INSTANCE}" \
+            --project="${PROJECT_ID}" \
+            --activation-policy=NEVER \
+            --quiet
+
+      - name: Verify state
+        run: |
+          sql_state="$(gcloud sql instances describe "${CLOUD_SQL_INSTANCE}" \
+            --project="${PROJECT_ID}" \
+            --format='value(state)')"
+          sql_activation="$(gcloud sql instances describe "${CLOUD_SQL_INSTANCE}" \
+            --project="${PROJECT_ID}" \
+            --format='value(settings.activationPolicy)')"
+          echo "Cloud SQL ${CLOUD_SQL_INSTANCE}: state=${sql_state}, activationPolicy=${sql_activation}"
+
+          for service in "${CORE_API_SERVICE}" "${GOAL_PLANNER_SERVICE}"; do
+            if ! gcloud run services describe "${service}" \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" >/dev/null 2>&1; then
+              echo "Cloud Run ${service}: not created"
+              continue
+            fi
+
+            min_scale="$(gcloud run services describe "${service}" \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --format='value(spec.template.metadata.annotations."autoscaling.knative.dev/minScale")')"
+            max_scale="$(gcloud run services describe "${service}" \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --format='value(metadata.annotations."run.googleapis.com/maxScale")')"
+            revision="$(gcloud run services describe "${service}" \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --format='value(status.latestReadyRevisionName)')"
+            echo "Cloud Run ${service}: revision=${revision}, min=${min_scale:-0}, max=${max_scale:-not-set}"
+
+            if [[ "${min_scale:-0}" != "0" || "${max_scale}" != "1" ]]; then
+              echo "Unexpected Cloud Run scaling for ${service}" >&2
+              exit 1
+            fi
+          done
+
+          if [[ "${{ inputs.action }}" == "stop" && "${sql_activation}" != "NEVER" ]]; then
+            echo "Cloud SQL did not switch to activationPolicy=NEVER" >&2
+            exit 1
+          fi

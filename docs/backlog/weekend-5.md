@@ -4,6 +4,8 @@
 
 Complete
 
+計画整理により、Weekend 6へ延期した自動deploy・Workload Identity Federationと、対象外だったGoal PlannerのCloud Run配置・実AIクラウド結合は[Weekend 6](weekend-6.md)の前半に統合した。以下の受け入れ条件と対象外はWeekend 5完了時点の記録として維持する。
+
 ## Sprint Goal
 
 主要なUI作成と代表的なCLI lifecycle操作でLifeAgentのクラウド構成を理解し、AndroidからCloud Run上のCore APIへ接続してCloud SQLへGoalを保存できるようにする。重複する学習操作はCodexへ移し、縦切りの完走と課金停止を優先する。

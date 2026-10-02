@@ -3,6 +3,9 @@ from datetime import date, timedelta
 from typing import Protocol
 
 import httpx
+from google.auth.exceptions import GoogleAuthError
+from google.auth.transport.requests import Request
+from google.oauth2.id_token import fetch_id_token
 from pydantic import ValidationError
 
 from life_agent_core.config import Settings
@@ -28,19 +31,33 @@ class HttpGoalPlanner:
     def __init__(self, settings: Settings) -> None:
         self.url = f"{settings.goal_planner_url.rstrip('/')}/internal/v1/goal-plans"
         self.timeout = settings.goal_planner_timeout_seconds
+        self.id_token_audience = settings.goal_planner_id_token_audience
 
     def generate(self, payload: GoalPreviewRequest) -> GoalPlan:
         try:
             response = httpx.post(
                 self.url,
                 json=payload.model_dump(mode="json"),
+                headers=self._headers(),
                 timeout=self.timeout,
             )
             response.raise_for_status()
             return GoalPlan.model_validate(response.json())
-        except (httpx.HTTPError, ValidationError, ValueError, TypeError) as error:
+        except (
+            GoogleAuthError,
+            httpx.HTTPError,
+            ValidationError,
+            ValueError,
+            TypeError,
+        ) as error:
             logger.warning("Goal Planner request failed (%s)", type(error).__name__)
             raise PlannerUnavailableError("Goal Planner request failed") from error
+
+    def _headers(self) -> dict[str, str] | None:
+        if not self.id_token_audience:
+            return None
+        token = fetch_id_token(Request(), self.id_token_audience)
+        return {"Authorization": f"Bearer {token}"}
 
 
 def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None) -> GoalPlan:

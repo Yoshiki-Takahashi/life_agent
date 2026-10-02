@@ -59,6 +59,17 @@ def test_openai_structured_output_is_combined_with_goal_input() -> None:
     client_factory.assert_called_once_with(api_key="test-key", timeout=20.0)
 
 
+def test_openai_api_key_whitespace_is_stripped() -> None:
+    responses = Mock()
+    responses.parse.return_value = SimpleNamespace(output_parsed=generated_plan())
+    client_factory = Mock(return_value=SimpleNamespace(responses=responses))
+    planner = OpenAIGoalPlanner(Settings(openai_api_key=" test-key\n"), client_factory)
+
+    planner.generate(request())
+
+    client_factory.assert_called_once_with(api_key="test-key", timeout=20.0)
+
+
 def test_missing_key_is_retryable_and_does_not_create_client() -> None:
     client_factory = Mock()
     planner = OpenAIGoalPlanner(Settings(openai_api_key=None), client_factory)

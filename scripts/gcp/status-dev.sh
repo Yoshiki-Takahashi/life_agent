@@ -5,6 +5,7 @@ project_id="lifeagent-505614"
 region="asia-northeast1"
 sql_instance="lifeagent-dev-db"
 run_service="lifeagent-core-api"
+planner_service="lifeagent-goal-planner"
 
 echo "Project: ${project_id}"
 echo "Cloud SQL:"
@@ -17,6 +18,18 @@ gcloud run services describe "${run_service}" \
     --region="${region}" \
     --project="${project_id}" \
     --format='table(metadata.name,status.latestReadyRevisionName,status.traffic[0].percent,status.url)'
+
+if gcloud run services describe "${planner_service}" \
+    --region="${region}" \
+    --project="${project_id}" >/dev/null 2>&1; then
+    echo "Goal Planner Cloud Run:"
+    gcloud run services describe "${planner_service}" \
+        --region="${region}" \
+        --project="${project_id}" \
+        --format='table(metadata.name,status.latestReadyRevisionName,status.traffic[0].percent,status.url)'
+else
+    echo "Goal Planner Cloud Run: not created"
+fi
 
 max_scale="$(gcloud run services describe "${run_service}" \
     --region="${region}" \

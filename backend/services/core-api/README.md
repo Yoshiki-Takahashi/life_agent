@@ -98,5 +98,13 @@ GOAL_PLANNER_URL=http://127.0.0.1:8001
 GOAL_PLANNER_TIMEOUT_SECONDS=25
 ```
 
+非公開Cloud Run上のGoal Plannerを呼ぶ場合は、Planner serviceのURLをaudienceに設定します。Core APIはこの値がある場合だけID tokenを取得し、`Authorization` headerを付けてPlannerへ送ります。
+
+```bash
+GOAL_PLANNER_BACKEND=http
+GOAL_PLANNER_URL=https://<goal-planner-service-url>
+GOAL_PLANNER_ID_TOKEN_AUDIENCE=https://<goal-planner-service-url>
+```
+
 Plannerの通信障害や契約違反は`503`となり、Goalは保存されません。`confirm`は編集済みのMetricとMilestoneを再検証し、Goalと同じTransactionで保存します。
 Core APIのPlanner待機時間は、Goal Planner側のOpenAI待機時間より長く設定してください。

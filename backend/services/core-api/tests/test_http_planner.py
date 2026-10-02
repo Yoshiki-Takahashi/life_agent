@@ -63,7 +63,70 @@ def test_http_planner_returns_validated_contract(monkeypatch: pytest.MonkeyPatch
     post.assert_called_once_with(
         "http://planner:8001/internal/v1/goal-plans",
         json=request().model_dump(mode="json"),
+        headers=None,
         timeout=2.0,
+    )
+
+
+def test_http_planner_adds_id_token_when_audience_is_configured(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = httpx.Response(
+        200,
+        json=response_payload(),
+        request=httpx.Request("POST", "https://planner.run.app/internal/v1/goal-plans"),
+    )
+    post = Mock(return_value=response)
+    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr("life_agent_core.planner.fetch_id_token", Mock(return_value="token"))
+
+    planner = HttpGoalPlanner(
+        Settings(
+            goal_planner_backend="http",
+            goal_planner_url="https://planner.run.app",
+            goal_planner_id_token_audience="https://planner.run.app",
+        )
+    )
+
+    planner.generate(request())
+
+    post.assert_called_once_with(
+        "https://planner.run.app/internal/v1/goal-plans",
+        json=request().model_dump(mode="json"),
+        headers={"Authorization": "Bearer token"},
+        timeout=25.0,
+    )
+
+
+def test_http_planner_treats_empty_id_token_audience_as_disabled(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    response = httpx.Response(
+        200,
+        json=response_payload(),
+        request=httpx.Request("POST", "http://planner:8001/internal/v1/goal-plans"),
+    )
+    post = Mock(return_value=response)
+    fetch = Mock(return_value="token")
+    monkeypatch.setattr(httpx, "post", post)
+    monkeypatch.setattr("life_agent_core.planner.fetch_id_token", fetch)
+
+    planner = HttpGoalPlanner(
+        Settings(
+            goal_planner_backend="http",
+            goal_planner_url="http://planner:8001",
+            goal_planner_id_token_audience="",
+        )
+    )
+
+    planner.generate(request())
+
+    fetch.assert_not_called()
+    post.assert_called_once_with(
+        "http://planner:8001/internal/v1/goal-plans",
+        json=request().model_dump(mode="json"),
+        headers=None,
+        timeout=25.0,
     )
 
 

@@ -1,0 +1,186 @@
+name: Deploy Development Backend
+
+on:
+  workflow_dispatch:
+    inputs:
+      service:
+        description: Service to deploy
+        required: true
+        default: both
+        type: choice
+        options:
+          - both
+          - core-api
+          - goal-planner
+      goal_planner_provider:
+        description: Goal Planner provider for Cloud Run
+        required: true
+        default: openai
+        type: choice
+        options:
+          - openai
+          - fake
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: deploy-dev
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: development
+    env:
+      PROJECT_ID: ${{ vars.GCP_PROJECT_ID }}
+      REGION: ${{ vars.GCP_REGION }}
+      REPOSITORY: ${{ vars.ARTIFACT_REGISTRY_REPOSITORY }}
+      WIF_PROVIDER: ${{ vars.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+      DEPLOYER_SERVICE_ACCOUNT: ${{ vars.GCP_DEPLOYER_SERVICE_ACCOUNT }}
+      CORE_API_SERVICE: ${{ vars.CORE_API_SERVICE }}
+      CORE_API_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CORE_API_RUNTIME_SERVICE_ACCOUNT }}
+      GOAL_PLANNER_SERVICE: ${{ vars.GOAL_PLANNER_SERVICE }}
+      GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT }}
+      CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
+      OPENAI_SECRET_NAME: ${{ vars.OPENAI_SECRET_NAME }}
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install uv and Python
+        uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
+        with:
+          python-version: "3.13"
+          enable-cache: true
+
+      - name: Check Core API
+        working-directory: backend/services/core-api
+        run: |
+          uv run --frozen ruff check .
+          uv run --frozen pytest
+
+      - name: Check Goal Planner
+        working-directory: backend/services/goal-planner
+        run: |
+          uv run --frozen ruff check .
+          uv run --frozen pytest -m "not live_ai"
+
+      - name: Validate deploy settings
+        run: |
+          : "${PROJECT_ID:?GCP_PROJECT_ID variable is required}"
+          : "${REGION:?GCP_REGION variable is required}"
+          : "${REPOSITORY:?ARTIFACT_REGISTRY_REPOSITORY variable is required}"
+          : "${WIF_PROVIDER:?GCP_WORKLOAD_IDENTITY_PROVIDER variable is required}"
+          : "${DEPLOYER_SERVICE_ACCOUNT:?GCP_DEPLOYER_SERVICE_ACCOUNT variable is required}"
+          : "${CORE_API_SERVICE:?CORE_API_SERVICE variable is required}"
+          : "${CORE_API_RUNTIME_SERVICE_ACCOUNT:?CORE_API_RUNTIME_SERVICE_ACCOUNT variable is required}"
+          : "${GOAL_PLANNER_SERVICE:?GOAL_PLANNER_SERVICE variable is required}"
+          : "${GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT:?GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT variable is required}"
+          : "${CLOUD_SQL_CONNECTION_NAME:?CLOUD_SQL_CONNECTION_NAME variable is required}"
+
+      - name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ env.WIF_PROVIDER }}
+          service_account: ${{ env.DEPLOYER_SERVICE_ACCOUNT }}
+
+      - name: Set up gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Configure Docker for Artifact Registry
+        run: gcloud auth configure-docker "${REGION}-docker.pkg.dev" --quiet
+
+      - name: Build and push Core API image
+        if: ${{ inputs.service == 'both' || inputs.service == 'core-api' }}
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/lifeagent-core-api:${{ github.sha }}
+        run: |
+          docker build --tag "${IMAGE}" backend/services/core-api
+          docker push "${IMAGE}"
+          echo "CORE_API_IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+
+      - name: Build and push Goal Planner image
+        if: ${{ inputs.service == 'both' || inputs.service == 'goal-planner' }}
+        env:
+          IMAGE: ${{ env.REGION }}-docker.pkg.dev/${{ env.PROJECT_ID }}/${{ env.REPOSITORY }}/lifeagent-goal-planner:${{ github.sha }}
+        run: |
+          docker build --tag "${IMAGE}" backend/services/goal-planner
+          docker push "${IMAGE}"
+          echo "GOAL_PLANNER_IMAGE=${IMAGE}" >> "${GITHUB_ENV}"
+
+      - name: Deploy private Goal Planner
+        if: ${{ inputs.service == 'both' || inputs.service == 'goal-planner' }}
+        run: |
+          deploy_args=(
+            run deploy "${GOAL_PLANNER_SERVICE}"
+            --project="${PROJECT_ID}"
+            --region="${REGION}"
+            --image="${GOAL_PLANNER_IMAGE}"
+            --service-account="${GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT}"
+            --no-allow-unauthenticated
+            --min-instances=0
+            --max-instances=1
+            --port=8001
+            --set-env-vars=GOAL_PLANNER_PROVIDER="${{ inputs.goal_planner_provider }}"
+          )
+
+          if [[ "${{ inputs.goal_planner_provider }}" == "openai" ]]; then
+            openai_secret="${OPENAI_SECRET_NAME:-lifeagent-openai-api-key}"
+            deploy_args+=(--update-secrets=OPENAI_API_KEY="${openai_secret}:latest")
+          fi
+
+          gcloud "${deploy_args[@]}"
+
+          gcloud run services add-iam-policy-binding "${GOAL_PLANNER_SERVICE}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --member="serviceAccount:${CORE_API_RUNTIME_SERVICE_ACCOUNT}" \
+            --role="roles/run.invoker" \
+            --quiet
+
+      - name: Resolve Goal Planner URL
+        if: ${{ inputs.service == 'both' || inputs.service == 'core-api' }}
+        run: |
+          planner_url="$(gcloud run services describe "${GOAL_PLANNER_SERVICE}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --format='value(status.url)')"
+          echo "GOAL_PLANNER_URL=${planner_url}" >> "${GITHUB_ENV}"
+
+      - name: Deploy Core API
+        if: ${{ inputs.service == 'both' || inputs.service == 'core-api' }}
+        run: |
+          db_secret="lifeagent-db-password"
+          gcloud run deploy "${CORE_API_SERVICE}" \
+            --project="${PROJECT_ID}" \
+            --region="${REGION}" \
+            --image="${CORE_API_IMAGE}" \
+            --service-account="${CORE_API_RUNTIME_SERVICE_ACCOUNT}" \
+            --allow-unauthenticated \
+            --min-instances=0 \
+            --max-instances=1 \
+            --add-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
+            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,CLOUD_SQL_CONNECTION_NAME="${CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
+            --update-secrets=DB_PASSWORD="${db_secret}:latest"
+
+      - name: Verify deployed services
+        run: |
+          if [[ "${{ inputs.service }}" == "both" || "${{ inputs.service }}" == "goal-planner" ]]; then
+            gcloud run services describe "${GOAL_PLANNER_SERVICE}" \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --format='table(metadata.name,status.latestReadyRevisionName,status.url)'
+          fi
+
+          if [[ "${{ inputs.service }}" == "both" || "${{ inputs.service }}" == "core-api" ]]; then
+            core_url="$(gcloud run services describe "${CORE_API_SERVICE}" \
+              --project="${PROJECT_ID}" \
+              --region="${REGION}" \
+              --format='value(status.url)')"
+            curl --fail-with-body --silent --show-error --max-time 30 "${core_url}/health"
+            echo
+          fi

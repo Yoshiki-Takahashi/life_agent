@@ -34,7 +34,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-Weekend 4.Aまで実装・検証済みです。次の作業はWeekend 5のGCP開発環境です。
+Weekend 5まで実装・検証済みです。次の作業はWeekend 6です。計画一覧と受け入れ条件は[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。Weekend 6では、Weekend 5から持ち越した自動デプロイとGoal Plannerクラウド結合を先に片付け、その後に進捗記録へ進みます。
 
 ### Weekend 0: 開発基盤
 
@@ -113,7 +113,7 @@ Metric、Milestone、AI、ログインは対象外です。
 - 全データへ所有者IDを追加する。
 - 他ユーザーのGoalを取得できないテストを追加する。
 
-最初はメールアドレスとパスワードで開始し、電話番号認証とGoogleログインは後続にします。
+最初はメールアドレスとパスワードで開始します。GoogleログインはWeekend 13、電話番号認証は同枠で必要性と費用を評価して採否を決めます。
 
 ### Weekend 4.A: Android Goal体験の拡充
 
@@ -130,6 +130,8 @@ Metric、Milestone、AI、ログインは対象外です。
 
 ### Weekend 5: GCP開発環境
 
+**状態:** 完了
+
 **完成状態:** AndroidからCloud Run上のCore APIへ接続し、クラウドDBへGoalを保存できる。
 
 詳細な受け入れ条件は[`backlog/weekend-5.md`](backlog/weekend-5.md)、UIとCLIの実習順序は[`infra/gcp/weekend-5-runbook.md`](../infra/gcp/weekend-5-runbook.md)、進捗は[`backlog/weekend-5-status.md`](backlog/weekend-5-status.md)で管理する。
@@ -137,39 +139,46 @@ Metric、Milestone、AI、ログインは対象外です。
 - Artifact RegistryとCloud Runを作成する。
 - Secret Managerへ必要な秘密情報を登録する。
 - 最小構成のCloud SQLを必要な期間だけ作成する。
-- GitHub Actionsからテスト・デプロイする。
+- GitHub Actionsで品質検査する。自動デプロイとWorkload Identity FederationはWeekend 6の前半で実施する。
 - 予算アラート、Cloud Run最大インスタンス数、削除手順を設定する。
 
 Goal Plannerは最初はローカルまたはFakeでもよく、Core APIのクラウド経路を先に完成させます。
 
-### Weekend 6: 進捗記録
+### Weekend 6: 開発環境自動デプロイ、クラウド実AI計画生成、進捗記録
 
-**完成状態:** テキストで進捗を登録し、Goal詳細で履歴とMetric更新を確認できる。
+**完成状態:** 長期サービスアカウントキーなしで開発環境へデプロイでき、AndroidからCloud Run上のGoal Plannerと実AIで計画を確認・保存し、その後に進捗本文と構造化したMetric値を登録して履歴と現在値を確認できる。
 
-- ProgressLog SchemaとAPIを追加する。
-- 最初は構造化フォームまたはFake Parserで保存する。
-- Androidに進捗入力と履歴表示を追加する。
-- Goal所有者とMetric整合性を検証する。
+- Workload Identity Federationと手動dispatchの開発環境deploy workflowを追加する。
+- Goal Plannerを非公開Cloud Runへ配置し、Core APIから認証付きで呼び出す。
+- OpenAI APIキーをSecret Managerで管理し、Fake切替・費用抑制・停止手順を整える。
+- ProgressLog Schema、API、migrationを追加する。
+- Androidに本文・Metric値の入力と履歴表示を追加する。
+- Metric更新の意味、再送時の重複防止、所有者検証を契約化する。
+- 自然言語からの値の抽出はWeekend 7で追加する。
+
+詳細は[`backlog/weekend-6.md`](backlog/weekend-6.md)を参照してください。
 
 ### Weekend 7: AI進捗解析と助言
 
-**完成状態:** 自然言語の進捗をMetricへ対応付け、次の行動を提案できる。
+**完成状態:** 自然言語の進捗をMetric更新候補へ変換し、確認・保存後に次の行動を提案できる。
 
-- Progress ParserとAdvisorのPortをCore APIに追加する。
-- FakeでE2Eを完成させてから実AI Adapterを追加する。
-- AI出力不正時に元データを壊さないテストを追加する。
-- 助言を表示するAndroid UIを追加する。
+Progress ParserとAdvisorをCore API内で責務分離し、Fakeで利用経路を完成させてから実AI Adapterを追加します。独立サービス化は下記の判断基準を満たした場合だけ行います。
 
-独立サービス化は、Goal Plannerと異なるデプロイ頻度または負荷が確認できた場合に行います。
+詳細は[`backlog/weekend-7.md`](backlog/weekend-7.md)を参照してください。この段階で、プロダクト概要にある進捗記録と助言を含むMVPの利用経路が揃います。
 
 ### Weekend 8以降: 段階的な強化
 
-- 計画変更の比較・確認・Re-planner
-- 可視化タイプの追加
-- 通知と定期振り返り
-- 音声入力
-- Cloud Tasks等による非同期処理
-- Terraformによる環境再現
+| 実施枠 | 内容 | 完成状態 |
+| --- | --- | --- |
+| Weekend 8 | Re-planner、計画差分の比較・確認 | ユーザーの承認後だけ計画を更新できる |
+| Weekend 9 | 進捗可視化 | 保存済みの履歴とMetricに基づく推移を確認できる |
+| Weekend 10 | 定期振り返り・通知 | 利用者が設定したタイミングで振り返れる |
+| Weekend 11 | 音声入力 | 音声から起こした本文を確認して進捗登録できる |
+| Weekend 12 | 非同期処理・環境再現 | 必要性を評価し、必要な場合にCloud Tasks等とTerraformを導入する |
+| Weekend 13 | 認証方式の拡充 | Googleログインを追加し、電話番号認証の採否を決める |
+| Weekend 14 | 本番化判断・運用整備 | 公開要否を判断し、公開する場合の復旧・監視・セキュリティ条件を満たす |
+
+詳細なストーリー、受け入れ条件、対象外は[`backlog/weekend-8-plus.md`](backlog/weekend-8-plus.md)にまとめます。MVP対象外の拡張であり、着手前に利用実績をもとに範囲を再確認します。条件付き項目は採否と理由の記録も完了条件とし、必要性のない基盤は作成しません。
 
 毎回、一つのユーザー経路をFakeで完成させてから外部サービスへ接続します。
 

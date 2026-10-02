@@ -6,11 +6,13 @@ region="asia-northeast1"
 repository="lifeagent-dev"
 sql_instance="lifeagent-dev-db"
 run_service="lifeagent-core-api"
+planner_service="lifeagent-goal-planner"
 runtime_service_account="lifeagent-core-api@lifeagent-505614.iam.gserviceaccount.com"
 
 show_targets() {
     echo "Deletion preview for project ${project_id}:"
     echo "- Cloud Run service: ${run_service} (${region})"
+    echo "- Cloud Run service: ${planner_service} (${region}), if it exists"
     echo "- Cloud SQL instance and its databases: ${sql_instance}"
     echo "- Secret Manager secret: lifeagent-db-password"
     echo "- Secret Manager secret: lifeagent-db-admin-password"
@@ -43,6 +45,12 @@ fi
 
 gcloud run services delete "${run_service}" \
     --region="${region}" --project="${project_id}" --quiet
+if gcloud run services describe "${planner_service}" \
+    --region="${region}" \
+    --project="${project_id}" >/dev/null 2>&1; then
+    gcloud run services delete "${planner_service}" \
+        --region="${region}" --project="${project_id}" --quiet
+fi
 gcloud sql instances delete "${sql_instance}" \
     --project="${project_id}" --quiet
 gcloud secrets delete lifeagent-db-password \

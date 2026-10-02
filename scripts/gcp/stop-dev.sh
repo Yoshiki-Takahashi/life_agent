@@ -5,6 +5,7 @@ project_id="lifeagent-505614"
 region="asia-northeast1"
 sql_instance="lifeagent-dev-db"
 run_service="lifeagent-core-api"
+planner_service="lifeagent-goal-planner"
 
 activation_policy="$(gcloud sql instances describe "${sql_instance}" \
     --project="${project_id}" \
@@ -55,3 +56,17 @@ if [[ "${min_scale:-0}" != "0" || "${max_scale}" != "1" ]]; then
 fi
 
 echo "Cloud SQL is stopped. Cloud Run remains request-driven with min=0 and service max=1."
+
+if gcloud run services describe "${planner_service}" \
+    --region="${region}" \
+    --project="${project_id}" >/dev/null 2>&1; then
+    planner_min_scale="$(gcloud run services describe "${planner_service}" \
+        --region="${region}" \
+        --project="${project_id}" \
+        --format='value(spec.template.metadata.annotations."autoscaling.knative.dev/minScale")')"
+    if [[ "${planner_min_scale:-0}" != "0" ]]; then
+        echo "Unexpected Goal Planner min scale: ${planner_min_scale}" >&2
+        exit 1
+    fi
+    echo "Goal Planner remains request-driven with min=0."
+fi

@@ -96,7 +96,13 @@ jobs:
             max_scale="$(gcloud run services describe "${service}" \
               --project="${PROJECT_ID}" \
               --region="${REGION}" \
-              --format='value(metadata.annotations."run.googleapis.com/maxScale")')"
+              --format='value(spec.template.metadata.annotations."autoscaling.knative.dev/maxScale")')"
+            if [[ -z "${max_scale}" ]]; then
+              max_scale="$(gcloud run services describe "${service}" \
+                --project="${PROJECT_ID}" \
+                --region="${REGION}" \
+                --format='value(metadata.annotations."run.googleapis.com/maxScale")')"
+            fi
             revision="$(gcloud run services describe "${service}" \
               --project="${PROJECT_ID}" \
               --region="${REGION}" \

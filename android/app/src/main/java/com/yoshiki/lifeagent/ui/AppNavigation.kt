@@ -87,6 +87,9 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                 state = detailState,
                 onBack = navController::navigateUp,
                 onRetry = { detailViewModel.loadGoal(goalId) },
+                onProgressBodyChange = detailViewModel::updateProgressBody,
+                onMetricProgressChange = detailViewModel::updateMetricProgress,
+                onSaveProgress = detailViewModel::saveProgress,
             )
         }
     }

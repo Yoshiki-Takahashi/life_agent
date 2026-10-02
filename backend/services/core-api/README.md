@@ -89,6 +89,7 @@ CORE_API_URL=http://127.0.0.1:8000 uv run pytest ../../../tests/e2e
 - `POST /api/v1/goals/preview`
 - `POST /api/v1/goals/confirm`
 - `GET /api/v1/goals/{goal_id}`
+- `POST /api/v1/goals/{goal_id}/progress`
 
 Goal一覧はTokenの`uid`で所有者を絞り、更新日時の新しい順で概要を返します。`preview`は設定されたPlannerを呼び、DBへ保存せずに計画案を返します。通常のローカル実行とテストでは決定論的Fakeを使用します。独立Goal Plannerを使う場合は次を設定します。
 
@@ -108,3 +109,9 @@ GOAL_PLANNER_ID_TOKEN_AUDIENCE=https://<goal-planner-service-url>
 
 Plannerの通信障害や契約違反は`503`となり、Goalは保存されません。`confirm`は編集済みのMetricとMilestoneを再検証し、Goalと同じTransactionで保存します。
 Core APIのPlanner待機時間は、Goal Planner側のOpenAI待機時間より長く設定してください。
+
+`progress`は認証済みユーザーが所有するGoalだけを対象に、進捗本文とMetric更新値を保存します。
+Metric更新は加算で、`Metric.current_value`が`target_value`を超える更新、別GoalのMetric、
+重複Metric、不正な入力は拒否します。`client_request_id`はGoal内で一意に扱い、同じIDの
+再送はMetricへ二重反映しません。ProgressLog、Metric更新履歴、Metric現在値、Goal更新日時は
+同一Transactionで保存します。

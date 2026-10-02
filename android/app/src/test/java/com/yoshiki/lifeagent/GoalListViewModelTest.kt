@@ -4,6 +4,7 @@ import com.yoshiki.lifeagent.data.Goal
 import com.yoshiki.lifeagent.data.GoalPlan
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.GoalSummary
+import com.yoshiki.lifeagent.data.MetricProgressInput
 import com.yoshiki.lifeagent.ui.GoalListViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -73,6 +74,11 @@ private class ListRepository(private val goals: List<GoalSummary>) : GoalReposit
     override suspend fun previewGoal(title: String, description: String?, targetDate: String): GoalPlan = error("unused")
     override suspend fun confirmGoal(plan: GoalPlan): Goal = error("unused")
     override suspend fun getGoal(goalId: String): Goal = error("unused")
+    override suspend fun recordProgress(
+        goalId: String,
+        body: String,
+        metricUpdates: List<MetricProgressInput>,
+    ): Goal = error("unused")
 }
 
 private fun summary(id: String) = GoalSummary(

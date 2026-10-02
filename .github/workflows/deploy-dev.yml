@@ -44,7 +44,7 @@ jobs:
       CORE_API_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CORE_API_RUNTIME_SERVICE_ACCOUNT }}
       GOAL_PLANNER_SERVICE: ${{ vars.GOAL_PLANNER_SERVICE }}
       GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT }}
-      CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
+      DEPLOY_CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
       OPENAI_SECRET_NAME: ${{ vars.OPENAI_SECRET_NAME }}
 
     steps:
@@ -80,7 +80,7 @@ jobs:
           : "${CORE_API_RUNTIME_SERVICE_ACCOUNT:?CORE_API_RUNTIME_SERVICE_ACCOUNT variable is required}"
           : "${GOAL_PLANNER_SERVICE:?GOAL_PLANNER_SERVICE variable is required}"
           : "${GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT:?GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT variable is required}"
-          : "${CLOUD_SQL_CONNECTION_NAME:?CLOUD_SQL_CONNECTION_NAME variable is required}"
+          : "${DEPLOY_CLOUD_SQL_CONNECTION_NAME:?CLOUD_SQL_CONNECTION_NAME variable is required}"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -163,8 +163,8 @@ jobs:
             --allow-unauthenticated \
             --min-instances=0 \
             --max-instances=1 \
-            --add-cloudsql-instances="${CLOUD_SQL_CONNECTION_NAME}" \
-            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,CLOUD_SQL_CONNECTION_NAME="${CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
+            --add-cloudsql-instances="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}" \
+            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,CLOUD_SQL_CONNECTION_NAME="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
             --update-secrets=DB_PASSWORD="${db_secret}:latest"
 
       - name: Verify deployed services

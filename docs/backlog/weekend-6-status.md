@@ -63,6 +63,7 @@
 | 2026-10-02 | W6-19 | Blocked | Core API経由previewはGoal Plannerまで到達したが、Secret version 1の末尾改行によりOpenAI SDKが不正headerとして拒否。診断ログにkeyが出たためversion 1を無効化し、ローカルkeyファイルを削除 |
 | 2026-10-02 | W6-20 | Pass | 改行除去済みのOpenAI keyをSecret version 2として登録し、Goal Planner revision `lifeagent-goal-planner-00004-j87`をdeploy。Core API経由previewが200を返し、Metric 3件、Milestone 5件の実AI計画案を取得 |
 | 2026-10-02 | W6-21 | In Progress | deploy-dev workflow上でのdeploy成功確認は未実施。manage-dev workflowを追加し、Cloud SQL停止とCloud Run scaling確認をworkflow化した。deployerへCloud SQL Adminを付与し、workflow定義、Backendテスト、script構文検査は成功。次にGitHub Actions上で両方を実行して証跡を残す |
+| 2026-10-02 | W6-22 | Fix | `deploy-dev`はGitHub Actions上で成功。`manage-dev stop`はCloud SQL停止まで成功したが、Goal Plannerのmax scale検証がservice-level annotationだけを読んだため失敗。template annotationを優先して読むよう修正する |
 
 ## Next Action
 

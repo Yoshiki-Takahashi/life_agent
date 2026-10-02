@@ -34,7 +34,13 @@ fi
 max_scale="$(gcloud run services describe "${run_service}" \
     --region="${region}" \
     --project="${project_id}" \
-    --format='value(metadata.annotations."run.googleapis.com/maxScale")')"
+    --format='value(spec.template.metadata.annotations."autoscaling.knative.dev/maxScale")')"
+if [[ -z "${max_scale}" ]]; then
+    max_scale="$(gcloud run services describe "${run_service}" \
+        --region="${region}" \
+        --project="${project_id}" \
+        --format='value(metadata.annotations."run.googleapis.com/maxScale")')"
+fi
 min_scale="$(gcloud run services describe "${run_service}" \
     --region="${region}" \
     --project="${project_id}" \

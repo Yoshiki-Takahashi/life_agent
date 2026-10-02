@@ -91,6 +91,7 @@ def validate_milestone_dates(milestones: list[MilestoneDraft], target_date: date
 
 class MetricResponse(MetricDraft):
     id: uuid.UUID
+    current_value: float
     position: int
     created_at: datetime
 
@@ -105,6 +106,48 @@ class MilestoneResponse(MilestoneDraft):
     model_config = ConfigDict(from_attributes=True)
 
 
+class ProgressMetricUpdateRequest(BaseModel):
+    metric_id: uuid.UUID
+    value: float = Field(gt=0, le=1_000_000_000)
+
+
+class ProgressLogCreateRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+    client_request_id: str = Field(min_length=1, max_length=64)
+    metric_updates: list[ProgressMetricUpdateRequest] = Field(min_length=1, max_length=3)
+
+    @field_validator("body", "client_request_id", mode="before")
+    @classmethod
+    def normalize_text(cls, value: object) -> object:
+        return value.strip() if isinstance(value, str) else value
+
+    @model_validator(mode="after")
+    def metric_ids_must_be_unique(self) -> "ProgressLogCreateRequest":
+        metric_ids = [item.metric_id for item in self.metric_updates]
+        if len(metric_ids) != len(set(metric_ids)):
+            raise ValueError("同じMetricを複数回更新できません")
+        return self
+
+
+class ProgressMetricUpdateResponse(BaseModel):
+    metric_id: uuid.UUID
+    metric_name: str
+    value: float
+    unit: str
+
+    model_config = ConfigDict(from_attributes=True)
+
+
+class ProgressLogResponse(BaseModel):
+    id: uuid.UUID
+    body: str
+    recorded_at: datetime
+    created_at: datetime
+    metric_updates: list[ProgressMetricUpdateResponse]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class GoalResponse(BaseModel):
     id: uuid.UUID
     title: str
@@ -113,6 +156,7 @@ class GoalResponse(BaseModel):
     status: GoalStatus
     metrics: list[MetricResponse]
     milestones: list[MilestoneResponse]
+    progress_logs: list[ProgressLogResponse] = []
     created_at: datetime
     updated_at: datetime
 

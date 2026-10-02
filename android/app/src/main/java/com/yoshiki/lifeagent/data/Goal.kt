@@ -9,6 +9,8 @@ data class Goal(
     val createdAt: String,
     val metrics: List<Metric>,
     val milestones: List<Milestone>,
+    val updatedAt: String = createdAt,
+    val progressLogs: List<ProgressLog> = emptyList(),
 )
 
 data class GoalSummary(
@@ -35,10 +37,32 @@ data class Metric(
     val targetValue: Double,
     val unit: String,
     val position: Int = 0,
+    val id: String = "",
+    val currentValue: Double = 0.0,
 )
 
 data class Milestone(
     val title: String,
     val targetDate: String,
     val position: Int = 0,
+)
+
+data class ProgressLog(
+    val id: String,
+    val body: String,
+    val recordedAt: String,
+    val createdAt: String,
+    val metricUpdates: List<ProgressMetricUpdate>,
+)
+
+data class ProgressMetricUpdate(
+    val metricId: String,
+    val metricName: String,
+    val value: Double,
+    val unit: String,
+)
+
+data class MetricProgressInput(
+    val metricId: String,
+    val value: Double,
 )

@@ -81,6 +81,8 @@ def test_preview_confirm_and_get_edited_plan(client: TestClient) -> None:
     body = created.json()
     assert body["metrics"][0]["name"] == "読書数"
     assert body["metrics"][0]["position"] == 0
+    assert body["metrics"][0]["current_value"] == 0
+    assert body["progress_logs"] == []
     assert body["milestones"][0]["title"] == "候補を8冊選ぶ"
     fetched = client.get(f"/api/v1/goals/{body['id']}")
     assert fetched.status_code == 200
@@ -137,6 +139,107 @@ def test_other_user_cannot_get_goal(client: TestClient) -> None:
     assert response.status_code == 404
 
 
+def test_record_progress_updates_metric_and_returns_history(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+    metric_id = goal["metrics"][0]["id"]
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/progress",
+        json={
+            "body": "2冊読み終えた",
+            "client_request_id": str(uuid.uuid4()),
+            "metric_updates": [{"metric_id": metric_id, "value": 2}],
+        },
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["metrics"][0]["current_value"] == 2
+    assert body["progress_logs"][0]["body"] == "2冊読み終えた"
+    assert body["progress_logs"][0]["metric_updates"] == [
+        {
+            "metric_id": metric_id,
+            "metric_name": body["metrics"][0]["name"],
+            "value": 2,
+            "unit": body["metrics"][0]["unit"],
+        }
+    ]
+
+
+def test_record_progress_is_idempotent_by_client_request_id(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+    payload = {
+        "body": "1冊読んだ",
+        "client_request_id": str(uuid.uuid4()),
+        "metric_updates": [{"metric_id": goal["metrics"][0]["id"], "value": 1}],
+    }
+
+    first = client.post(f"/api/v1/goals/{goal['id']}/progress", json=payload)
+    second = client.post(f"/api/v1/goals/{goal['id']}/progress", json=payload)
+
+    assert first.status_code == 200
+    assert second.status_code == 200
+    assert second.json()["metrics"][0]["current_value"] == 1
+    assert len(second.json()["progress_logs"]) == 1
+
+
+def test_record_progress_rejects_metric_from_other_goal(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client, "本を読む")).json()
+    other_goal = client.post("/api/v1/goals/confirm", json=preview(client, "筋トレを続ける")).json()
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/progress",
+        json={
+            "body": "別GoalのMetricを混ぜる",
+            "client_request_id": str(uuid.uuid4()),
+            "metric_updates": [{"metric_id": other_goal["metrics"][0]["id"], "value": 1}],
+        },
+    )
+
+    assert response.status_code == 422
+    fetched = client.get(f"/api/v1/goals/{goal['id']}").json()
+    assert fetched["metrics"][0]["current_value"] == 0
+    assert fetched["progress_logs"] == []
+
+
+def test_record_progress_rejects_updates_over_target(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/progress",
+        json={
+            "body": "目標を超える",
+            "client_request_id": str(uuid.uuid4()),
+            "metric_updates": [
+                {
+                    "metric_id": goal["metrics"][0]["id"],
+                    "value": goal["metrics"][0]["target_value"] + 1,
+                }
+            ],
+        },
+    )
+
+    assert response.status_code == 422
+    fetched = client.get(f"/api/v1/goals/{goal['id']}").json()
+    assert fetched["metrics"][0]["current_value"] == 0
+
+
+def test_other_user_cannot_record_progress(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/progress",
+        json={
+            "body": "1冊読んだ",
+            "client_request_id": str(uuid.uuid4()),
+            "metric_updates": [{"metric_id": goal["metrics"][0]["id"], "value": 1}],
+        },
+        headers={"Authorization": "Bearer user-b"},
+    )
+
+    assert response.status_code == 404
+
+
 def test_goal_endpoints_require_valid_token(unauthenticated_client: TestClient) -> None:
     assert unauthenticated_client.get("/health").status_code == 200
     assert (
@@ -144,6 +247,13 @@ def test_goal_endpoints_require_valid_token(unauthenticated_client: TestClient) 
         == 401
     )
     assert unauthenticated_client.get("/api/v1/goals").status_code == 401
+    assert (
+        unauthenticated_client.post(
+            f"/api/v1/goals/{uuid.uuid4()}/progress",
+            json={"body": "進捗", "client_request_id": "request", "metric_updates": []},
+        ).status_code
+        == 401
+    )
     assert (
         unauthenticated_client.get(
             f"/api/v1/goals/{uuid.uuid4()}",

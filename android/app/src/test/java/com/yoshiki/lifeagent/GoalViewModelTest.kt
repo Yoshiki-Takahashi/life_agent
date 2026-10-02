@@ -5,6 +5,7 @@ import com.yoshiki.lifeagent.data.GoalPlan
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.GoalSummary
 import com.yoshiki.lifeagent.data.Metric
+import com.yoshiki.lifeagent.data.MetricProgressInput
 import com.yoshiki.lifeagent.data.Milestone
 import com.yoshiki.lifeagent.ui.GoalViewModel
 import java.text.SimpleDateFormat
@@ -188,6 +189,12 @@ private class FakeGoalRepository(
             milestones = listOf(Milestone("読み終える", futureDate())),
         )
     )
+
+    override suspend fun recordProgress(
+        goalId: String,
+        body: String,
+        metricUpdates: List<MetricProgressInput>,
+    ): Goal = error("unused")
 
     private fun goal(plan: GoalPlan) = Goal(
         id = "goal-id",

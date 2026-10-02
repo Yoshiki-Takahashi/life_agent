@@ -7,6 +7,7 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
+import java.util.UUID
 
 interface GoalApi {
     @GET("api/v1/goals")
@@ -30,6 +31,13 @@ interface GoalApi {
     suspend fun getGoal(
         @Header("Authorization") authorization: String,
         @Path("goalId") goalId: String,
+    ): GoalResponse
+
+    @POST("api/v1/goals/{goalId}/progress")
+    suspend fun recordProgress(
+        @Header("Authorization") authorization: String,
+        @Path("goalId") goalId: String,
+        @Body request: ProgressLogCreateRequest,
     ): GoalResponse
 }
 
@@ -111,6 +119,7 @@ data class GoalResponse(
     val status: String,
     val metrics: List<MetricResponse>,
     val milestones: List<MilestoneResponse>,
+    @SerialName("progress_logs") val progressLogs: List<ProgressLogResponse> = emptyList(),
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
 ) {
@@ -123,6 +132,8 @@ data class GoalResponse(
         createdAt = createdAt,
         metrics = metrics.map { it.toMetric() },
         milestones = milestones.map { it.toMilestone() },
+        updatedAt = updatedAt,
+        progressLogs = progressLogs.map { it.toProgressLog() },
     )
 }
 
@@ -131,11 +142,12 @@ data class MetricResponse(
     val id: String,
     val name: String,
     @SerialName("target_value") val targetValue: Double,
+    @SerialName("current_value") val currentValue: Double = 0.0,
     val unit: String,
     val position: Int,
     @SerialName("created_at") val createdAt: String,
 ) {
-    fun toMetric() = Metric(name, targetValue, unit, position)
+    fun toMetric() = Metric(name, targetValue, unit, position, id, currentValue)
 }
 
 @Serializable
@@ -147,6 +159,46 @@ data class MilestoneResponse(
     @SerialName("created_at") val createdAt: String,
 ) {
     fun toMilestone() = Milestone(title, targetDate, position)
+}
+
+@Serializable
+data class ProgressLogCreateRequest(
+    val body: String,
+    @SerialName("client_request_id") val clientRequestId: String = UUID.randomUUID().toString(),
+    @SerialName("metric_updates") val metricUpdates: List<ProgressMetricUpdatePayload>,
+)
+
+@Serializable
+data class ProgressMetricUpdatePayload(
+    @SerialName("metric_id") val metricId: String,
+    val value: Double,
+)
+
+@Serializable
+data class ProgressLogResponse(
+    val id: String,
+    val body: String,
+    @SerialName("recorded_at") val recordedAt: String,
+    @SerialName("created_at") val createdAt: String,
+    @SerialName("metric_updates") val metricUpdates: List<ProgressMetricUpdateResponse>,
+) {
+    fun toProgressLog() = ProgressLog(
+        id = id,
+        body = body,
+        recordedAt = recordedAt,
+        createdAt = createdAt,
+        metricUpdates = metricUpdates.map { it.toProgressMetricUpdate() },
+    )
+}
+
+@Serializable
+data class ProgressMetricUpdateResponse(
+    @SerialName("metric_id") val metricId: String,
+    @SerialName("metric_name") val metricName: String,
+    val value: Double,
+    val unit: String,
+) {
+    fun toProgressMetricUpdate() = ProgressMetricUpdate(metricId, metricName, value, unit)
 }
 
 private fun MetricPayload.toMetric(position: Int) = Metric(name, targetValue, unit, position)

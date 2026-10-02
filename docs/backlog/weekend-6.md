@@ -43,6 +43,15 @@ Weekend 5から持ち越した6.A相当の自動デプロイと、6.B相当のGo
 - ProgressLog保存とMetric更新を同一transactionで行い、通信再送で二重反映しない。
 - 空履歴、保存中、失敗、再試行の表示を用意する。
 
+#### ProgressLog契約
+
+- Weekend 6では自然言語解析を行わず、AndroidのGoal詳細画面で本文とMetricごとの今回値を手入力する。
+- Metric更新は加算とする。`Metric.current_value`へ正の値を足し、`target_value`を超える更新は保存しない。
+- `ProgressLog.body`は1〜2000文字、`metric_updates`は1〜3件、各`value`は`0 < value <= 1,000,000,000`とする。
+- `client_request_id`をGoal内で一意に扱い、同じIDの再送は既存記録として扱ってMetricへ二重反映しない。
+- `recorded_at`と`created_at`はサーバー時刻で記録し、履歴は`recorded_at`の新しい順で返す。
+- `ProgressLog`保存、`ProgressMetricUpdate`保存、`Metric.current_value`更新、`Goal.updated_at`更新は同一transactionで行う。
+
 ## Done
 
 - 自動デプロイworkflowを実行して成功証跡を残し、失敗時の復旧手順を検証する。

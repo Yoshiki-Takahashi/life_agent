@@ -64,11 +64,10 @@
 | 2026-10-02 | W6-20 | Pass | 改行除去済みのOpenAI keyをSecret version 2として登録し、Goal Planner revision `lifeagent-goal-planner-00004-j87`をdeploy。Core API経由previewが200を返し、Metric 3件、Milestone 5件の実AI計画案を取得 |
 | 2026-10-02 | W6-21 | In Progress | deploy-dev workflow上でのdeploy成功確認は未実施。manage-dev workflowを追加し、Cloud SQL停止とCloud Run scaling確認をworkflow化した。deployerへCloud SQL Adminを付与し、workflow定義、Backendテスト、script構文検査は成功。次にGitHub Actions上で両方を実行して証跡を残す |
 | 2026-10-02 | W6-22 | Fix | `deploy-dev`はGitHub Actions上で成功。`manage-dev stop`はCloud SQL停止まで成功したが、Goal Plannerのmax scale検証がservice-level annotationだけを読んだため失敗。template annotationを優先して読むよう修正する |
+| 2026-10-02 | W6-23 | Pass | GitHub Actions上で`deploy-dev` run `36949309163`が成功し、Core APIとGoal Plannerのbuild、push、deploy、health確認が完了。`manage-dev stop` run `36954436853`が成功し、Cloud SQL `STOPPED / NEVER`、Core API revision `lifeagent-core-api-00004-2sw`、Goal Planner revision `lifeagent-goal-planner-00005-c9z`、Cloud Run `min=0 / max=1`を確認 |
 
 ## Next Action
 
 1. OpenAI Dashboardでversion 1に使った旧keyがrevoke済みであることを確認する。
-2. `deploy-dev`をGitHub Actions上で実行し、deploy成功証跡を残す。
-3. `manage-dev`をGitHub Actions上で`stop`実行し、close成功証跡を残す。
-4. 実AI計画生成の読書・アプリ開発・筋トレ回帰評価を明示実行し、結果を記録する。
-5. Androidから実Firebase認証、実AI計画、確認、保存、再訪を確認する。
+2. 実AI計画生成の読書・アプリ開発・筋トレ回帰評価を明示実行し、結果を記録する。
+3. Androidから実Firebase認証、実AI計画、確認、保存、再訪を確認する。

@@ -144,3 +144,13 @@ AIが生成した計画は直ちに保存せず、検証後にAndroidへ返し�
 ## 開発フェーズとの差分
 
 通常のローカル開発ではCloud SQLをローカルPostgreSQLに、OpenAI AdapterをFakeに置き換えます。クラウド結合環境では同じPortをCloud SQLとOpenAI Adapterへ接続します。詳細は`development-infrastructure.md`を参照してください。
+
+## Weekend 7の実装境界
+
+Progress ParserとAdvisorはCore API内の独立Portで、個別にFake/OpenAIを選択する。Androidから解析要求を受けたら所有者確認済みGoalのMetricだけを送り、候補を返す。解析処理は正本を変更しない。ユーザーの確認後、従来の進捗APIがGoal行のロック内で加算と履歴を保存する。
+
+保存後にAndroidが別APIで助言を要求する。Advisorには保存済みGoal、Metric、Milestoneと最新10件の履歴を渡し、計画変更・DB書込みを許可しない。助言失敗時も進捗は維持され、助言だけ再試行できる。AI呼び出し前に読取りtransactionを終了する。候補と助言の追加永続化・新サービス・migrationは導入しない。
+
+実AIモードではCore APIもOpenAIに直接接続するため、Core API runtime service accountにOpenAI SecretのAccessorが必要になる。Goal Plannerの認証・DB非所有境界は従来どおり。
+
+Advisorにはサーバー基準日（UTC）、期限までの日数、最新記録からの日数、Metricごとの残量を明示する。本文と確定値が異なる場合も確定値を優先し、記録空白を活動停止と断定しない。状況別の助言と合格基準は[進捗AI品質設計](progress-ai-quality.md)に従う。

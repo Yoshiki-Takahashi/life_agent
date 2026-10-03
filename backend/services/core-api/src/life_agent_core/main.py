@@ -13,11 +13,23 @@ from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
 from life_agent_core.database import get_db
 from life_agent_core.models import Goal, Metric, Milestone, ProgressLog, ProgressMetricUpdate
+from life_agent_core.openai_progress import OpenAIAdvisor, OpenAIProgressParser
 from life_agent_core.planner import (
     FakeGoalPlanner,
     GoalPlanner,
     HttpGoalPlanner,
     PlannerUnavailableError,
+)
+from life_agent_core.progress_ai import (
+    Advice,
+    Advisor,
+    AIUnavailableError,
+    FakeAdvisor,
+    FakeProgressParser,
+    ProgressParser,
+    ProgressPreview,
+    ProgressPreviewRequest,
+    validate_candidates,
 )
 from life_agent_core.schemas import (
     GoalConfirmRequest,
@@ -92,6 +104,17 @@ def record_progress(
     db: DatabaseSession,
     user_id: CurrentUserId,
 ) -> Goal:
+    # Serialize writes for this Goal before loading metric values or checking replay IDs.
+    locked = db.scalar(
+        select(Goal.id)
+        .where(
+            Goal.id == goal_id,
+            Goal.owner_id == user_id,
+        )
+        .with_for_update()
+    )
+    if locked is None:
+        raise HTTPException(status_code=404, detail="Goalが見つかりません")
     goal = load_goal_with_details(goal_id, db, user_id)
     existing = db.scalar(
         select(ProgressLog).where(
@@ -183,3 +206,56 @@ def load_goal_with_details(goal_id: uuid.UUID, db: Session, user_id: str) -> Goa
     if goal is None:
         raise HTTPException(status_code=404, detail="Goalが見つかりません")
     return goal
+
+
+@lru_cache
+def get_progress_parser() -> ProgressParser:
+    settings = get_settings()
+    if settings.progress_parser_backend == "openai":
+        return OpenAIProgressParser(settings)
+    return FakeProgressParser()
+
+
+@lru_cache
+def get_advisor() -> Advisor:
+    settings = get_settings()
+    if settings.advisor_backend == "openai":
+        return OpenAIAdvisor(settings)
+    return FakeAdvisor()
+
+
+@app.post("/api/v1/goals/{goal_id}/progress/preview", response_model=ProgressPreview)
+def preview_progress(
+    goal_id: uuid.UUID,
+    payload: ProgressPreviewRequest,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+    parser: Annotated[ProgressParser, Depends(get_progress_parser)],
+) -> ProgressPreview:
+    context = GoalResponse.model_validate(load_goal_with_details(goal_id, db, user_id))
+    db.rollback()  # Do not keep a transaction open during AI generation.
+    try:
+        result = ProgressPreview.model_validate(parser.parse(context, payload.body))
+        return validate_candidates(result, context)
+    except (AIUnavailableError, ValueError, TypeError) as error:
+        raise HTTPException(
+            status_code=503, detail="解析できませんでした。再試行または手入力してください"
+        ) from error
+
+
+@app.post("/api/v1/goals/{goal_id}/advice", response_model=Advice)
+def generate_advice(
+    goal_id: uuid.UUID,
+    db: DatabaseSession,
+    user_id: CurrentUserId,
+    advisor: Annotated[Advisor, Depends(get_advisor)],
+) -> Advice:
+    context = GoalResponse.model_validate(load_goal_with_details(goal_id, db, user_id))
+    context.progress_logs = context.progress_logs[:10]
+    db.rollback()
+    try:
+        return Advice.model_validate(advisor.advise(context))
+    except (AIUnavailableError, ValueError, TypeError) as error:
+        raise HTTPException(
+            status_code=503, detail="助言を取得できませんでした。助言だけ再試行できます"
+        ) from error

@@ -46,3 +46,6 @@ jobs:
 
       - name: Run service integration test
         run: ./scripts/test-weekend-3.sh
+
+      - name: Run progress concurrency test
+        run: ./scripts/test-weekend-7.sh

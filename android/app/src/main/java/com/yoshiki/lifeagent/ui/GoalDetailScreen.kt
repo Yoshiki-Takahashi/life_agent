@@ -20,6 +20,8 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
@@ -35,7 +37,12 @@ fun GoalDetailScreen(
     onProgressBodyChange: (String) -> Unit,
     onMetricProgressChange: (Int, String) -> Unit,
     onSaveProgress: () -> Unit,
+    onParseProgress: () -> Unit = {},
+    onCancelPreview: () -> Unit = {},
+    onLoadAdvice: () -> Unit = {},
 ) {
+    val focusManager = LocalFocusManager.current
+    val keyboard = LocalSoftwareKeyboardController.current
     Scaffold(
         topBar = {
             TopAppBar(
@@ -59,7 +66,10 @@ fun GoalDetailScreen(
                     state = state,
                     onProgressBodyChange = onProgressBodyChange,
                     onMetricProgressChange = onMetricProgressChange,
-                    onSaveProgress = onSaveProgress,
+                    onSaveProgress = { focusManager.clearFocus(); keyboard?.hide(); onSaveProgress() },
+                    onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
+                    onCancelPreview = onCancelPreview,
+                    onLoadAdvice = onLoadAdvice,
                 )
             }
         }
@@ -72,6 +82,9 @@ private fun GoalDetail(
     onProgressBodyChange: (String) -> Unit,
     onMetricProgressChange: (Int, String) -> Unit,
     onSaveProgress: () -> Unit,
+    onParseProgress: () -> Unit = {},
+    onCancelPreview: () -> Unit = {},
+    onLoadAdvice: () -> Unit = {},
 ) {
     val goal = requireNotNull(state.goal)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -106,7 +119,27 @@ private fun GoalDetail(
         onProgressBodyChange = onProgressBodyChange,
         onMetricProgressChange = onMetricProgressChange,
         onSaveProgress = onSaveProgress,
+        onParseProgress = onParseProgress,
+        onCancelPreview = onCancelPreview,
+        onLoadAdvice = onLoadAdvice,
     )
+    if (state.progressSaved) Text("進捗を保存しました", color = MaterialTheme.colorScheme.primary)
+    if (goal.progressLogs.isNotEmpty()) {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text("次の一歩", style = MaterialTheme.typography.titleLarge)
+                if (state.isLoadingAdvice) CircularProgressIndicator()
+                state.advice?.let { advice ->
+                    Text(advice.summary)
+                    advice.nextActions.forEach { Text("• $it") }
+                }
+                state.adviceError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+                TextButton(onClick = onLoadAdvice, enabled = !state.isLoadingAdvice && !state.isSavingProgress) {
+                    Text(if (state.adviceError != null) "助言だけ再試行" else "助言を取得")
+                }
+            }
+        }
+    }
     ProgressHistory(goal)
     Text("達成までのMilestone", style = MaterialTheme.typography.titleLarge)
     goal.milestones.sortedBy { it.position }.forEachIndexed { index, milestone ->
@@ -129,6 +162,9 @@ private fun ProgressEntry(
     onProgressBodyChange: (String) -> Unit,
     onMetricProgressChange: (Int, String) -> Unit,
     onSaveProgress: () -> Unit,
+    onParseProgress: () -> Unit = {},
+    onCancelPreview: () -> Unit = {},
+    onLoadAdvice: () -> Unit = {},
 ) {
     Text("進捗を記録", style = MaterialTheme.typography.titleLarge)
     Card(Modifier.fillMaxWidth()) {
@@ -137,11 +173,25 @@ private fun ProgressEntry(
                 value = state.progressBody,
                 onValueChange = onProgressBodyChange,
                 label = { Text("進捗メモ") },
+                enabled = !state.isSavingProgress,
+                supportingText = { Text("例：今日は2冊読み終えた") },
                 modifier = Modifier.fillMaxWidth(),
             )
+            Button(onClick = onParseProgress, enabled = !state.isParsing && !state.isSavingProgress) {
+                Text(if (state.isParsing) "解析中…" else "進捗メモを解析")
+            }
+            if (state.hasPreview) {
+                Text("更新候補を確認", style = MaterialTheme.typography.titleMedium)
+                Text("まだ保存されていません。今回の増加量を確認・修正してください。")
+                TextButton(onClick = onCancelPreview, enabled = !state.isSavingProgress && !state.isParsing) {
+                    Text("候補を取り消して手入力")
+                }
+            }
+            state.parserWarnings.forEach { Text(it) }
             state.metricProgress.forEachIndexed { index, item ->
                 OutlinedTextField(
                     value = item.value,
+                    enabled = !state.isSavingProgress && !state.isParsing,
                     onValueChange = { onMetricProgressChange(index, it) },
                     label = { Text("${item.name} の今回値") },
                     supportingText = {
@@ -154,7 +204,7 @@ private fun ProgressEntry(
                 )
             }
             state.progressError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(onClick = onSaveProgress, enabled = !state.isSavingProgress) {
+            Button(onClick = onSaveProgress, enabled = !state.isSavingProgress && !state.isParsing) {
                 if (state.isSavingProgress) CircularProgressIndicator() else Text("進捗を保存")
             }
         }

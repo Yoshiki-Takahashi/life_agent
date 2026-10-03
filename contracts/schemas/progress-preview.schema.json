@@ -1,0 +1,54 @@
+{
+  "$defs": {
+    "ProgressMetricUpdateRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "metric_id": {
+          "format": "uuid",
+          "title": "Metric Id",
+          "type": "string"
+        },
+        "value": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000000000,
+          "multipleOf": 0.01,
+          "title": "Value",
+          "type": "number"
+        }
+      },
+      "required": [
+        "metric_id",
+        "value"
+      ],
+      "title": "ProgressMetricUpdateRequest",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "metric_updates": {
+      "items": {
+        "$ref": "#/$defs/ProgressMetricUpdateRequest"
+      },
+      "maxItems": 3,
+      "title": "Metric Updates",
+      "type": "array"
+    },
+    "warnings": {
+      "items": {
+        "maxLength": 300,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 3,
+      "title": "Warnings",
+      "type": "array"
+    }
+  },
+  "required": [
+    "metric_updates",
+    "warnings"
+  ],
+  "title": "ProgressPreview",
+  "type": "object"
+}

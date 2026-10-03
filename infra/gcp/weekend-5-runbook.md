@@ -136,3 +136,13 @@ CodexはDBにowner付きGoalが存在することだけを確認し、入力全�
 - 「削除候補を確認して」: 実削除せず対象一覧だけを表示する。
 
 完全削除は一般的な停止依頼から推測して実行しない。
+
+## Weekend 7: Core APIの実AI解析・助言
+
+Core API内にParser・Advisorを追加したため、実AIモードではCore API runtime service accountも`lifeagent-openai-api-key`のAccessorを必要とする。`scripts/gcp/setup-dev-deploy.sh`にこのbindingを追加している。初回の実AI deploy前に同スクリプトを適用する。
+
+`deploy-dev`には`progress_parser_backend`と`advisor_backend`の独立した選択を追加した（既定値`fake`）。実AI確認時は必要な側だけ`openai`を選ぶ。一方でも`openai`ならCore APIへSecret参照を追加し、両方`fake`ならCore APIのOpenAI Secret参照を除去する。DB Secretは保持する。追加migrationはない。
+
+クラウド受け入れではFirebaseログイン→Goal選択→本文解析→候補修正・取消→確定保存→助言→再訪を確認する。助言障害時の履歴維持と助言だけの再試行も確認する。revisionと結果をWeekend 7ステータスへ記録し、確認後は既存の`manage-dev stop`または`stop-dev.sh`を実行する。ローカルのFake E2Eと実AI回帰評価だけでは、このCloud Run経路を確認済みとは扱わない。
+
+問題があれば両providerを`fake`にして再deployする。providerの出力上限2000 tokens、SDK自動再試行0回、timeout20秒、Cloud Run min=0/max=1を維持する。費用はOpenAI usageとGCP Billingを分けて確認する。

@@ -44,3 +44,14 @@ OpenAI API keyを登録またはrotateする場合は、`.secrets/openai-api-key
 ```bash
 ./scripts/gcp/destroy-dev.sh
 ```
+
+## Weekend 7のローカル確認
+
+Docker、uv、起動済みAndroidエミュレータを用意します。
+
+```bash
+./scripts/test-weekend-7.sh
+ANDROID_HOME="$HOME/Library/Android/sdk" ./scripts/test-weekend-7.sh --android
+```
+
+専用PostgreSQL（15437）とFake認証・Fake AIのCore API（18007）を起動し、終了時に専用コンテナとデータを削除します。通常の開発DBは使いません。ポート使用中は停止し、既存プロセスを終了しません。Android確認はadb reverseを使います。スクリーンショットとinstrumentation結果は`android/app/build/weekend7/`（`W7_OUTPUT_DIR`で変更可能）へ保存されます。クラウドFirebase・Cloud Runの確認はこのテストに含みません。

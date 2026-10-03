@@ -190,10 +190,15 @@ private class FakeGoalRepository(
         )
     )
 
+    override suspend fun previewProgress(goalId: String, body: String): com.yoshiki.lifeagent.data.ProgressPreview =
+        com.yoshiki.lifeagent.data.ProgressPreview(emptyList(), emptyList())
+    override suspend fun getAdvice(goalId: String): com.yoshiki.lifeagent.data.Advice =
+        com.yoshiki.lifeagent.data.Advice("保存済み進捗", listOf("次の行動"))
     override suspend fun recordProgress(
         goalId: String,
         body: String,
         metricUpdates: List<MetricProgressInput>,
+        clientRequestId: String,
     ): Goal = error("unused")
 
     private fun goal(plan: GoalPlan) = Goal(

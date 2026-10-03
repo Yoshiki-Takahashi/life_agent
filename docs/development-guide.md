@@ -34,7 +34,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-Weekend 5まで実装・検証済みです。次の作業はWeekend 6です。計画一覧と受け入れ条件は[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。Weekend 6では、Weekend 5から持ち越した自動デプロイとGoal Plannerクラウド結合を先に片付け、その後に進捗記録へ進みます。
+Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。実AI回帰評価とAndroidクラウド通し確認等の残件は[`Weekend 6ステータス`](backlog/weekend-6-status.md)で追跡し、Weekend 7も進捗解析・助言の実装とエミュレータ確認まで完了しました。次はクラウド受け入れです。[検証結果](backlog/weekend-7-status.md)を参照してください。[実装準備](backlog/weekend-7-preparation.md)と[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
 
 ### Weekend 0: 開発基盤
 

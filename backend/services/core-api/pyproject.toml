@@ -9,6 +9,7 @@ dependencies = [
     "firebase-admin>=7.1.0",
     "google-auth>=2.58.0",
     "httpx>=0.28.1",
+    "openai>=3.23.0",
     "psycopg[binary]>=3.3.4",
     "pydantic-settings>=2.15.0",
     "python-dotenv>=1.2.3",
@@ -25,6 +26,8 @@ packages = ["src/life_agent_core"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
+markers = ["live_ai: explicitly enabled real OpenAI regression evaluation"]
 
 [tool.ruff]
 line-length = 100

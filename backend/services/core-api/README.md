@@ -115,3 +115,37 @@ Metric更新は加算で、`Metric.current_value`が`target_value`を超える�
 重複Metric、不正な入力は拒否します。`client_request_id`はGoal内で一意に扱い、同じIDの
 再送はMetricへ二重反映しません。ProgressLog、Metric更新履歴、Metric現在値、Goal更新日時は
 同一Transactionで保存します。
+
+## Weekend 7: Progress Parser / Advisor
+
+Goal詳細の進捗メモを解析し、ユーザーが修正・確認してから既存進捗APIで保存します。保存後の助言取得は独立しているため、助言生成だけ失敗しても履歴は残ります。公開契約は[`contracts/README.md`](../../../contracts/README.md)を参照してください。
+
+通常は両方Fakeです。Fake Parserは明確な数字と単位を含む完了報告のデモ用で、汎用の自然言語解析器ではありません。独立した実AI Adapterへは次で切り替えます。
+
+```bash
+PROGRESS_PARSER_BACKEND=openai ADVISOR_BACKEND=openai uv run uvicorn life_agent_core.main:app
+```
+
+`OPENAI_API_KEY`を環境変数または無視対象の`.env`に設定します。`OPENAI_MODEL`は既存Plannerと同じ`gpt-5.6-luna`、timeoutは20秒、SDKの自動再試行は0回、出力上限は2000 tokens、`store=False`です。Androidのread timeoutは35秒です。秘密情報や報告全文をエラーログへ出しません。
+
+通常テストは実AIを呼びません。3分野の解析・保存・助言の評価は明示的に実行します（合計6回のAI呼び出し）。
+
+```bash
+RUN_LIVE_AI=1 uv run pytest tests/test_live_progress.py -q
+```
+
+リポジトリルートから`./scripts/test-weekend-7.sh`で専用PostgreSQL・Fake APIを使った同時保存テストを実行できます。`--android`を付けると起動済みエミュレータで解析・取消・修正・保存・助言障害・再試行・再訪を確認し、スクリーンショットを`android/app/build/weekend7/files/`に保存します。認証はこの隔離E2Eに限りFakeです。
+
+実AI Adapterは[OpenAI Structured Outputsの公式仕様](https://developers.openai.com/api/docs/guides/structured-outputs)に従い、`responses.parse`とPydanticモデルで出力を検証します。拒否・未完了・不正出力・タイムアウトは再試行可能なエラーに変換します。
+
+### ユーザー価値の評価
+
+従来の3分野テストは接続と構造のスモークテストです。有益さの受け入れは[解析・助言品質設計](../../../docs/progress-ai-quality.md)で別に定義しています。合成の主19ケースと追加6ケースを使い、数値の完全一致に加えて制約への適合、最初の行動、負担、主体性を評価します。
+
+```bash
+uv run python -m evaluations.progress_quality --repeat 2 --output /tmp/progress-quality.json
+uv run python -m evaluations.progress_quality --suite holdout --repeat 2 --output /tmp/progress-quality-holdout.json
+```
+
+このコマンドは実OpenAIを呼び出します。通常CIでは実行しません。終了コード0は機械チェックの合格のみで、全返答の内容レビューも必要です。キー・providerエラー全文はレポートに記録しません。
+Weekend 7時点の内容レビュー結果は[進捗解析・助言 実AI品質評価結果](../../../docs/progress-ai-quality-results.md)に記録しています。

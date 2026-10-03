@@ -18,6 +18,7 @@ import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.test.setMain
 import org.junit.After
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Before
@@ -75,9 +76,73 @@ class GoalDetailViewModelTest {
         assertEquals("", viewModel.uiState.value.progressBody)
         assertEquals("", viewModel.uiState.value.metricProgress.single().value)
     }
+    @Test fun retryRetainsIdAndAdviceFailureDoesNotResave() = runTest(dispatcher) {
+        val repo = FakeDetailRepository()
+        val vm = GoalDetailViewModel(repo)
+        vm.loadGoal("goal-1")
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.updateProgressBody("1冊読んだ")
+        vm.updateMetricProgress(0, "1")
+        repo.failSave = true
+        vm.saveProgress()
+        vm.saveProgress()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(1, repo.recordProgressCalls)
+        repo.failSave = false
+        repo.failAdvice = true
+        vm.saveProgress()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(repo.requestIds[0], repo.requestIds[1])
+        assertNotNull(vm.uiState.value.adviceError)
+        assertTrue(vm.uiState.value.progressSaved)
+        repo.failAdvice = false
+        vm.loadAdvice()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals(2, repo.recordProgressCalls)
+        assertNotNull(vm.uiState.value.advice)
+    }
+
+    @Test fun previewIsEditableAndBodyChangesInvalidateIt() = runTest(dispatcher) {
+        val repo = FakeDetailRepository()
+        val vm = GoalDetailViewModel(repo)
+        vm.loadGoal("goal-1")
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.updateProgressBody("2冊読んだ")
+        vm.parseProgress()
+        dispatcher.scheduler.advanceUntilIdle()
+        assertEquals("2", vm.uiState.value.metricProgress.single().value)
+        assertEquals(0, repo.recordProgressCalls)
+        vm.updateMetricProgress(0, "1")
+        assertEquals("1", vm.uiState.value.metricProgress.single().value)
+        vm.updateProgressBody("少し読んだ")
+        assertFalse(vm.uiState.value.hasPreview)
+        assertEquals("", vm.uiState.value.metricProgress.single().value)
+        vm.parseProgress()
+        vm.updateProgressBody("新しい本文")
+        dispatcher.scheduler.advanceUntilIdle()
+        assertFalse(vm.uiState.value.hasPreview)
+    }
+
+    @Test fun invalidNumericInputIsNotSilentlyDropped() = runTest(dispatcher) {
+        val repo = FakeDetailRepository()
+        val vm = GoalDetailViewModel(repo)
+        vm.loadGoal("goal-1")
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.updateProgressBody("読んだ")
+        for (value in listOf("NaN", "Infinity", "-1", "13", "0.001", "abc")) {
+            vm.updateMetricProgress(0, value)
+            vm.saveProgress()
+            assertNotNull(vm.uiState.value.progressError)
+        }
+        assertEquals(0, repo.recordProgressCalls)
+    }
+
 }
 
 private class FakeDetailRepository : GoalRepository {
+    var failSave = false
+    var failAdvice = false
+    val requestIds = mutableListOf<String>()
     var recordProgressCalls = 0
     var lastBody: String? = null
     var lastUpdates: List<MetricProgressInput> = emptyList()
@@ -91,12 +156,19 @@ private class FakeDetailRepository : GoalRepository {
     override suspend fun confirmGoal(plan: GoalPlan): Goal = error("unused")
     override suspend fun getGoal(goalId: String): Goal = goal(currentValue = 0.0)
 
+    override suspend fun previewProgress(goalId: String, body: String): com.yoshiki.lifeagent.data.ProgressPreview =
+        com.yoshiki.lifeagent.data.ProgressPreview(listOf(com.yoshiki.lifeagent.data.ProgressMetricUpdatePayload("metric-1", 2.0)), emptyList())
+    override suspend fun getAdvice(goalId: String): com.yoshiki.lifeagent.data.Advice =
+        if (failAdvice) error("unavailable") else com.yoshiki.lifeagent.data.Advice("保存済み進捗", listOf("次の行動"))
     override suspend fun recordProgress(
         goalId: String,
         body: String,
         metricUpdates: List<MetricProgressInput>,
+        clientRequestId: String,
     ): Goal {
         recordProgressCalls++
+        requestIds.add(clientRequestId)
+        if (failSave) error("response lost")
         lastBody = body
         lastUpdates = metricUpdates
         return goal(currentValue = metricUpdates.single().value)

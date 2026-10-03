@@ -5,10 +5,13 @@ interface GoalRepository {
     suspend fun previewGoal(title: String, description: String?, targetDate: String): GoalPlan
     suspend fun confirmGoal(plan: GoalPlan): Goal
     suspend fun getGoal(goalId: String): Goal
+    suspend fun previewProgress(goalId: String, body: String): ProgressPreview
+    suspend fun getAdvice(goalId: String): Advice
     suspend fun recordProgress(
         goalId: String,
         body: String,
         metricUpdates: List<MetricProgressInput>,
+        clientRequestId: String,
     ): Goal
 }
 
@@ -42,15 +45,22 @@ class HttpGoalRepository(
 
     override suspend fun getGoal(goalId: String): Goal = api.getGoal(authorization(), goalId).toGoal()
 
+    override suspend fun previewProgress(goalId: String, body: String): ProgressPreview =
+        api.previewProgress(authorization(), goalId, ProgressPreviewRequest(body))
+
+    override suspend fun getAdvice(goalId: String): Advice = api.getAdvice(authorization(), goalId)
+
     override suspend fun recordProgress(
         goalId: String,
         body: String,
         metricUpdates: List<MetricProgressInput>,
+        clientRequestId: String,
     ): Goal = api.recordProgress(
         authorization(),
         goalId,
         ProgressLogCreateRequest(
             body = body,
+            clientRequestId = clientRequestId,
             metricUpdates = metricUpdates.map { ProgressMetricUpdatePayload(it.metricId, it.value) },
         ),
     ).toGoal()

@@ -1,0 +1,28 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "summary": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    },
+    "next_actions": {
+      "items": {
+        "maxLength": 300,
+        "minLength": 1,
+        "type": "string"
+      },
+      "maxItems": 3,
+      "minItems": 1,
+      "title": "Next Actions",
+      "type": "array"
+    }
+  },
+  "required": [
+    "summary",
+    "next_actions"
+  ],
+  "title": "Advice",
+  "type": "object"
+}

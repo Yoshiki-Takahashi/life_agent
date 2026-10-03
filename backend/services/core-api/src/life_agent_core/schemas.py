@@ -37,7 +37,7 @@ class GoalPreviewRequest(GoalInput):
 
 class MetricDraft(BaseModel):
     name: str = Field(min_length=1, max_length=100)
-    target_value: float = Field(gt=0, le=1_000_000_000)
+    target_value: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False, multiple_of=0.01)
     unit: str = Field(min_length=1, max_length=30)
 
     @field_validator("name", "unit", mode="before")
@@ -107,8 +107,10 @@ class MilestoneResponse(MilestoneDraft):
 
 
 class ProgressMetricUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
     metric_id: uuid.UUID
-    value: float = Field(gt=0, le=1_000_000_000)
+    value: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False, multiple_of=0.01)
 
 
 class ProgressLogCreateRequest(BaseModel):

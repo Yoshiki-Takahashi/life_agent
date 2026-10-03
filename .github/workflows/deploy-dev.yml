@@ -20,6 +20,18 @@ on:
         options:
           - openai
           - fake
+      progress_parser_backend:
+        description: Progress Parser provider for Core API
+        required: true
+        default: fake
+        type: choice
+        options: [fake, openai]
+      advisor_backend:
+        description: Advisor provider for Core API
+        required: true
+        default: fake
+        type: choice
+        options: [fake, openai]
 
 permissions:
   contents: read
@@ -155,6 +167,12 @@ jobs:
         if: ${{ inputs.service == 'both' || inputs.service == 'core-api' }}
         run: |
           db_secret="lifeagent-db-password"
+          ai_args=()
+          if [[ "${{ inputs.progress_parser_backend }}" == "openai" || "${{ inputs.advisor_backend }}" == "openai" ]]; then
+            ai_args+=(--update-secrets=OPENAI_API_KEY="${OPENAI_SECRET_NAME:-lifeagent-openai-api-key}:latest")
+          else
+            ai_args+=(--remove-secrets=OPENAI_API_KEY)
+          fi
           gcloud run deploy "${CORE_API_SERVICE}" \
             --project="${PROJECT_ID}" \
             --region="${REGION}" \
@@ -164,8 +182,8 @@ jobs:
             --min-instances=0 \
             --max-instances=1 \
             --add-cloudsql-instances="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}" \
-            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,CLOUD_SQL_CONNECTION_NAME="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
-            --update-secrets=DB_PASSWORD="${db_secret}:latest"
+            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,PROGRESS_PARSER_BACKEND="${{ inputs.progress_parser_backend }}",ADVISOR_BACKEND="${{ inputs.advisor_backend }}",CLOUD_SQL_CONNECTION_NAME="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
+            --update-secrets=DB_PASSWORD="${db_secret}:latest" "${ai_args[@]}"
 
       - name: Verify deployed services
         run: |

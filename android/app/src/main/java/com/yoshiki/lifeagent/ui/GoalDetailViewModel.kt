@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
+import com.yoshiki.lifeagent.data.Advice
 import com.yoshiki.lifeagent.data.Goal
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.MetricProgressInput
@@ -13,6 +14,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import java.math.BigDecimal
+import java.util.UUID
 
 data class GoalDetailUiState(
     val goal: Goal? = null,
@@ -22,6 +25,13 @@ data class GoalDetailUiState(
     val metricProgress: List<MetricProgressEdit> = emptyList(),
     val error: String? = null,
     val progressError: String? = null,
+    val isParsing: Boolean = false,
+    val hasPreview: Boolean = false,
+    val parserWarnings: List<String> = emptyList(),
+    val advice: Advice? = null,
+    val isLoadingAdvice: Boolean = false,
+    val adviceError: String? = null,
+    val progressSaved: Boolean = false,
 )
 
 data class MetricProgressEdit(
@@ -38,6 +48,9 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     val uiState: StateFlow<GoalDetailUiState> = _uiState.asStateFlow()
 
     fun loadGoal(goalId: String) {
+        inputRevision++
+        adviceRevision++
+        requestId = null
         viewModelScope.launch {
             _uiState.update { it.copy(isLoading = true, error = null) }
             runCatching { repository.getGoal(goalId) }
@@ -50,11 +63,21 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         }
     }
 
+    private var requestId: String? = null
+    private var inputRevision = 0
+    private var adviceRevision = 0
+
     fun updateProgressBody(value: String) {
+        if (_uiState.value.isSavingProgress) return
+        inputRevision++
+        requestId = null
+        cancelPreview()
         _uiState.update { it.copy(progressBody = value, progressError = null) }
     }
 
     fun updateMetricProgress(index: Int, value: String) {
+        if (_uiState.value.isSavingProgress || _uiState.value.isParsing) return
+        requestId = null
         _uiState.update { state ->
             state.copy(
                 metricProgress = state.metricProgress.mapIndexed { itemIndex, item ->
@@ -68,6 +91,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     fun saveProgress() {
         val state = _uiState.value
         val goal = state.goal ?: return
+        if (state.isSavingProgress || state.isParsing) return
         val body = state.progressBody.trim()
         val updates = state.metricProgress.mapNotNull { item ->
             val value = item.value.toDoubleOrNull()
@@ -77,16 +101,34 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
             _uiState.update { it.copy(progressError = "進捗メモを入力してください") }
             return
         }
+        val invalid = state.metricProgress.any { item ->
+            if (item.value.isBlank()) false else {
+                val value = item.value.toBigDecimalOrNull()
+                value == null || value <= BigDecimal.ZERO ||
+                    value > BigDecimal("1000000000") ||
+                    value + BigDecimal.valueOf(item.currentValue) > BigDecimal.valueOf(item.targetValue) ||
+                    value.stripTrailingZeros().scale() > 2
+            }
+        }
+        if (invalid) {
+            _uiState.update { it.copy(progressError = "今回値は目標以内の正の数（小数2桁まで）で入力してください") }
+            return
+        }
         if (updates.isEmpty()) {
             _uiState.update { it.copy(progressError = "今回進んだMetricを1つ以上入力してください") }
             return
         }
 
+        val id = requestId ?: UUID.randomUUID().toString().also { requestId = it }
+        adviceRevision++
+        _uiState.update { it.copy(isSavingProgress = true, progressError = null,
+            isLoadingAdvice = false, advice = null, adviceError = null) }
         viewModelScope.launch {
-            _uiState.update { it.copy(isSavingProgress = true, progressError = null) }
-            runCatching { repository.recordProgress(goal.id, body, updates) }
+            runCatching { repository.recordProgress(goal.id, body, updates, id) }
                 .onSuccess { updatedGoal ->
-                    _uiState.value = stateForGoal(updatedGoal)
+                    requestId = null
+                    _uiState.value = stateForGoal(updatedGoal).copy(progressSaved = true)
+                    loadAdvice()
                 }
                 .onFailure {
                     _uiState.update {
@@ -96,6 +138,69 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                         )
                     }
                 }
+        }
+    }
+
+    fun parseProgress() {
+        val state = _uiState.value
+        val goal = state.goal ?: return
+        if (state.isParsing || state.isSavingProgress) return
+        if (state.progressBody.isBlank()) {
+            _uiState.update { it.copy(progressError = "進捗メモを入力してください") }
+            return
+        }
+        val revision = inputRevision
+        _uiState.update { it.copy(isParsing = true, progressError = null) }
+        viewModelScope.launch {
+            runCatching { repository.previewProgress(goal.id, state.progressBody.trim()) }
+                .onSuccess { preview ->
+                    if (revision == inputRevision) {
+                        requestId = null
+                        _uiState.update { current -> current.copy(
+                            hasPreview = true,
+                            parserWarnings = preview.warnings,
+                            metricProgress = current.metricProgress.map { item ->
+                                item.copy(value = preview.metricUpdates.find { it.metricId == item.metricId }
+                                    ?.value?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() } ?: "")
+                            },
+                        ) }
+                    }
+                }.onFailure {
+                    if (revision == inputRevision) _uiState.update {
+                        it.copy(progressError = "解析できませんでした。再試行または手入力してください")
+                    }
+                }
+            _uiState.update { it.copy(isParsing = false) }
+        }
+    }
+
+    fun cancelPreview() {
+        if (_uiState.value.isSavingProgress) return
+        requestId = null
+        _uiState.update { state -> state.copy(
+            hasPreview = false, parserWarnings = emptyList(),
+            metricProgress = if (state.hasPreview) state.metricProgress.map { it.copy(value = "") }
+                else state.metricProgress,
+        ) }
+    }
+
+    fun loadAdvice() {
+        val state = _uiState.value
+        val goal = state.goal ?: return
+        if (state.isLoadingAdvice || state.isSavingProgress) return
+        val revision = ++adviceRevision
+        _uiState.update { it.copy(isLoadingAdvice = true, adviceError = null) }
+        viewModelScope.launch {
+            runCatching { repository.getAdvice(goal.id) }
+                .onSuccess { advice ->
+                    if (revision == adviceRevision) _uiState.update { it.copy(advice = advice) }
+                }
+                .onFailure {
+                    if (revision == adviceRevision) _uiState.update {
+                        it.copy(adviceError = "助言を取得できませんでした。進捗は保存済みです")
+                    }
+                }
+            if (revision == adviceRevision) _uiState.update { it.copy(isLoadingAdvice = false) }
         }
     }
 

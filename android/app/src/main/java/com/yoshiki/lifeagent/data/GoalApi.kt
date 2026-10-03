@@ -7,7 +7,6 @@ import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
 import retrofit2.http.Path
-import java.util.UUID
 
 interface GoalApi {
     @GET("api/v1/goals")
@@ -32,6 +31,19 @@ interface GoalApi {
         @Header("Authorization") authorization: String,
         @Path("goalId") goalId: String,
     ): GoalResponse
+
+    @POST("api/v1/goals/{goalId}/progress/preview")
+    suspend fun previewProgress(
+        @Header("Authorization") authorization: String,
+        @Path("goalId") goalId: String,
+        @Body request: ProgressPreviewRequest,
+    ): ProgressPreview
+
+    @POST("api/v1/goals/{goalId}/advice")
+    suspend fun getAdvice(
+        @Header("Authorization") authorization: String,
+        @Path("goalId") goalId: String,
+    ): Advice
 
     @POST("api/v1/goals/{goalId}/progress")
     suspend fun recordProgress(
@@ -164,7 +176,7 @@ data class MilestoneResponse(
 @Serializable
 data class ProgressLogCreateRequest(
     val body: String,
-    @SerialName("client_request_id") val clientRequestId: String = UUID.randomUUID().toString(),
+    @SerialName("client_request_id") val clientRequestId: String,
     @SerialName("metric_updates") val metricUpdates: List<ProgressMetricUpdatePayload>,
 )
 
@@ -204,3 +216,18 @@ data class ProgressMetricUpdateResponse(
 private fun MetricPayload.toMetric(position: Int) = Metric(name, targetValue, unit, position)
 
 private fun MilestonePayload.toMilestone(position: Int) = Milestone(title, targetDate, position)
+
+@Serializable
+data class ProgressPreviewRequest(val body: String)
+
+@Serializable
+data class ProgressPreview(
+    @SerialName("metric_updates") val metricUpdates: List<ProgressMetricUpdatePayload>,
+    val warnings: List<String>,
+)
+
+@Serializable
+data class Advice(
+    val summary: String,
+    @SerialName("next_actions") val nextActions: List<String>,
+)

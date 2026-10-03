@@ -90,6 +90,9 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                 onProgressBodyChange = detailViewModel::updateProgressBody,
                 onMetricProgressChange = detailViewModel::updateMetricProgress,
                 onSaveProgress = detailViewModel::saveProgress,
+                onParseProgress = detailViewModel::parseProgress,
+                onCancelPreview = detailViewModel::cancelPreview,
+                onLoadAdvice = detailViewModel::loadAdvice,
             )
         }
     }

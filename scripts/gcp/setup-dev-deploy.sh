@@ -112,6 +112,7 @@ add_service_account_user "${planner_runtime_account}"
 
 add_secret_accessor_if_exists "${db_secret_name}" "${core_runtime_account}"
 add_secret_accessor_if_exists "${openai_secret_name}" "${planner_runtime_account}"
+add_secret_accessor_if_exists "${openai_secret_name}" "${core_runtime_account}"
 
 if ! gcloud iam workload-identity-pools describe "${pool_id}" \
     --project="${project_id}" \

@@ -25,9 +25,9 @@
 | PostgreSQL同時保存 | 同じIDの6並行送信で履歴1件・加算1回、異なるIDの6並行送信で履歴6件・加算6回、2件成功 |
 | 実AI接続エミュレータE2E | 追加1件成功。Parser・Advisorをopenaiへ切替、解析2回・助言1回の実呼び出し |
 | 実AI品質評価 | 主19ケースx2回、追加6ケースx2回の計50応答を実OpenAIで確認。Parser候補26/26一致、Advisor 24/24が内容レビュー合格 |
-| Cloud Run / 実Firebase受け入れ | 成功。Core API revision `lifeagent-core-api-00005-q4v`、実Firebase ID token、Cloud SQL、Goal Planner / AI接続サービス経由のOpenAI Parser/AdvisorでGoal作成、進捗解析、保存、助言、再訪を確認 |
+| Cloud Run / 実Firebase受け入れ | 成功。2026-10-03にCore API revision `lifeagent-core-api-00005-q4v`で確認。2026-10-04にADR 0002反映後のCore API revision `lifeagent-core-api-00006-mrp`、Goal Planner revision `lifeagent-goal-planner-00006-665`でも、実Firebase ID token、Cloud SQL、Goal Planner / AI接続サービス経由のOpenAI Goal Planner / Parser / AdvisorでGoal作成、進捗解析、保存、助言を確認 |
 | Android Cloud build / Emulator | 成功。`-Plifeagent.useCloudFirebase=true`のdebug APKをbuild/installし、実Firebaseログイン後にCloud RunからGoal一覧を取得 |
-| Workflow / scripts | YAML読込、各runのbash構文、script構文、git diff --check成功。ADR 0002反映後のworkflowはCoreのOpenAI Secretを外し、Goal PlannerへProgress/Advisor providerを設定する。変更後workflowのクラウド実行は未実施 |
+| Workflow / scripts | YAML読込、各runのbash構文、script構文、git diff --check成功。ADR 0002反映後の`deploy-dev` run `37179466671`が成功し、CoreのOpenAI Secretを外し、Goal PlannerへProgress/Advisor providerを設定した状態でCloud Runへdeploy済み |
 
 Cloud受け入れ時に、Cloud SQLのmigrationが`20260912_03`で止まっていたため、Auth Proxy経由で`20261002_04_add_progress_logs`を適用した。適用後、`progress_logs`と`progress_metric_updates`の存在を確認した。最初のGoal保存500は、この未適用schemaが原因だった。
 
@@ -62,6 +62,6 @@ Cloud受け入れのAndroidスクリーンショットは作業成果ディレ�
 
 ## 残件と次の作業
 
-Weekend 7としての実装・ローカル検証・実AI品質評価・Cloud受け入れは完了。2026-10-04にADR 0002へ合わせ、Core APIからOpenAI直接接続を除去し、Progress Parser / Advisorの実AI生成をGoal Planner Service配下の内部AI接続APIへ移した。確認後、Cloud SQLは停止し、Cloud Runはmin 0 / max 1のrequest-driven設定を維持した。Weekend 6の旧キー失効確認等の残件は同ステータスで引き続き追跡する。
+Weekend 7としての実装・ローカル検証・実AI品質評価・Cloud受け入れは完了。2026-10-04にADR 0002へ合わせ、Core APIからOpenAI直接接続を除去し、Progress Parser / Advisorの実AI生成をGoal Planner Service配下の内部AI接続APIへ移した。同日、`deploy-dev` run `37179466671`と実Firebase tokenによるCloud API確認まで完了した。確認後、Cloud SQLは停止し、Cloud Runはmin 0 / max 1のrequest-driven設定を維持する。Weekend 6の旧キー失効確認等の残件は同ステータスで引き続き追跡する。
 
 クラウド受け入れ完了後、Weekend 8の計画変更差分Schemaへ進む。

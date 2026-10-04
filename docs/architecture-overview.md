@@ -27,6 +27,8 @@ AIは任意のテーブルやフィールドを生成しません。AIが提案�
 
 各責務は独立して検証・評価できる境界を持ちます。AI出力はStructured Outputで検証し、重要な変更はユーザーの確認前に確定しません。
 
+機能追加時の配置先と変更手順は[サービス設計・拡張指針](service-design-guidelines.md)に従います。実AI接続は既存のGoal Planner / AI接続サービスへ集約し、Core APIは認可・業務検証・正本保存を担当します。
+
 ## 想定ディレクトリ
 
 ```text
@@ -34,7 +36,7 @@ android/       Androidアプリ
 backend/
   services/
     core-api/       Android向けAPIと正本データ
-    goal-planner/   独立した初期計画生成サービス
+    goal-planner/   初期計画・進捗解析・助言を担う内部AI接続サービス
 contracts/     公開APIとサービス間Schema
 infra/         GCP構成とデプロイ手順
 tests/e2e/     複数コンポーネントのE2Eテスト

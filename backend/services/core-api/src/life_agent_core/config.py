@@ -18,11 +18,8 @@ class Settings(BaseSettings):
     # Must exceed the Goal Planner's provider timeout (20 seconds by default).
     goal_planner_timeout_seconds: float = 25.0
     firebase_project_id: str = "life-agent-local"
-    progress_parser_backend: Literal["fake", "openai"] = "fake"
-    advisor_backend: Literal["fake", "openai"] = "fake"
-    openai_api_key: SecretStr | None = None
-    openai_model: str = "gpt-5.6-luna"
-    openai_timeout_seconds: float = 20.0
+    progress_parser_backend: Literal["fake", "http", "openai"] = "fake"
+    advisor_backend: Literal["fake", "http", "openai"] = "fake"
     auth_backend: Literal["firebase", "fake"] = "firebase"
 
     model_config = SettingsConfigDict(

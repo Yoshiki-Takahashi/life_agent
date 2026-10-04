@@ -9,11 +9,11 @@ from sqlalchemy import select
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session, selectinload
 
+from life_agent_core.ai_service import HttpAdvisor, HttpProgressParser
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
 from life_agent_core.database import get_db
 from life_agent_core.models import Goal, Metric, Milestone, ProgressLog, ProgressMetricUpdate
-from life_agent_core.openai_progress import OpenAIAdvisor, OpenAIProgressParser
 from life_agent_core.planner import (
     FakeGoalPlanner,
     GoalPlanner,
@@ -211,16 +211,16 @@ def load_goal_with_details(goal_id: uuid.UUID, db: Session, user_id: str) -> Goa
 @lru_cache
 def get_progress_parser() -> ProgressParser:
     settings = get_settings()
-    if settings.progress_parser_backend == "openai":
-        return OpenAIProgressParser(settings)
+    if settings.progress_parser_backend in ("http", "openai"):
+        return HttpProgressParser(settings)
     return FakeProgressParser()
 
 
 @lru_cache
 def get_advisor() -> Advisor:
     settings = get_settings()
-    if settings.advisor_backend == "openai":
-        return OpenAIAdvisor(settings)
+    if settings.advisor_backend in ("http", "openai"):
+        return HttpAdvisor(settings)
     return FakeAdvisor()
 
 

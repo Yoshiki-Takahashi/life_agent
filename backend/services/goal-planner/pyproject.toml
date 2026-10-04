@@ -20,6 +20,7 @@ packages = ["src/life_agent_goal_planner"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+pythonpath = ["."]
 markers = [
     "live_ai: calls the real OpenAI API and requires OPENAI_API_KEY",
 ]

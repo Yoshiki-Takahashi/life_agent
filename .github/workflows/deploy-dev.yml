@@ -21,13 +21,13 @@ on:
           - openai
           - fake
       progress_parser_backend:
-        description: Progress Parser provider for Core API
+        description: Progress Parser provider for internal AI service
         required: true
         default: fake
         type: choice
         options: [fake, openai]
       advisor_backend:
-        description: Advisor provider for Core API
+        description: Advisor provider for internal AI service
         required: true
         default: fake
         type: choice
@@ -137,10 +137,10 @@ jobs:
             --min-instances=0
             --max-instances=1
             --port=8001
-            --set-env-vars=GOAL_PLANNER_PROVIDER="${{ inputs.goal_planner_provider }}"
+            --set-env-vars=GOAL_PLANNER_PROVIDER="${{ inputs.goal_planner_provider }}",PROGRESS_PARSER_PROVIDER="${{ inputs.progress_parser_backend }}",ADVISOR_PROVIDER="${{ inputs.advisor_backend }}"
           )
 
-          if [[ "${{ inputs.goal_planner_provider }}" == "openai" ]]; then
+          if [[ "${{ inputs.goal_planner_provider }}" == "openai" || "${{ inputs.progress_parser_backend }}" == "openai" || "${{ inputs.advisor_backend }}" == "openai" ]]; then
             openai_secret="${OPENAI_SECRET_NAME:-lifeagent-openai-api-key}"
             deploy_args+=(--update-secrets=OPENAI_API_KEY="${openai_secret}:latest")
           fi
@@ -167,11 +167,13 @@ jobs:
         if: ${{ inputs.service == 'both' || inputs.service == 'core-api' }}
         run: |
           db_secret="lifeagent-db-password"
-          ai_args=()
-          if [[ "${{ inputs.progress_parser_backend }}" == "openai" || "${{ inputs.advisor_backend }}" == "openai" ]]; then
-            ai_args+=(--update-secrets=OPENAI_API_KEY="${OPENAI_SECRET_NAME:-lifeagent-openai-api-key}:latest")
-          else
-            ai_args+=(--remove-secrets=OPENAI_API_KEY)
+          progress_parser_backend="fake"
+          advisor_backend="fake"
+          if [[ "${{ inputs.progress_parser_backend }}" == "openai" ]]; then
+            progress_parser_backend="http"
+          fi
+          if [[ "${{ inputs.advisor_backend }}" == "openai" ]]; then
+            advisor_backend="http"
           fi
           gcloud run deploy "${CORE_API_SERVICE}" \
             --project="${PROJECT_ID}" \
@@ -182,8 +184,9 @@ jobs:
             --min-instances=0 \
             --max-instances=1 \
             --add-cloudsql-instances="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}" \
-            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,PROGRESS_PARSER_BACKEND="${{ inputs.progress_parser_backend }}",ADVISOR_BACKEND="${{ inputs.advisor_backend }}",CLOUD_SQL_CONNECTION_NAME="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
-            --update-secrets=DB_PASSWORD="${db_secret}:latest" "${ai_args[@]}"
+            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,PROGRESS_PARSER_BACKEND="${progress_parser_backend}",ADVISOR_BACKEND="${advisor_backend}",CLOUD_SQL_CONNECTION_NAME="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
+            --update-secrets=DB_PASSWORD="${db_secret}:latest" \
+            --remove-secrets=OPENAI_API_KEY
 
       - name: Verify deployed services
         run: |

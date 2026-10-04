@@ -6,28 +6,28 @@
 
 | 項目 | 状態 | 内容 |
 | --- | --- | --- |
-| W7-01 解析候補 | Complete | 固定Schema、独立Parser Port、Fake・OpenAI Adapter、未保存preview、所有者・Metric・値検証 |
+| W7-01 解析候補 | Complete | 固定Schema、独立Parser Port、内部AI接続サービスのFake・OpenAI Provider、未保存preview、所有者・Metric・値検証 |
 | W7-02 候補確認と保存 | Complete | Androidで修正・取消・手入力、本文変更で候補無効化、再試行ID保持、保存中の編集・連打防止 |
 | W7-03 助言 | Complete | 保存済みデータから生成、保存とは独立した取得・失敗・再試行、計画変更なし |
 | W7-04 実AI・運用 | Complete | 実AI Adapter・3分野評価・ローカルAPI経由のエミュレータ確認、品質評価、Cloud Run＋実Firebase受け入れを完了 |
 
-進捗履歴用migration `20261002_04_add_progress_logs`を追加した。保存処理はGoal行をロックし、同時送信でも二重加算や更新消失を防ぐ。AI生成中はDB transactionを保持しない。Parser・AdvisorはCore API内に置き、独立サービス化しない。
+進捗履歴用migration `20261002_04_add_progress_logs`を追加した。保存処理はGoal行をロックし、同時送信でも二重加算や更新消失を防ぐ。AI生成中はDB transactionを保持しない。Parser・Advisorの公開Portと最終検証はCore APIに残し、OpenAI SDK・プロンプト・Structured Output生成はGoal Planner Service配下の内部AI接続APIへ移した。Core APIはOpenAI Secretを持たない。
 
 ## 検証結果
 
 | 検証 | 結果 |
 | --- | --- |
-| Core API Ruff / pytest | 成功（通常63件、live_ai 3件は通常実行でskip） |
-| Goal Planner Ruff / pytest -m 'not live_ai' | 成功（13件） |
+| Core API Ruff / pytest | 成功（通常64件） |
+| Goal Planner Ruff / pytest | 成功（通常23件、live_ai 6件は通常実行でskip） |
 | 実AI回帰評価 | 読書・アプリ開発・筋トレの3件成功。解析・保存・助言を各分野で確認（計6回のOpenAI呼び出し） |
 | Android testDebugUnitTest / assembleDebug | 成功（単体20件） |
 | Pixel_8 / Android 17 instrumented test | 既存5件＋新しいHTTP E2E 1件、計6件成功 |
 | PostgreSQL同時保存 | 同じIDの6並行送信で履歴1件・加算1回、異なるIDの6並行送信で履歴6件・加算6回、2件成功 |
 | 実AI接続エミュレータE2E | 追加1件成功。Parser・Advisorをopenaiへ切替、解析2回・助言1回の実呼び出し |
 | 実AI品質評価 | 主19ケースx2回、追加6ケースx2回の計50応答を実OpenAIで確認。Parser候補26/26一致、Advisor 24/24が内容レビュー合格 |
-| Cloud Run / 実Firebase受け入れ | 成功。Core API revision `lifeagent-core-api-00005-q4v`、実Firebase ID token、Cloud SQL、OpenAI Parser/AdvisorでGoal作成、進捗解析、保存、助言、再訪を確認 |
+| Cloud Run / 実Firebase受け入れ | 成功。Core API revision `lifeagent-core-api-00005-q4v`、実Firebase ID token、Cloud SQL、Goal Planner / AI接続サービス経由のOpenAI Parser/AdvisorでGoal作成、進捗解析、保存、助言、再訪を確認 |
 | Android Cloud build / Emulator | 成功。`-Plifeagent.useCloudFirebase=true`のdebug APKをbuild/installし、実Firebaseログイン後にCloud RunからGoal一覧を取得 |
-| Workflow / scripts | YAML読込、各runのbash構文、script構文、git diff --check成功。変更後workflowのクラウド実行は未実施 |
+| Workflow / scripts | YAML読込、各runのbash構文、script構文、git diff --check成功。ADR 0002反映後のworkflowはCoreのOpenAI Secretを外し、Goal PlannerへProgress/Advisor providerを設定する。変更後workflowのクラウド実行は未実施 |
 
 Cloud受け入れ時に、Cloud SQLのmigrationが`20260912_03`で止まっていたため、Auth Proxy経由で`20261002_04_add_progress_logs`を適用した。適用後、`progress_logs`と`progress_metric_updates`の存在を確認した。最初のGoal保存500は、この未適用schemaが原因だった。
 
@@ -62,6 +62,6 @@ Cloud受け入れのAndroidスクリーンショットは作業成果ディレ�
 
 ## 残件と次の作業
 
-Weekend 7としての実装・ローカル検証・実AI品質評価・Cloud受け入れは完了。確認後、Cloud SQLは停止し、Cloud Runはmin 0 / max 1のrequest-driven設定を維持した。Weekend 6の旧キー失効確認等の残件は同ステータスで引き続き追跡する。
+Weekend 7としての実装・ローカル検証・実AI品質評価・Cloud受け入れは完了。2026-10-04にADR 0002へ合わせ、Core APIからOpenAI直接接続を除去し、Progress Parser / Advisorの実AI生成をGoal Planner Service配下の内部AI接続APIへ移した。確認後、Cloud SQLは停止し、Cloud Runはmin 0 / max 1のrequest-driven設定を維持した。Weekend 6の旧キー失効確認等の残件は同ステータスで引き続き追跡する。
 
 クラウド受け入れ完了後、Weekend 8の計画変更差分Schemaへ進む。

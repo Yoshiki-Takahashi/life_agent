@@ -137,11 +137,11 @@ CodexはDBにowner付きGoalが存在することだけを確認し、入力全�
 
 完全削除は一般的な停止依頼から推測して実行しない。
 
-## Weekend 7: Core APIの実AI解析・助言
+## Weekend 7: 内部AI接続サービス経由の解析・助言
 
-Core API内にParser・Advisorを追加したため、実AIモードではCore API runtime service accountも`lifeagent-openai-api-key`のAccessorを必要とする。`scripts/gcp/setup-dev-deploy.sh`にこのbindingを追加している。初回の実AI deploy前に同スクリプトを適用する。
+Progress Parser / AdvisorのOpenAI接続はGoal Planner Service配下の内部AI接続APIが担当する。Core APIはAndroid公開API、所有者確認、候補の再検証、ユーザー確認後の保存だけを担当し、OpenAI Secretを持たない。`scripts/gcp/setup-dev-deploy.sh`は`lifeagent-openai-api-key`のAccessorをGoal Planner runtime service accountへ付与し、Core API runtime service accountへは付与しない。
 
-`deploy-dev`には`progress_parser_backend`と`advisor_backend`の独立した選択を追加した（既定値`fake`）。実AI確認時は必要な側だけ`openai`を選ぶ。一方でも`openai`ならCore APIへSecret参照を追加し、両方`fake`ならCore APIのOpenAI Secret参照を除去する。DB Secretは保持する。追加migrationはない。
+`deploy-dev`には`progress_parser_backend`と`advisor_backend`の独立した選択を残す（既定値`fake`）。実AI確認時は必要な側だけ`openai`を選ぶ。workflowはGoal Plannerへ`PROGRESS_PARSER_PROVIDER` / `ADVISOR_PROVIDER`を設定し、Core APIへは対応する`http` backendを設定する。両方`fake`ならCore APIもFakeで動く。追加migrationはない。
 
 クラウド受け入れではFirebaseログイン→Goal選択→本文解析→候補修正・取消→確定保存→助言→再訪を確認する。助言障害時の履歴維持と助言だけの再試行も確認する。revisionと結果をWeekend 7ステータスへ記録し、確認後は既存の`manage-dev stop`または`stop-dev.sh`を実行する。ローカルのFake E2Eと実AI回帰評価だけでは、このCloud Run経路を確認済みとは扱わない。
 

@@ -3,7 +3,7 @@
 from datetime import UTC, datetime, timedelta
 from uuid import UUID
 
-from life_agent_core.schemas import GoalResponse
+from life_agent_goal_planner.schemas import GoalResponse
 
 
 def goal(title, description, metrics, reports=(), deadline_days=30):

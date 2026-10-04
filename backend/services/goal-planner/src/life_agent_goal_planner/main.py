@@ -10,7 +10,23 @@ from life_agent_goal_planner.planner import (
     OpenAIGoalPlanner,
     PlannerUnavailableError,
 )
-from life_agent_goal_planner.schemas import GoalPlan, GoalPlanRequest
+from life_agent_goal_planner.progress import (
+    Advisor,
+    AIUnavailableError,
+    FakeAdvisor,
+    FakeProgressParser,
+    OpenAIAdvisor,
+    OpenAIProgressParser,
+    ProgressParser,
+)
+from life_agent_goal_planner.schemas import (
+    Advice,
+    AdviceAIRequest,
+    GoalPlan,
+    GoalPlanRequest,
+    ProgressPreview,
+    ProgressPreviewAIRequest,
+)
 
 app = FastAPI(title="LifeAgent Goal Planner", version="0.1.0")
 
@@ -26,6 +42,26 @@ def get_planner() -> GoalPlanner:
 Planner = Annotated[GoalPlanner, Depends(get_planner)]
 
 
+@lru_cache
+def get_progress_parser() -> ProgressParser:
+    settings = get_settings()
+    if settings.progress_parser_provider == "fake":
+        return FakeProgressParser()
+    return OpenAIProgressParser(settings)
+
+
+@lru_cache
+def get_advisor() -> Advisor:
+    settings = get_settings()
+    if settings.advisor_provider == "fake":
+        return FakeAdvisor()
+    return OpenAIAdvisor(settings)
+
+
+ProgressParserDependency = Annotated[ProgressParser, Depends(get_progress_parser)]
+AdvisorDependency = Annotated[Advisor, Depends(get_advisor)]
+
+
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
@@ -39,4 +75,28 @@ def create_goal_plan(payload: GoalPlanRequest, planner: Planner) -> GoalPlan:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="計画を生成できませんでした。再試行してください",
+        ) from error
+
+
+@app.post("/internal/v1/progress-preview", response_model=ProgressPreview)
+def create_progress_preview(
+    payload: ProgressPreviewAIRequest, parser: ProgressParserDependency
+) -> ProgressPreview:
+    try:
+        return parser.parse(payload.goal, payload.body)
+    except AIUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="進捗候補を生成できませんでした。再試行してください",
+        ) from error
+
+
+@app.post("/internal/v1/advice", response_model=Advice)
+def create_advice(payload: AdviceAIRequest, advisor: AdvisorDependency) -> Advice:
+    try:
+        return advisor.advise(payload.goal)
+    except AIUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="助言を生成できませんでした。再試行してください",
         ) from error

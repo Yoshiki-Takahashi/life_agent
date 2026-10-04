@@ -7,6 +7,8 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 class Settings(BaseSettings):
     goal_planner_provider: Literal["openai", "fake"] = "openai"
+    progress_parser_provider: Literal["openai", "fake"] = "fake"
+    advisor_provider: Literal["openai", "fake"] = "fake"
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-luna"
     openai_timeout_seconds: float = 20.0

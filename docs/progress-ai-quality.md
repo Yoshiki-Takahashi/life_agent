@@ -65,7 +65,7 @@ Advisorは保存済みMetricを数値の正本、本文を状況説明として�
 
 ## 再現・記録・運用
 
-合成ケースを`backend/services/core-api/evaluations/progress_cases.py`に固定し、実ユーザーの文章や認証情報を評価へ流用しない。同じモデル・ケースで改善前後を比較し、モデル名、プロンプトhash、実行日時、全出力、成否、内容レビューと理由を記録する。出力ファイルは生成物としてコミットせず、結果と代表例を設計文書に記録する。
+合成ケースを`backend/services/goal-planner/evaluations/progress_cases.py`に固定し、実ユーザーの文章や認証情報を評価へ流用しない。同じモデル・ケースで改善前後を比較し、モデル名、プロンプトhash、実行日時、全出力、成否、内容レビューと理由を記録する。出力ファイルは生成物としてコミットせず、結果と代表例を設計文書に記録する。
 
 通常CIはキーなしの契約・入力構成・Fakeテストだけ。実AI評価は明示実行。Schema不正、拒否、timeoutも失敗として残す。都合の良い再試行だけを採用しない。運用時は候補修正率、解析取消率、助言の役立ち評価・実行率を、同意とプライバシーに配慮して今後検討する。現時点で収集済みの指標とは扱わない。
 
@@ -82,7 +82,7 @@ Advisorは保存済みMetricを数値の正本、本文を状況説明として�
 ### 実行コマンド
 
 ```bash
-cd backend/services/core-api
+cd backend/services/goal-planner
 # OPENAI_API_KEYを環境変数に設定。キーや実ユーザー本文を出力へ含めない。
 uv run python -m evaluations.progress_quality --repeat 2 --output /tmp/progress-quality-main.json
 uv run python -m evaluations.progress_quality --suite holdout --repeat 2 --output /tmp/progress-quality-extra.json

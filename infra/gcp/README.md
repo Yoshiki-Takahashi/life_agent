@@ -53,7 +53,7 @@ CLOUD_SQL_CONNECTION_NAME=lifeagent-505614:asia-northeast1:lifeagent-dev-db
 OPENAI_SECRET_NAME=lifeagent-openai-api-key
 ```
 
-`deploy-dev`は通常テスト、container build、Artifact Registry push、Cloud Run deploy、health確認を行います。Goal Plannerは非公開serviceとしてdeployし、Core APIはPlanner URLを`GOAL_PLANNER_ID_TOKEN_AUDIENCE`にも設定して認証付きで呼び出します。OpenAI Secret登録前は`goal_planner_provider=fake`でservice境界だけを検証し、Secret登録後に`openai`へ切り替えます。
+`deploy-dev`は通常テスト、container build、Artifact Registry push、Cloud Run deploy、health確認を行います。Goal Plannerは非公開のAI接続serviceとしてdeployし、Core APIはPlanner URLを`GOAL_PLANNER_ID_TOKEN_AUDIENCE`にも設定して認証付きで呼び出します。OpenAI Secret登録前はGoal Planner / Progress Parser / Advisor providerを`fake`にしてservice境界だけを検証し、Secret登録後に必要なproviderを`openai`へ切り替えます。OpenAI SecretはGoal Planner runtime service accountだけに付与し、Core APIには渡しません。
 
 開発環境の状態確認、開始、停止は`.github/workflows/manage-dev.yml`から手動実行します。`stop`はCloud SQLを`activationPolicy=NEVER`へ変更し、Core APIとGoal Plannerが`min=0`、`max=1`であることを検証します。Cloud Run service自体は削除せず、revisionを保持します。
 

@@ -1,4 +1,6 @@
-from datetime import date
+from datetime import date, datetime
+from typing import Annotated
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -74,3 +76,103 @@ class GoalPlan(GoalPlanRequest):
                 raise ValueError("Milestone期限は表示順にしてください")
             previous = milestone.target_date
         return self
+
+
+class ProgressMetricUpdateRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric_id: UUID
+    value: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False, multiple_of=0.01)
+
+
+class ProgressPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric_updates: list[ProgressMetricUpdateRequest] = Field(max_length=3)
+    warnings: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(max_length=3)
+
+    @model_validator(mode="after")
+    def unique_metrics(self) -> "ProgressPreview":
+        ids = [item.metric_id for item in self.metric_updates]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate metric")
+        return self
+
+
+class Advice(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    summary: str = Field(min_length=1, max_length=500)
+    next_actions: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(
+        min_length=1,
+        max_length=3,
+    )
+
+
+class MetricResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    name: str
+    unit: str
+    current_value: float
+    target_value: float
+    position: int
+    created_at: datetime
+
+
+class MilestoneResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    title: str
+    target_date: date
+    position: int
+    created_at: datetime
+
+
+class ProgressMetricUpdateResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    metric_id: UUID
+    metric_name: str
+    value: float
+    unit: str
+
+
+class ProgressLogResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    body: str
+    recorded_at: datetime
+    created_at: datetime
+    metric_updates: list[ProgressMetricUpdateResponse]
+
+
+class GoalResponse(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    title: str
+    description: str | None
+    target_date: date
+    status: str
+    metrics: list[MetricResponse]
+    milestones: list[MilestoneResponse] = []
+    progress_logs: list[ProgressLogResponse] = []
+    created_at: datetime
+    updated_at: datetime
+
+
+class ProgressPreviewAIRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    goal: GoalResponse
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class AdviceAIRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    goal: GoalResponse

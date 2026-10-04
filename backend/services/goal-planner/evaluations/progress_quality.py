@@ -18,14 +18,13 @@ from evaluations.progress_cases import (
     holdout_parser_cases,
     parser_cases,
 )
-from life_agent_core.config import Settings
-from life_agent_core.openai_progress import (
+from life_agent_goal_planner.config import Settings
+from life_agent_goal_planner.progress import (
     ADVISOR_PROMPT,
     PARSER_PROMPT,
     OpenAIAdvisor,
     OpenAIProgressParser,
 )
-from life_agent_core.progress_ai import validate_candidates
 
 
 def evaluate(case, kind, settings, repeat):
@@ -43,7 +42,6 @@ def evaluate(case, kind, settings, repeat):
     try:
         if kind == "parser":
             output = OpenAIProgressParser(settings).parse(case["context"], case["body"])
-            validate_candidates(output, case["context"])
             actual = {item.metric_id.int: item.value for item in output.metric_updates}
             checks = dict(
                 exact_candidates=actual == case["expected"],

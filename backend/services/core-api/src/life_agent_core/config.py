@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     firebase_project_id: str = "life-agent-local"
     progress_parser_backend: Literal["fake", "http", "openai"] = "fake"
     advisor_backend: Literal["fake", "http", "openai"] = "fake"
+    replanner_backend: Literal["fake", "http", "openai"] = "fake"
     auth_backend: Literal["firebase", "fake"] = "firebase"
 
     model_config = SettingsConfigDict(

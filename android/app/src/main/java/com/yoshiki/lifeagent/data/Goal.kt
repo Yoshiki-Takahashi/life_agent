@@ -11,6 +11,7 @@ data class Goal(
     val milestones: List<Milestone>,
     val updatedAt: String = createdAt,
     val progressLogs: List<ProgressLog> = emptyList(),
+    val planRevision: Int = 1,
 )
 
 data class GoalSummary(
@@ -65,4 +66,22 @@ data class ProgressMetricUpdate(
 data class MetricProgressInput(
     val metricId: String,
     val value: Double,
+)
+
+data class ReplanProposal(
+    val proposalId: String,
+    val basePlanRevision: Int,
+    val reason: String,
+    val proposedPlan: GoalPlan,
+    val diff: List<ReplanDiffItem>,
+    val createdAt: String,
+)
+
+data class ReplanDiffItem(
+    val changeType: String,
+    val targetType: String,
+    val targetLabel: String,
+    val before: String?,
+    val after: String?,
+    val rationale: String,
 )

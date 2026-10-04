@@ -3,7 +3,7 @@ from collections.abc import Generator
 import pytest
 from fastapi.testclient import TestClient
 
-from life_agent_goal_planner.main import app, get_planner
+from life_agent_goal_planner.main import app, get_planner, get_replanner
 
 
 @pytest.fixture
@@ -17,5 +17,13 @@ def client() -> Generator[TestClient]:
 def override_planner():
     def apply(planner: object) -> None:
         app.dependency_overrides[get_planner] = lambda: planner
+
+    return apply
+
+
+@pytest.fixture
+def override_replanner():
+    def apply(replanner: object) -> None:
+        app.dependency_overrides[get_replanner] = lambda: replanner
 
     return apply

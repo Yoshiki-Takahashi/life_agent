@@ -4,7 +4,7 @@ from pathlib import Path
 
 from jsonschema import Draft202012Validator, FormatChecker
 
-from life_agent_goal_planner.schemas import GoalPlan, GoalPlanRequest
+from life_agent_goal_planner.schemas import GeneratedReplan, GoalPlan, GoalPlanRequest
 
 CONTRACTS = Path(__file__).resolve().parents[4] / "contracts" / "schemas"
 
@@ -43,3 +43,23 @@ def test_response_matches_shared_json_schema() -> None:
     Draft202012Validator(
         load_contract("goal-plan.schema.json"), format_checker=FormatChecker()
     ).validate(plan().model_dump(mode="json"))
+
+
+def test_replan_candidate_matches_shared_json_schema() -> None:
+    replan = GeneratedReplan(
+        proposed_plan=plan(),
+        diff=[
+            {
+                "change_type": "update",
+                "target_type": "metric",
+                "target_label": "読了冊数",
+                "before": "12 冊",
+                "after": "10 冊",
+                "rationale": "進捗に合わせます。",
+            }
+        ],
+    )
+
+    Draft202012Validator(
+        load_contract("replan-candidate.schema.json"), format_checker=FormatChecker()
+    ).validate(replan.model_dump(mode="json"))

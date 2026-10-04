@@ -9,6 +9,7 @@ import com.yoshiki.lifeagent.data.Advice
 import com.yoshiki.lifeagent.data.Goal
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.MetricProgressInput
+import com.yoshiki.lifeagent.data.ReplanProposal
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -32,6 +33,12 @@ data class GoalDetailUiState(
     val isLoadingAdvice: Boolean = false,
     val adviceError: String? = null,
     val progressSaved: Boolean = false,
+    val replanReason: String = "",
+    val replanProposal: ReplanProposal? = null,
+    val isLoadingReplan: Boolean = false,
+    val isApplyingReplan: Boolean = false,
+    val replanError: String? = null,
+    val replanApplied: Boolean = false,
 )
 
 data class MetricProgressEdit(
@@ -73,6 +80,18 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         requestId = null
         cancelPreview()
         _uiState.update { it.copy(progressBody = value, progressError = null) }
+    }
+
+    fun updateReplanReason(value: String) {
+        if (_uiState.value.isLoadingReplan || _uiState.value.isApplyingReplan) return
+        _uiState.update {
+            it.copy(
+                replanReason = value,
+                replanError = null,
+                replanProposal = null,
+                replanApplied = false,
+            )
+        }
     }
 
     fun updateMetricProgress(index: Int, value: String) {
@@ -201,6 +220,69 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                     }
                 }
             if (revision == adviceRevision) _uiState.update { it.copy(isLoadingAdvice = false) }
+        }
+    }
+
+    fun previewReplan() {
+        val state = _uiState.value
+        val goal = state.goal ?: return
+        if (state.isLoadingReplan || state.isApplyingReplan) return
+        val reason = state.replanReason.trim()
+        if (reason.isBlank()) {
+            _uiState.update { it.copy(replanError = "見直し理由を入力してください") }
+            return
+        }
+        _uiState.update {
+            it.copy(
+                isLoadingReplan = true,
+                replanError = null,
+                replanProposal = null,
+                replanApplied = false,
+            )
+        }
+        viewModelScope.launch {
+            runCatching { repository.previewReplan(goal.id, reason) }
+                .onSuccess { proposal ->
+                    _uiState.update {
+                        it.copy(replanProposal = proposal, replanReason = reason)
+                    }
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(replanError = "再計画候補を生成できませんでした。再試行してください")
+                    }
+                }
+            _uiState.update { it.copy(isLoadingReplan = false) }
+        }
+    }
+
+    fun cancelReplan() {
+        if (_uiState.value.isApplyingReplan) return
+        _uiState.update { it.copy(replanProposal = null, replanError = null, replanApplied = false) }
+    }
+
+    fun applyReplan() {
+        val state = _uiState.value
+        val goal = state.goal ?: return
+        val proposal = state.replanProposal ?: return
+        if (state.isLoadingReplan || state.isApplyingReplan) return
+        _uiState.update { it.copy(isApplyingReplan = true, replanError = null) }
+        viewModelScope.launch {
+            runCatching { repository.applyReplan(goal.id, proposal.proposalId) }
+                .onSuccess { updatedGoal ->
+                    _uiState.value = stateForGoal(updatedGoal).copy(
+                        replanApplied = true,
+                        replanReason = "",
+                    )
+                }
+                .onFailure {
+                    _uiState.update {
+                        it.copy(
+                            isApplyingReplan = false,
+                            replanError = "再計画を保存できませんでした。候補を作り直してください",
+                        )
+                    }
+                }
         }
     }
 

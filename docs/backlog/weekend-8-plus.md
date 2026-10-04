@@ -4,7 +4,7 @@
 
 各枠の責務配置と既存サービスの拡張方法は[サービス設計・拡張指針](../service-design-guidelines.md)を参照する。方針は開発中に更新可能とし、変更時は本計画と契約も整合させる。
 
-Planned。以下は実施順の枠であり、確定日程ではない。各枠の着手前に利用実績を確認し、その枠の詳細チケットと契約を作成する。条件付き機能は採用または見送り理由を記録し、採用した場合だけ実装・リソース作成する。
+Weekend 8は実装中。以下は実施順の枠であり、確定日程ではない。各枠の着手前に利用実績を確認し、その枠の詳細チケットと契約を作成する。条件付き機能は採用または見送り理由を記録し、採用した場合だけ実装・リソース作成する。
 
 各枠のDoneは、下記の受け入れ条件、変更に対応するテスト・品質検査、AndroidまたはAPIでのデモ、契約・運用文書の更新、次回の最初の作業の記載とする。AI機能では読書・アプリ開発・筋トレの回帰評価を維持し、通常テストはFakeを使う。
 
@@ -12,12 +12,21 @@ Planned。以下は実施順の枠であり、確定日程ではない。各枠�
 
 **Sprint Goal / User Story:** ユーザーとして、実績に合わなくなった計画を、変更点を確認したうえで見直したい。
 
+**実装方針:**
+
+- Re-plannerはGoal Planner / AI接続サービス内に配置し、既存Goal、Metric、Milestone、最新ProgressLog、見直し理由から未確定の変更候補だけを返す。
+- Core APIは`POST /api/v1/goals/{goal_id}/replan/preview`で候補を保存し、`proposal_id`、`base_plan_revision`、差分、候補Planを返す。プレビューではGoal本体を変更しない。
+- Core APIは`POST /api/v1/goals/{goal_id}/replan/apply`で承認済み候補だけを適用する。`base_plan_revision`と現在の`plan_revision`が違う場合は409で拒否し、候補を作り直す。
+- Metricは物理削除せず、候補適用で使わなくなったMetricを`archived_at`で非表示化する。過去のProgressLogは既存Metric参照を保持し、履歴を失わない。
+- 契約は`contracts/schemas/replan-*.schema.json`で管理し、通常テストはFake Replannerを使う。実AI回帰は読書、アプリ開発、筋トレを`RUN_LIVE_AI=1`で明示実行する。
+
 **受け入れ条件:**
 
 - Re-plannerは既存計画と進捗から変更案だけを生成する。
-- 現行計画との差分を表示し、承認時だけ更新する。取消・不正出力では変更しない。
+- 現行計画との差分をAndroidに表示し、承認時だけ更新する。取消・不正出力では変更しない。
 - 提案後に計画が変更されていた場合は古い提案を適用しない。
 - Metric変更後も過去のProgressLogを失わない参照・履歴方針を契約化する。
+- Core API、Goal Planner、Androidの自動テストでプレビュー、適用、stale拒否、履歴保持を確認する。
 
 **対象外:** 無確認の自動再計画、複数Goal横断の優先順位調整。
 

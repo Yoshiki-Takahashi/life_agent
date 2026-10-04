@@ -4,7 +4,7 @@ import httpx
 import pytest
 from test_goals import preview
 
-from life_agent_core.ai_service import HttpAdvisor, HttpProgressParser
+from life_agent_core.ai_service import HttpAdvisor, HttpProgressParser, HttpReplanner
 from life_agent_core.config import Settings
 from life_agent_core.progress_ai import AIUnavailableError
 from life_agent_core.schemas import GoalResponse
@@ -63,6 +63,46 @@ def test_http_advisor_returns_validated_contract(client, monkeypatch: pytest.Mon
 
     assert result.next_actions == ["5分だけ読む"]
     assert post.call_args.args == ("http://planner:8001/internal/v1/advice",)
+    assert post.call_args.kwargs["json"]["goal"]["id"] == str(context.id)
+
+
+def test_http_replanner_returns_validated_contract(client, monkeypatch: pytest.MonkeyPatch):
+    context = goal(client)
+    response = httpx.Response(
+        200,
+        json={
+            "proposed_plan": {
+                "title": context.title,
+                "description": context.description,
+                "target_date": str(context.target_date),
+                "metrics": [{"name": "読了冊数", "target_value": 8, "unit": "冊"}],
+                "milestones": [
+                    {"title": "4冊読む", "target_date": str(context.milestones[0].target_date)},
+                    {"title": "6冊読む", "target_date": str(context.milestones[1].target_date)},
+                    {"title": "8冊読む", "target_date": str(context.milestones[2].target_date)},
+                ],
+            },
+            "diff": [
+                {
+                    "change_type": "update",
+                    "target_type": "metric",
+                    "target_label": "読了冊数",
+                    "before": "12 冊",
+                    "after": "8 冊",
+                    "rationale": "進捗に合わせます。",
+                }
+            ],
+        },
+        request=httpx.Request("POST", "http://planner:8001/internal/v1/replan"),
+    )
+    post = Mock(return_value=response)
+    monkeypatch.setattr(httpx, "post", post)
+
+    result = HttpReplanner(settings()).propose(context, "今の計画が厳しい")
+
+    assert result.diff[0].target_type == "metric"
+    assert post.call_args.args == ("http://planner:8001/internal/v1/replan",)
+    assert post.call_args.kwargs["json"]["reason"] == "今の計画が厳しい"
     assert post.call_args.kwargs["json"]["goal"]["id"] == str(context.id)
 
 

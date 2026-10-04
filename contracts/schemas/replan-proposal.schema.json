@@ -1,0 +1,210 @@
+{
+  "$defs": {
+    "GoalPlan": {
+      "properties": {
+        "title": {
+          "title": "Title",
+          "type": "string"
+        },
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Description"
+        },
+        "target_date": {
+          "format": "date",
+          "title": "Target Date",
+          "type": "string"
+        },
+        "metrics": {
+          "items": {
+            "$ref": "#/$defs/MetricDraft"
+          },
+          "maxItems": 3,
+          "minItems": 1,
+          "title": "Metrics",
+          "type": "array"
+        },
+        "milestones": {
+          "items": {
+            "$ref": "#/$defs/MilestoneDraft"
+          },
+          "maxItems": 5,
+          "minItems": 3,
+          "title": "Milestones",
+          "type": "array"
+        }
+      },
+      "required": [
+        "title",
+        "description",
+        "target_date",
+        "metrics",
+        "milestones"
+      ],
+      "title": "GoalPlan",
+      "type": "object"
+    },
+    "MetricDraft": {
+      "properties": {
+        "name": {
+          "maxLength": 100,
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "target_value": {
+          "exclusiveMinimum": 0,
+          "maximum": 1000000000,
+          "multipleOf": 0.01,
+          "title": "Target Value",
+          "type": "number"
+        },
+        "unit": {
+          "maxLength": 30,
+          "minLength": 1,
+          "title": "Unit",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "target_value",
+        "unit"
+      ],
+      "title": "MetricDraft",
+      "type": "object"
+    },
+    "MilestoneDraft": {
+      "properties": {
+        "title": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "target_date": {
+          "format": "date",
+          "title": "Target Date",
+          "type": "string"
+        }
+      },
+      "required": [
+        "title",
+        "target_date"
+      ],
+      "title": "MilestoneDraft",
+      "type": "object"
+    },
+    "ReplanDiffItem": {
+      "additionalProperties": false,
+      "properties": {
+        "change_type": {
+          "pattern": "^(add|update|remove)$",
+          "title": "Change Type",
+          "type": "string"
+        },
+        "target_type": {
+          "pattern": "^(goal|metric|milestone)$",
+          "title": "Target Type",
+          "type": "string"
+        },
+        "target_label": {
+          "maxLength": 120,
+          "minLength": 1,
+          "title": "Target Label",
+          "type": "string"
+        },
+        "before": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Before"
+        },
+        "after": {
+          "anyOf": [
+            {
+              "maxLength": 300,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "After"
+        },
+        "rationale": {
+          "maxLength": 300,
+          "minLength": 1,
+          "title": "Rationale",
+          "type": "string"
+        }
+      },
+      "required": [
+        "change_type",
+        "target_type",
+        "target_label",
+        "rationale"
+      ],
+      "title": "ReplanDiffItem",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "proposal_id": {
+      "format": "uuid",
+      "title": "Proposal Id",
+      "type": "string"
+    },
+    "base_plan_revision": {
+      "title": "Base Plan Revision",
+      "type": "integer"
+    },
+    "reason": {
+      "title": "Reason",
+      "type": "string"
+    },
+    "proposed_plan": {
+      "$ref": "#/$defs/GoalPlan"
+    },
+    "diff": {
+      "items": {
+        "$ref": "#/$defs/ReplanDiffItem"
+      },
+      "maxItems": 12,
+      "minItems": 1,
+      "title": "Diff",
+      "type": "array"
+    },
+    "created_at": {
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    }
+  },
+  "required": [
+    "proposal_id",
+    "base_plan_revision",
+    "reason",
+    "proposed_plan",
+    "diff",
+    "created_at"
+  ],
+  "title": "ReplanProposal",
+  "type": "object"
+}

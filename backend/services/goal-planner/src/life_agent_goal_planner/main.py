@@ -19,13 +19,16 @@ from life_agent_goal_planner.progress import (
     OpenAIProgressParser,
     ProgressParser,
 )
+from life_agent_goal_planner.replan import FakeReplanner, OpenAIReplanner, Replanner
 from life_agent_goal_planner.schemas import (
     Advice,
     AdviceAIRequest,
+    GeneratedReplan,
     GoalPlan,
     GoalPlanRequest,
     ProgressPreview,
     ProgressPreviewAIRequest,
+    ReplanAIRequest,
 )
 
 app = FastAPI(title="LifeAgent Goal Planner", version="0.1.0")
@@ -58,8 +61,17 @@ def get_advisor() -> Advisor:
     return OpenAIAdvisor(settings)
 
 
+@lru_cache
+def get_replanner() -> Replanner:
+    settings = get_settings()
+    if settings.replanner_provider == "fake":
+        return FakeReplanner()
+    return OpenAIReplanner(settings)
+
+
 ProgressParserDependency = Annotated[ProgressParser, Depends(get_progress_parser)]
 AdvisorDependency = Annotated[Advisor, Depends(get_advisor)]
+ReplannerDependency = Annotated[Replanner, Depends(get_replanner)]
 
 
 @app.get("/health")
@@ -99,4 +111,15 @@ def create_advice(payload: AdviceAIRequest, advisor: AdvisorDependency) -> Advic
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="助言を生成できませんでした。再試行してください",
+        ) from error
+
+
+@app.post("/internal/v1/replan", response_model=GeneratedReplan)
+def create_replan(payload: ReplanAIRequest, replanner: ReplannerDependency) -> GeneratedReplan:
+    try:
+        return replanner.propose(payload.goal, payload.reason)
+    except AIUnavailableError as error:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="再計画候補を生成できませんでした。再試行してください",
         ) from error

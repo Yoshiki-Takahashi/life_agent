@@ -4,6 +4,12 @@ from pathlib import Path
 import pytest
 
 from life_agent_core.progress_ai import Advice, ProgressPreview, ProgressPreviewRequest
+from life_agent_core.schemas import (
+    ReplanApplyRequest,
+    ReplanCandidate,
+    ReplanProposal,
+    ReplanRequest,
+)
 
 
 @pytest.mark.parametrize(
@@ -12,6 +18,10 @@ from life_agent_core.progress_ai import Advice, ProgressPreview, ProgressPreview
         ("progress-preview-request", ProgressPreviewRequest),
         ("progress-preview", ProgressPreview),
         ("advice", Advice),
+        ("replan-request", ReplanRequest),
+        ("replan-candidate", ReplanCandidate),
+        ("replan-proposal", ReplanProposal),
+        ("replan-apply-request", ReplanApplyRequest),
     ],
 )
 def test_checked_in_schema_matches_model(name, model):

@@ -78,6 +78,24 @@ class GoalPlan(GoalPlanRequest):
         return self
 
 
+class ReplanDiffItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    change_type: str = Field(pattern="^(add|update|remove)$")
+    target_type: str = Field(pattern="^(goal|metric|milestone)$")
+    target_label: str = Field(min_length=1, max_length=120)
+    before: str | None = Field(default=None, max_length=300)
+    after: str | None = Field(default=None, max_length=300)
+    rationale: str = Field(min_length=1, max_length=300)
+
+
+class GeneratedReplan(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposed_plan: GoalPlan
+    diff: list[ReplanDiffItem] = Field(min_length=1, max_length=12)
+
+
 class ProgressMetricUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -157,6 +175,7 @@ class GoalResponse(BaseModel):
     title: str
     description: str | None
     target_date: date
+    plan_revision: int = 1
     status: str
     metrics: list[MetricResponse]
     milestones: list[MilestoneResponse] = []
@@ -176,3 +195,10 @@ class AdviceAIRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     goal: GoalResponse
+
+
+class ReplanAIRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    goal: GoalResponse
+    reason: str = Field(min_length=1, max_length=2000)

@@ -36,7 +36,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。旧キー失効確認等の運用残件は[`Weekend 6ステータス`](backlog/weekend-6-status.md)で追跡します。Weekend 7はクラウド受け入れとADR 0002に基づくAI接続責務の移行まで完了しました。[検証結果](backlog/weekend-7-status.md)を参照してください。次はWeekend 8の計画変更差分Schemaを定義します。現在の計画は[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
+Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。旧キー失効確認等の運用残件は[`Weekend 6ステータス`](backlog/weekend-6-status.md)で追跡します。Weekend 7はクラウド受け入れとADR 0002に基づくAI接続責務の移行まで完了しました。[検証結果](backlog/weekend-7-status.md)を参照してください。Weekend 8では再計画候補の生成、差分確認、承認適用、古い提案の拒否、Metric履歴保持を実装中です。現在の計画は[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
 
 ### Weekend 0: 開発基盤
 
@@ -183,6 +183,8 @@ Progress ParserとAdvisorの呼出し境界と業務検証をCore API内で分�
 詳細なストーリー、受け入れ条件、対象外は[`backlog/weekend-8-plus.md`](backlog/weekend-8-plus.md)にまとめます。MVP対象外の拡張であり、着手前に利用実績をもとに範囲を再確認します。条件付き項目は採否と理由の記録も完了条件とし、必要性のない基盤は作成しません。
 
 毎回、一つのユーザー経路をFakeで完成させてから外部サービスへ接続します。
+
+Weekend 8の再計画では、Core APIが`replan_proposals`を保持し、`plan_revision`で古い候補を拒否します。Goal Planner / AI接続サービスは候補Planと差分だけを返し、Androidは差分を表示して承認または取消を選ばせます。過去のProgressLogを守るため、使わなくなったMetricは削除せず非表示化します。
 
 ## サービスを分離する判断基準
 

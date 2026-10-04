@@ -51,6 +51,20 @@ interface GoalApi {
         @Path("goalId") goalId: String,
         @Body request: ProgressLogCreateRequest,
     ): GoalResponse
+
+    @POST("api/v1/goals/{goalId}/replan/preview")
+    suspend fun previewReplan(
+        @Header("Authorization") authorization: String,
+        @Path("goalId") goalId: String,
+        @Body request: ReplanPreviewRequest,
+    ): ReplanProposalResponse
+
+    @POST("api/v1/goals/{goalId}/replan/apply")
+    suspend fun applyReplan(
+        @Header("Authorization") authorization: String,
+        @Path("goalId") goalId: String,
+        @Body request: ReplanApplyRequest,
+    ): GoalResponse
 }
 
 @Serializable
@@ -128,6 +142,7 @@ data class GoalResponse(
     val title: String,
     val description: String? = null,
     @SerialName("target_date") val targetDate: String,
+    @SerialName("plan_revision") val planRevision: Int = 1,
     val status: String,
     val metrics: List<MetricResponse>,
     val milestones: List<MilestoneResponse>,
@@ -142,6 +157,7 @@ data class GoalResponse(
         targetDate = targetDate,
         status = status,
         createdAt = createdAt,
+        planRevision = planRevision,
         metrics = metrics.map { it.toMetric() },
         milestones = milestones.map { it.toMilestone() },
         updatedAt = updatedAt,
@@ -231,3 +247,47 @@ data class Advice(
     val summary: String,
     @SerialName("next_actions") val nextActions: List<String>,
 )
+
+@Serializable
+data class ReplanPreviewRequest(val reason: String)
+
+@Serializable
+data class ReplanApplyRequest(@SerialName("proposal_id") val proposalId: String)
+
+@Serializable
+data class ReplanProposalResponse(
+    @SerialName("proposal_id") val proposalId: String,
+    @SerialName("base_plan_revision") val basePlanRevision: Int,
+    val reason: String,
+    @SerialName("proposed_plan") val proposedPlan: GoalPlanResponse,
+    val diff: List<ReplanDiffItemResponse>,
+    @SerialName("created_at") val createdAt: String,
+) {
+    fun toReplanProposal() = ReplanProposal(
+        proposalId = proposalId,
+        basePlanRevision = basePlanRevision,
+        reason = reason,
+        proposedPlan = proposedPlan.toGoalPlan(),
+        diff = diff.map { it.toReplanDiffItem() },
+        createdAt = createdAt,
+    )
+}
+
+@Serializable
+data class ReplanDiffItemResponse(
+    @SerialName("change_type") val changeType: String,
+    @SerialName("target_type") val targetType: String,
+    @SerialName("target_label") val targetLabel: String,
+    val before: String? = null,
+    val after: String? = null,
+    val rationale: String,
+) {
+    fun toReplanDiffItem() = ReplanDiffItem(
+        changeType = changeType,
+        targetType = targetType,
+        targetLabel = targetLabel,
+        before = before,
+        after = after,
+        rationale = rationale,
+    )
+}

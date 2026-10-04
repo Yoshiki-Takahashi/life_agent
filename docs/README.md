@@ -5,6 +5,7 @@
 - `product-overview.md`: サービス構想、MVP、機能範囲
 - `architecture-overview.md`: システム構成、データ、AI境界
 - `system-architecture.md`: サービスの責務、連携、主要処理フロー
+- [service-design-guidelines.md](service-design-guidelines.md): 全Sprint共通の責務配置と拡張指針。開発中の発見に応じてGit上で更新する
 - `development-infrastructure.md`: 開発フェーズの使用リソース、技術、課金抑制方針
 - `development-guide.md`: 週末単位の実装順序とサービス分離方針
 - `progress-ai-quality.md`: 進捗解析・助言のユーザー価値、ケース別期待、合格基準

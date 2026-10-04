@@ -9,6 +9,7 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 - `docs/product-overview.md`: 機能、MVP、対象外
 - `docs/architecture-overview.md`: システム境界とデータ設計
 - `docs/system-architecture.md`: サービス責務、連携、セキュリティ境界
+- `docs/service-design-guidelines.md`: 全Sprint共通の責務配置、既存サービスの拡張先、設計変更・サービス分離の判断基準
 - `docs/development-infrastructure.md`: 開発環境、クラウドリソース、コスト管理
 - `docs/development-guide.md`: 開発順序、各段階の完成状態、サービス分離基準
 - `docs/coding-standards.md`: 実装時の簡潔さ、構成、品質ルール
@@ -22,6 +23,8 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 - AI出力はStructured Outputとして検証し、不正な出力は保存しない。
 - 重要な計画変更はユーザー確認後に確定する。
 - Goal Planner、Progress Parser、Advisor、Re-plannerの責務を分離する。
+- 機能の追加・計画時は`docs/service-design-guidelines.md`に沿って配置を決める。AI接続は既存のGoal Planner / AI接続サービスへ寄せる。
+- 共通設計指針は開発中に修正可能とし、配置方針を変えた場合は同じ変更で更新する。重要な境界変更はADRにも記録する。
 - 既存の変更を尊重し、依頼範囲外の変更を混ぜない。
 
 ## ツールとコマンド
@@ -50,7 +53,7 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 
 - `android/`: Androidアプリ
 - `backend/services/core-api/`: Android向けAPIと正本データ
-- `backend/services/goal-planner/`: 独立した初期計画生成サービス
+- `backend/services/goal-planner/`: 初期計画・進捗解析・助言の生成を担い、再計画へ拡張する内部AI接続サービス
 - `contracts/`: 公開APIとサービス間Schema
 - `infra/`: GCP構成とデプロイ手順
 - `tests/e2e/`: 複数コンポーネントを通すテスト

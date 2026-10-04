@@ -8,6 +8,8 @@
 
 ## サービス境界
 
+全Sprintに適用する配置・拡張・設計変更の判断は[サービス設計・拡張指針](service-design-guidelines.md)を参照します。
+
 ```text
 Android App
     ↓ 公開HTTP API
@@ -16,15 +18,15 @@ Core API ──→ Goal Planner Service ──→ OpenAI API
 PostgreSQL
 ```
 
-- AndroidはCore APIだけを呼び出す。
+- Androidの業務通信はCore APIへ集約する。認証はFirebase Authenticationを使う。
 - Core APIだけがアプリケーションDBを所有する。
-- Goal Plannerは状態を持たず、Goalを保存しない。
+- Goal Planner / AI接続サービスは状態を持たず、初期計画・進捗解析・助言の生成を担う。Goalを保存しない。
 - サービス間連携は`contracts/`のSchemaに従う。
-- Progress Parser、Advisor、Re-plannerは必要になるまで分離しない。負荷、変更頻度、障害分離の必要性が明確になった時点で抽出する。
+- Progress Parser、Advisor、Re-plannerは機能別の責務を分け、実AI生成は既存のAI接続サービスへ寄せる。新しいデプロイ単位への分離は共通指針の条件を満たす場合に検討する。
 
 ## 各作業単位の共通手順
 
-1. `docs/backlog/`にユーザーストーリー、受け入れ条件、対象外を書く。
+1. 共通のサービス設計指針を確認し、`docs/backlog/`にユーザーストーリー、受け入れ条件、対象外、責務の配置先を書く。
 2. APIまたはSchemaの契約を先に決める。
 3. 最小の失敗テストを追加する。
 4. 一つの利用経路だけを実装する。
@@ -34,7 +36,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。実AI回帰評価とAndroidクラウド通し確認等の残件は[`Weekend 6ステータス`](backlog/weekend-6-status.md)で追跡し、Weekend 7も進捗解析・助言の実装とエミュレータ確認まで完了しました。次はクラウド受け入れです。[検証結果](backlog/weekend-7-status.md)を参照してください。[実装準備](backlog/weekend-7-preparation.md)と[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
+Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。旧キー失効確認等の運用残件は[`Weekend 6ステータス`](backlog/weekend-6-status.md)で追跡します。Weekend 7はクラウド受け入れとADR 0002に基づくAI接続責務の移行まで完了しました。[検証結果](backlog/weekend-7-status.md)を参照してください。次はWeekend 8の計画変更差分Schemaを定義します。現在の計画は[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
 
 ### Weekend 0: 開発基盤
 
@@ -162,7 +164,7 @@ Goal Plannerは最初はローカルまたはFakeでもよく、Core APIのク�
 
 **完成状態:** 自然言語の進捗をMetric更新候補へ変換し、確認・保存後に次の行動を提案できる。
 
-Progress ParserとAdvisorをCore API内で責務分離し、Fakeで利用経路を完成させてから実AI Adapterを追加します。独立サービス化は下記の判断基準を満たした場合だけ行います。
+Progress ParserとAdvisorの呼出し境界と業務検証をCore API内で分け、生成処理はGoal Planner / AI接続サービスに配置します。Fakeで利用経路を完成させてから実AI Adapterを追加します。新しいデプロイ単位への分離は共通指針の判断基準を満たした場合だけ行います。
 
 詳細は[`backlog/weekend-7.md`](backlog/weekend-7.md)を参照してください。この段階で、プロダクト概要にある進捗記録と助言を含むMVPの利用経路が揃います。
 
@@ -184,15 +186,7 @@ Progress ParserとAdvisorをCore API内で責務分離し、Fakeで利用経路�
 
 ## サービスを分離する判断基準
 
-以下のいずれかが具体的に発生した場合だけ、新しいデプロイ単位へ分離します。
-
-- 他機能と異なるスケーリングが必要
-- 障害やタイムアウトを隔離する必要がある
-- 独立したリリース頻度が必要
-- 個別の秘密情報や権限境界が必要
-- 独立した性能・品質評価が必要
-
-コード量だけを理由にサービスを増やしません。まずCore API内のPortとして分離し、契約テストを整えてからプロセスを分けます。
+[共通指針の分離条件](service-design-guidelines.md#新しいサービスへ分離する条件)を適用します。まず責務に合う既存サービス内で機能を分け、具体的な必要性と運用コストを評価し、契約テストを整えてから実行単位を分離します。
 
 ## 各週末の完了条件
 

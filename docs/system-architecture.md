@@ -1,6 +1,6 @@
 # システムアーキテクチャ
 
-機能の配置先、将来の拡張、設計変更の判断は[サービス設計・拡張指針](service-design-guidelines.md)を参照してください。本書は現在の構成を説明し、Re-plannerの呼出し境界はWeekend 8で追加する予定です。
+機能の配置先、将来の拡張、設計変更の判断は[サービス設計・拡張指針](service-design-guidelines.md)を参照してください。本書は現在の構成を説明します。
 
 ## 全体構成
 
@@ -44,7 +44,7 @@ flowchart LR
     AIService -->|"構造化ログ"| Logging
 ```
 
-AndroidはFirebase AuthenticationとCore APIだけに接続します。DB、OpenAI API、内部AI接続サービスへ直接接続しません。Core APIは正本DB、認可、ユーザー確認、最終検証を担当し、OpenAI SDK・API Key・プロンプトを持ちません。Goal Planner Serviceは当面のAI接続サービスとして、初期計画、進捗解析候補、助言を生成するステートレスな内部サービスです。
+AndroidはFirebase AuthenticationとCore APIだけに接続します。DB、OpenAI API、内部AI接続サービスへ直接接続しません。Core APIは正本DB、認可、ユーザー確認、最終検証を担当し、OpenAI SDK・API Key・プロンプトを持ちません。Goal Planner Serviceは当面のAI接続サービスとして、初期計画、進捗解析候補、助言、再計画候補を生成するステートレスな内部サービスです。
 
 ## サービスの責務
 
@@ -52,8 +52,8 @@ AndroidはFirebase AuthenticationとCore APIだけに接続します。DB、Open
 | --- | --- | --- |
 | Android App | 入力、計画確認、進捗候補の確認・修正、進捗表示、ID Token付きAPI通信 | AI API呼び出し、DB直接操作、秘密情報保持 |
 | Firebase Authentication | ログイン、ユーザー識別、ID Token発行 | Goalデータ管理、業務上の認可判断 |
-| Core API | Android公開API、Token検証、所有者認可、Goal/Metric/Milestone/ProgressLogの正本管理、AI出力の業務検証、ユーザー確認後の保存 | OpenAI SDK/API Key、プロンプト管理、正本化前のAI候補生成 |
-| Goal Planner / AI接続サービス | OpenAI SDK/API Key、プロンプト、Structured Output schema、timeout/retry/refusal処理、Fake/実AI回帰評価、初期計画・進捗候補・助言生成 | Android公開API、ユーザー認可、アプリDBアクセス、AI出力の自動保存 |
+| Core API | Android公開API、Token検証、所有者認可、Goal/Metric/Milestone/ProgressLogの正本管理、AI出力の業務検証、再計画提案の保持、ユーザー確認後の保存 | OpenAI SDK/API Key、プロンプト管理、正本化前のAI候補生成 |
+| Goal Planner / AI接続サービス | OpenAI SDK/API Key、プロンプト、Structured Output schema、timeout/retry/refusal処理、Fake/実AI回帰評価、初期計画・進捗候補・助言・再計画候補生成 | Android公開API、ユーザー認可、アプリDBアクセス、AI出力の自動保存 |
 | Cloud SQL | Goal、Metric、Milestone、ProgressLogの永続化 | AI処理、クライアントからの直接アクセス |
 | OpenAI API | 計画、進捗解析、助言、再計画案の生成 | 正本データの保持、変更の自動確定 |
 | Secret Manager | DB passwordとOpenAI API keyの安全な保管 | アプリケーションデータの保管 |
@@ -79,6 +79,7 @@ flowchart TB
         Planner["Goal Planner"]
         Parser["Progress Parser"]
         Advisor["Advisor"]
+        Replanner["Re-planner"]
         AIAdapter["OpenAI Adapter<br/>Structured Output"]
     end
 
@@ -95,9 +96,11 @@ flowchart TB
     PlannerPort --> AISvc
     ParserPort --> AISvc
     AdvisorPort --> AISvc
+    ReplannerPort --> AISvc
     Planner --> AIAdapter
     Parser --> AIAdapter
     Advisor --> AIAdapter
+    Replanner --> AIAdapter
     DBAdapter --> PostgreSQL
 ```
 
@@ -145,6 +148,17 @@ AIが生成した計画は直ちに保存せず、検証後にAndroidへ返し�
 3. Backendが構造と業務ルールを検証してProgressLogを保存する。
 4. Advisorが保存済みデータをもとに次の行動を提案する。
 5. 再計画が必要な場合も、ユーザー確認前には既存計画を変更しない。
+
+### 計画の見直し
+
+1. Androidが見直し理由をCore APIへ送る。
+2. Core APIが所有者確認済みGoalを読み、AI呼び出し前に読取りtransactionを終了する。
+3. Re-plannerが候補Planと現行計画との差分を返す。
+4. Core APIが候補を検証し、`replan_proposals`へ`base_plan_revision`付きで保存する。
+5. Androidが差分を表示し、ユーザーが承認した場合だけ適用APIを呼ぶ。
+6. Core APIはGoal行をロックし、現在の`plan_revision`が提案の`base_plan_revision`と一致する場合だけGoalを更新する。一致しない場合は409で拒否する。
+
+Metricを見直す場合、Core APIは既存Metricを削除せず、使わなくなったMetricへ`archived_at`を設定して詳細画面の対象から外します。ProgressLogは既存Metric参照を保持するため、過去の履歴は失われません。
 
 ## セキュリティ境界
 

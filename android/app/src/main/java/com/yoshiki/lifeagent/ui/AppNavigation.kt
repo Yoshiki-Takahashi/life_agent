@@ -93,6 +93,10 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                 onParseProgress = detailViewModel::parseProgress,
                 onCancelPreview = detailViewModel::cancelPreview,
                 onLoadAdvice = detailViewModel::loadAdvice,
+                onReplanReasonChange = detailViewModel::updateReplanReason,
+                onPreviewReplan = detailViewModel::previewReplan,
+                onCancelReplan = detailViewModel::cancelReplan,
+                onApplyReplan = detailViewModel::applyReplan,
             )
         }
     }

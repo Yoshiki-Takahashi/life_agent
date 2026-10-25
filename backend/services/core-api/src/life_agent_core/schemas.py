@@ -69,6 +69,47 @@ class GoalPlan(BaseModel):
         return self
 
 
+class ReplanRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    reason: str = Field(min_length=1, max_length=2000)
+
+
+class ReplanDiffItem(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    change_type: str = Field(pattern="^(add|update|remove)$")
+    target_type: str = Field(pattern="^(goal|metric|milestone)$")
+    target_label: str = Field(min_length=1, max_length=120)
+    before: str | None = Field(default=None, max_length=300)
+    after: str | None = Field(default=None, max_length=300)
+    rationale: str = Field(min_length=1, max_length=300)
+
+
+class ReplanCandidate(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposed_plan: GoalPlan
+    diff: list[ReplanDiffItem] = Field(min_length=1, max_length=12)
+
+
+class ReplanProposal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_id: uuid.UUID
+    base_plan_revision: int
+    reason: str
+    proposed_plan: GoalPlan
+    diff: list[ReplanDiffItem] = Field(min_length=1, max_length=12)
+    created_at: datetime
+
+
+class ReplanApplyRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    proposal_id: uuid.UUID
+
+
 class GoalConfirmRequest(GoalInput):
     metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
     milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
@@ -155,6 +196,7 @@ class GoalResponse(BaseModel):
     title: str
     description: str | None
     target_date: date
+    plan_revision: int
     status: GoalStatus
     metrics: list[MetricResponse]
     milestones: list[MilestoneResponse]

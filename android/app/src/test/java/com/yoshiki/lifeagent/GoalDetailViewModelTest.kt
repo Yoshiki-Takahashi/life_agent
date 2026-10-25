@@ -9,6 +9,8 @@ import com.yoshiki.lifeagent.data.MetricProgressInput
 import com.yoshiki.lifeagent.data.Milestone
 import com.yoshiki.lifeagent.data.ProgressLog
 import com.yoshiki.lifeagent.data.ProgressMetricUpdate
+import com.yoshiki.lifeagent.data.ReplanDiffItem
+import com.yoshiki.lifeagent.data.ReplanProposal
 import com.yoshiki.lifeagent.ui.GoalDetailViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -137,6 +139,46 @@ class GoalDetailViewModelTest {
         assertEquals(0, repo.recordProgressCalls)
     }
 
+    @Test fun replanPreviewDoesNotUpdateGoalUntilApplied() = runTest(dispatcher) {
+        val repo = FakeDetailRepository()
+        val vm = GoalDetailViewModel(repo)
+        vm.loadGoal("goal-1")
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.updateReplanReason("期限を調整したい")
+        vm.previewReplan()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, repo.previewReplanCalls)
+        assertEquals("2026-12-31", vm.uiState.value.goal?.targetDate)
+        assertNotNull(vm.uiState.value.replanProposal)
+        assertFalse(vm.uiState.value.replanApplied)
+
+        vm.applyReplan()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(1, repo.applyReplanCalls)
+        assertEquals("2027-01-31", vm.uiState.value.goal?.targetDate)
+        assertTrue(vm.uiState.value.replanApplied)
+        assertEquals(null, vm.uiState.value.replanProposal)
+    }
+
+    @Test fun cancelReplanDropsProposalWithoutApiCall() = runTest(dispatcher) {
+        val repo = FakeDetailRepository()
+        val vm = GoalDetailViewModel(repo)
+        vm.loadGoal("goal-1")
+        dispatcher.scheduler.advanceUntilIdle()
+        vm.updateReplanReason("見直したい")
+        vm.previewReplan()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        vm.cancelReplan()
+        vm.applyReplan()
+        dispatcher.scheduler.advanceUntilIdle()
+
+        assertEquals(null, vm.uiState.value.replanProposal)
+        assertEquals(0, repo.applyReplanCalls)
+    }
 }
 
 private class FakeDetailRepository : GoalRepository {
@@ -144,6 +186,8 @@ private class FakeDetailRepository : GoalRepository {
     var failAdvice = false
     val requestIds = mutableListOf<String>()
     var recordProgressCalls = 0
+    var previewReplanCalls = 0
+    var applyReplanCalls = 0
     var lastBody: String? = null
     var lastUpdates: List<MetricProgressInput> = emptyList()
 
@@ -160,6 +204,55 @@ private class FakeDetailRepository : GoalRepository {
         com.yoshiki.lifeagent.data.ProgressPreview(listOf(com.yoshiki.lifeagent.data.ProgressMetricUpdatePayload("metric-1", 2.0)), emptyList())
     override suspend fun getAdvice(goalId: String): com.yoshiki.lifeagent.data.Advice =
         if (failAdvice) error("unavailable") else com.yoshiki.lifeagent.data.Advice("保存済み進捗", listOf("次の行動"))
+    override suspend fun previewReplan(goalId: String, reason: String): ReplanProposal {
+        previewReplanCalls++
+        return ReplanProposal(
+            proposalId = "proposal-1",
+            basePlanRevision = 1,
+            reason = reason,
+            proposedPlan = GoalPlan(
+                title = "読書する",
+                description = "毎日読む",
+                targetDate = "2027-01-31",
+                metrics = listOf(Metric("読了冊数", 10.0, "冊", 0)),
+                milestones = listOf(
+                    Milestone("前半を読む", "2026-12-15"),
+                    Milestone("後半を読む", "2027-01-15"),
+                    Milestone("読み終える", "2027-01-31"),
+                ),
+            ),
+            diff = listOf(
+                ReplanDiffItem(
+                    changeType = "update",
+                    targetType = "goal",
+                    targetLabel = "Goal期限",
+                    before = "2026-12-31",
+                    after = "2027-01-31",
+                    rationale = "予定に合わせます。",
+                )
+            ),
+            createdAt = "2026-10-02T00:00:00Z",
+        )
+    }
+
+    override suspend fun applyReplan(goalId: String, proposalId: String): Goal {
+        applyReplanCalls++
+        return goal(currentValue = 0.0).copy(
+            targetDate = "2027-01-31",
+            planRevision = 2,
+            metrics = listOf(
+                Metric(
+                    name = "読了冊数",
+                    targetValue = 10.0,
+                    unit = "冊",
+                    position = 0,
+                    id = "metric-1",
+                    currentValue = 0.0,
+                )
+            ),
+        )
+    }
+
     override suspend fun recordProgress(
         goalId: String,
         body: String,

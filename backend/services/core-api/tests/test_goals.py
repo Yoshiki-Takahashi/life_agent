@@ -9,9 +9,10 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.orm import Session
 
 from life_agent_core.database import get_db
-from life_agent_core.main import app, get_goal_planner
-from life_agent_core.models import Goal
+from life_agent_core.main import app, get_goal_planner, get_replanner
+from life_agent_core.models import Goal, ReplanProposal
 from life_agent_core.planner import PlannerUnavailableError
+from life_agent_core.schemas import ReplanCandidate
 
 
 def request_payload(title: str = "毎月4冊読む") -> dict[str, object]:
@@ -340,3 +341,190 @@ def test_confirm_rolls_back_when_commit_fails(client: TestClient) -> None:
 
     assert response.status_code == 500
     assert session.rolled_back
+
+
+def test_replan_preview_is_saved_without_changing_goal(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/preview",
+        json={"reason": "期限までに間に合わなさそう"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["proposal_id"]
+    assert body["base_plan_revision"] == goal["plan_revision"]
+    assert body["diff"]
+    fetched = client.get(f"/api/v1/goals/{goal['id']}").json()
+    assert fetched["target_date"] == goal["target_date"]
+    assert fetched["plan_revision"] == goal["plan_revision"]
+
+
+def test_apply_replan_updates_only_after_approval(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+    proposal = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/preview",
+        json={"reason": "今の計画が厳しい"},
+    ).json()
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/apply",
+        json={"proposal_id": proposal["proposal_id"]},
+    )
+
+    assert response.status_code == 200
+    updated = response.json()
+    assert updated["plan_revision"] == goal["plan_revision"] + 1
+    assert updated["target_date"] == proposal["proposed_plan"]["target_date"]
+    assert updated["metrics"][0]["target_value"] == proposal["proposed_plan"]["metrics"][0][
+        "target_value"
+    ]
+
+
+def test_stale_replan_proposal_is_rejected(client: TestClient, db_session: Session) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+    proposal = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/preview",
+        json={"reason": "計画を変えたい"},
+    ).json()
+    stored_goal = db_session.get(Goal, uuid.UUID(goal["id"]))
+    stored_goal.plan_revision += 1
+    db_session.commit()
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/apply",
+        json={"proposal_id": proposal["proposal_id"]},
+    )
+
+    assert response.status_code == 409
+
+
+def test_replan_metric_removal_keeps_progress_history(client: TestClient) -> None:
+    plan = preview(client)
+    plan["metrics"] = [
+        {"name": "読了冊数", "target_value": 8, "unit": "冊"},
+        {"name": "読書時間", "target_value": 20, "unit": "時間"},
+    ]
+    goal = client.post("/api/v1/goals/confirm", json=plan).json()
+    client.post(
+        f"/api/v1/goals/{goal['id']}/progress",
+        json={
+            "body": "1時間読んだ",
+            "client_request_id": str(uuid.uuid4()),
+            "metric_updates": [{"metric_id": goal["metrics"][1]["id"], "value": 1}],
+        },
+    )
+
+    class RemovingReplanner:
+        def propose(self, context, reason: str) -> ReplanCandidate:
+            return ReplanCandidate(
+                proposed_plan={
+                    "title": context.title,
+                    "description": context.description,
+                    "target_date": context.target_date,
+                    "metrics": [
+                        {"name": "読了冊数", "target_value": 8, "unit": "冊"},
+                    ],
+                    "milestones": [
+                        item.model_dump(mode="json", include={"title", "target_date"})
+                        for item in context.milestones
+                    ],
+                },
+                diff=[
+                    {
+                        "change_type": "remove",
+                        "target_type": "metric",
+                        "target_label": "読書時間",
+                        "before": "20 時間",
+                        "after": None,
+                        "rationale": "読了冊数に集中します。",
+                    }
+                ],
+            )
+
+    app.dependency_overrides[get_replanner] = lambda: RemovingReplanner()
+    proposal = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/preview",
+        json={"reason": "測る項目を減らす"},
+    ).json()
+    app.dependency_overrides.pop(get_replanner, None)
+
+    updated = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/apply",
+        json={"proposal_id": proposal["proposal_id"]},
+    ).json()
+
+    assert [metric["name"] for metric in updated["metrics"]] == ["読了冊数"]
+    assert updated["progress_logs"][0]["metric_updates"][0]["metric_name"] == "読書時間"
+
+
+def test_other_user_cannot_apply_replan(client: TestClient) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+    proposal = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/preview",
+        json={"reason": "計画を変えたい"},
+    ).json()
+
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/apply",
+        json={"proposal_id": proposal["proposal_id"]},
+        headers={"Authorization": "Bearer user-b"},
+    )
+
+    assert response.status_code == 404
+
+
+def test_invalid_replan_does_not_create_proposal(
+    client: TestClient, db_session: Session
+) -> None:
+    goal = client.post("/api/v1/goals/confirm", json=preview(client)).json()
+    client.post(
+        f"/api/v1/goals/{goal['id']}/progress",
+        json={
+            "body": "2冊読んだ",
+            "client_request_id": str(uuid.uuid4()),
+            "metric_updates": [{"metric_id": goal["metrics"][0]["id"], "value": 2}],
+        },
+    )
+
+    class InvalidReplanner:
+        def propose(self, context, reason: str) -> ReplanCandidate:
+            return ReplanCandidate(
+                proposed_plan={
+                    "title": context.title,
+                    "description": context.description,
+                    "target_date": context.target_date,
+                    "metrics": [
+                        {
+                            "name": context.metrics[0].name,
+                            "target_value": context.metrics[0].current_value - 0.5,
+                            "unit": context.metrics[0].unit,
+                        }
+                    ],
+                    "milestones": [
+                        item.model_dump(mode="json", include={"title", "target_date"})
+                        for item in context.milestones
+                    ],
+                },
+                diff=[
+                    {
+                        "change_type": "update",
+                        "target_type": "metric",
+                        "target_label": context.metrics[0].name,
+                        "before": "old",
+                        "after": "new",
+                        "rationale": "invalid",
+                    }
+                ],
+            )
+
+    app.dependency_overrides[get_replanner] = lambda: InvalidReplanner()
+    response = client.post(
+        f"/api/v1/goals/{goal['id']}/replan/preview",
+        json={"reason": "壊れた候補"},
+    )
+    app.dependency_overrides.pop(get_replanner, None)
+
+    assert response.status_code == 503
+    assert db_session.query(ReplanProposal).count() == 0

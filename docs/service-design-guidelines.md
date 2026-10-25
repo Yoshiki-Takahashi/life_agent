@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | Android (`android/`) | 入力、表示、候補の修正・確認、権限要求、画面状態、端末処理 | 業務通信はCore APIへ。Firebase認証はSDKで行う。AI秘密情報やDB接続を持たない |
 | Core API (`backend/services/core-api/`) | 公開API、認証Token検証、所有者認可、正本の読取りと保存、業務検証、競合・重複反映防止 | アプリケーションDBの唯一の所有者。AIに渡すコンテキストを選び、生成結果を再検証する。OpenAI SDK・キー・プロンプトを持たない |
-| Goal Planner / AI接続サービス (`backend/services/goal-planner/`) | AI Provider接続、キー、プロンプト、Structured Output生成、Providerエラー処理、Fakeと実AI評価 | ステートレスな内部サービス。初期計画・進捗解析候補・助言を生成する。アプリDB、ユーザー認可、正本更新を担わない |
+| Goal Planner / AI接続サービス (`backend/services/goal-planner/`) | AI Provider接続、キー、プロンプト、Structured Output生成、Providerエラー処理、Fakeと実AI評価 | ステートレスな内部サービス。初期計画・進捗解析候補・助言・再計画候補を生成する。アプリDB、ユーザー認可、正本更新を担わない |
 | 契約 (`contracts/`) | 公開API・内部APIの入出力、固定Schema、エラーと更新の意味 | AI任せでSchemaを増やさない。AI側の生成制約とCore側の検証を契約に合わせる |
 | 基盤 (`infra/`・`scripts/`・CI) | デプロイ、権限、Secret注入、監視、環境再現、運用手順 | 業務判断やAIプロンプトを配置しない。新規リソースは必要性と費用を評価して導入する |
 
@@ -39,13 +39,15 @@ Goal Planner、Progress Parser、Advisor、Re-plannerの「責務分離」は、
 
 AI呼出しに必要な正本はCore APIで所有者確認後に読み出し、必要最小限を渡します。AI応答待ちの間はDB transactionを保持しません。結果は候補として扱い、Core APIが構造と業務ルールを検証します。計画変更や進捗登録はユーザー確認後に短いtransactionで確定し、助言の失敗が保存済みの進捗を巻き戻さないようにします。
 
+再計画のように後から適用する候補は、Core APIで提案ID、作成時点の計画版、差分、候補Planを保持します。適用時は現在の計画版と提案の基準版を比較し、古い候補を拒否します。履歴を参照するデータは削除せず、非表示化や版管理で過去のProgressLogを失わないようにします。
+
 ## 今後の拡張先
 
-以下は[Weekend 8以降の計画](backlog/weekend-8-plus.md)を実装するときの配置方針です。すべてPlannedで、詳細契約は各Sprintの着手時に決めます。
+以下は[Weekend 8以降の計画](backlog/weekend-8-plus.md)を実装するときの配置方針です。Weekend 8はこの方針で実装中で、それ以降の詳細契約は各Sprintの着手時に決めます。
 
 | 実施枠 | 既存サービスの拡張方法 | 着手時に決めること |
 | --- | --- | --- |
-| Weekend 8: 再計画 | AI接続サービスにRe-plannerの変更案生成を追加。Core APIがコンテキスト取得、差分検証、承認後の適用を担当。Androidが変更前後と承認・取消を表示 | 変更可能項目と差分Schema、提案の保持方法、計画の版と古い提案の拒否、Metric変更後のProgressLog参照・履歴保持 |
+| Weekend 8: 再計画 | AI接続サービスにRe-plannerの変更案生成を追加。Core APIがコンテキスト取得、差分検証、提案保持、承認後の適用を担当。Androidが変更前後と承認・取消を表示 | 差分Schemaは`ReplanDiffItem`、提案は`replan_proposals`、計画版は`plan_revision`、Metric履歴は削除せず`archived_at`で保持 |
 | Weekend 9: 可視化 | Core APIが履歴とMetricから集計・達成率の計算規則を提供し、Androidが固定のグラフを描画。AIを集計の正本にしない | 型別の集計、未記録・目標値なしの表現、必要な取得API。AIによる表示種別の提案を採用しても許可済み集合に制限 |
 | Weekend 10: 振り返り・通知 | Core APIが期間内の実績を取得し、AIによる要約・助言が必要なら既存AI接続サービスを拡張。Androidが振り返り、通知設定、端末権限を扱う | 端末処理とサーバー処理の採否、設定の保存先、頻度・タイムゾーン、通知重複防止。サーバー定期処理が必要な場合だけCloud Schedulerを導入し、認証付きでCore側の処理を起動 |
 | Weekend 11: 音声入力 | Androidに録音・文字起こし本文の編集と確認を追加し、既存の進捗解析・保存経路へ接続。外部AIによる文字起こしを採用する場合、Core APIを窓口にAI接続サービスへ委譲 | 端末内認識か外部AIか、送信先、音声の保存・保持・削除。保存が必要な場合だけStorageを導入し、Core側で所有者とアクセス・削除を管理 |

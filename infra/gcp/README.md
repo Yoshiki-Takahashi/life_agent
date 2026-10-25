@@ -57,7 +57,20 @@ OPENAI_SECRET_NAME=lifeagent-openai-api-key
 
 開発環境の状態確認、開始、停止は`.github/workflows/manage-dev.yml`から手動実行します。`stop`はCloud SQLを`activationPolicy=NEVER`へ変更し、Core APIとGoal Plannerが`min=0`、`max=1`であることを検証します。Cloud Run service自体は削除せず、revisionを保持します。
 
-DB migrationはWeekend 6の進捗記録migrationを追加する時点で、deploy前に失敗時停止できる明示手順へ組み込みます。現時点のworkflowは既存schemaのimage deployを対象にしています。
+Core APIのdeploy前に、同じimageを使うCloud Run Job `lifeagent-db-migrate`で
+`alembic upgrade head`を実行します。Cloud SQLを起動してからworkflowを実行してください。
+Jobの失敗時はCore APIのdeployを停止します。既存Core APIのruntime service accountとDB Secretだけを
+使い、OpenAI Secretは渡しません。1 task、再試行0回、timeout120秒で実行し、常時稼働しません。
+接続情報とDB SecretをログやGitへ保存しないでください。
+
+ローカルAuth Proxyを`127.0.0.1:15438`で起動した後、`bash scripts/gcp/migrate-dev.sh`で
+Secret Managerから一時的にDB接続情報を取得し、migrationと現在のrevisionの確認を実行できます。
+ローカルからCloud SQLの3307番ポートへ到達できない場合は、workflowのmigration Jobを使います。
+
+Weekend 8は対象ブランチの`deploy-dev.yml`を指定し、`replanner_backend=openai`を選択します。
+Goal Plannerには`REPLANNER_PROVIDER=openai`、Core APIには`REPLANNER_BACKEND=http`を設定し、
+OpenAI Secretは引き続きGoal Plannerだけに渡します。適用migrationは`20261004_05`です。
+検証後も環境を利用する場合は起動を維持し、利用終了時は`stop-dev.sh`で停止します。
 
 WIF、deploy用service account、Goal Planner runtime service account、GitHub Variablesは次のスクリプトで作成・更新します。
 

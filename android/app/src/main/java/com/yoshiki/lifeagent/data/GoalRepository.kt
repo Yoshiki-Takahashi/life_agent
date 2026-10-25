@@ -7,6 +7,8 @@ interface GoalRepository {
     suspend fun getGoal(goalId: String): Goal
     suspend fun previewProgress(goalId: String, body: String): ProgressPreview
     suspend fun getAdvice(goalId: String): Advice
+    suspend fun previewReplan(goalId: String, reason: String): ReplanProposal
+    suspend fun applyReplan(goalId: String, proposalId: String): Goal
     suspend fun recordProgress(
         goalId: String,
         body: String,
@@ -49,6 +51,12 @@ class HttpGoalRepository(
         api.previewProgress(authorization(), goalId, ProgressPreviewRequest(body))
 
     override suspend fun getAdvice(goalId: String): Advice = api.getAdvice(authorization(), goalId)
+
+    override suspend fun previewReplan(goalId: String, reason: String): ReplanProposal =
+        api.previewReplan(authorization(), goalId, ReplanPreviewRequest(reason)).toReplanProposal()
+
+    override suspend fun applyReplan(goalId: String, proposalId: String): Goal =
+        api.applyReplan(authorization(), goalId, ReplanApplyRequest(proposalId)).toGoal()
 
     override suspend fun recordProgress(
         goalId: String,

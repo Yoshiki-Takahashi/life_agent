@@ -4,6 +4,7 @@ from decimal import Decimal
 from enum import StrEnum
 
 from sqlalchemy import (
+    JSON,
     Date,
     DateTime,
     Enum,
@@ -24,6 +25,11 @@ class GoalStatus(StrEnum):
     ACTIVE = "active"
 
 
+class ReplanProposalStatus(StrEnum):
+    PENDING = "pending"
+    APPLIED = "applied"
+
+
 class Goal(Base):
     __tablename__ = "goals"
 
@@ -32,6 +38,7 @@ class Goal(Base):
     title: Mapped[str] = mapped_column(String(120))
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     target_date: Mapped[date] = mapped_column(Date)
+    plan_revision: Mapped[int] = mapped_column(Integer, default=1)
     status: Mapped[GoalStatus] = mapped_column(
         Enum(
             GoalStatus,
@@ -55,6 +62,9 @@ class Goal(Base):
         cascade="all, delete-orphan",
         order_by=lambda: (ProgressLog.recorded_at.desc(), ProgressLog.id.desc()),
     )
+    replan_proposals: Mapped[list["ReplanProposal"]] = relationship(
+        back_populates="goal", cascade="all, delete-orphan"
+    )
 
 
 class Metric(Base):
@@ -68,6 +78,7 @@ class Metric(Base):
     current_value: Mapped[Decimal] = mapped_column(Numeric(12, 2), default=Decimal("0"))
     unit: Mapped[str] = mapped_column(String(30))
     position: Mapped[int] = mapped_column(Integer)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
     goal: Mapped[Goal] = relationship(back_populates="metrics")
     progress_updates: Mapped[list["ProgressMetricUpdate"]] = relationship(back_populates="metric")
@@ -130,3 +141,26 @@ class ProgressMetricUpdate(Base):
     @property
     def unit(self) -> str:
         return self.metric.unit
+
+
+class ReplanProposal(Base):
+    __tablename__ = "replan_proposals"
+
+    id: Mapped[uuid.UUID] = mapped_column(primary_key=True, default=uuid.uuid4)
+    goal_id: Mapped[uuid.UUID] = mapped_column(ForeignKey("goals.id", ondelete="CASCADE"))
+    owner_id: Mapped[str] = mapped_column(String(128), index=True)
+    base_plan_revision: Mapped[int] = mapped_column(Integer)
+    reason: Mapped[str] = mapped_column(Text)
+    proposed_plan: Mapped[dict] = mapped_column(JSON)
+    diff: Mapped[list] = mapped_column(JSON)
+    status: Mapped[ReplanProposalStatus] = mapped_column(
+        Enum(
+            ReplanProposalStatus,
+            name="replan_proposal_status",
+            values_callable=lambda values: [item.value for item in values],
+        ),
+        default=ReplanProposalStatus.PENDING,
+    )
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now())
+    applied_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
+    goal: Mapped[Goal] = relationship(back_populates="replan_proposals")

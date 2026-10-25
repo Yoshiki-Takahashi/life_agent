@@ -40,6 +40,10 @@ fun GoalDetailScreen(
     onParseProgress: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
     onLoadAdvice: () -> Unit = {},
+    onReplanReasonChange: (String) -> Unit = {},
+    onPreviewReplan: () -> Unit = {},
+    onCancelReplan: () -> Unit = {},
+    onApplyReplan: () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -70,6 +74,10 @@ fun GoalDetailScreen(
                     onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
                     onCancelPreview = onCancelPreview,
                     onLoadAdvice = onLoadAdvice,
+                    onReplanReasonChange = onReplanReasonChange,
+                    onPreviewReplan = { focusManager.clearFocus(); keyboard?.hide(); onPreviewReplan() },
+                    onCancelReplan = onCancelReplan,
+                    onApplyReplan = { focusManager.clearFocus(); keyboard?.hide(); onApplyReplan() },
                 )
             }
         }
@@ -85,6 +93,10 @@ private fun GoalDetail(
     onParseProgress: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
     onLoadAdvice: () -> Unit = {},
+    onReplanReasonChange: (String) -> Unit = {},
+    onPreviewReplan: () -> Unit = {},
+    onCancelReplan: () -> Unit = {},
+    onApplyReplan: () -> Unit = {},
 ) {
     val goal = requireNotNull(state.goal)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -124,6 +136,7 @@ private fun GoalDetail(
         onLoadAdvice = onLoadAdvice,
     )
     if (state.progressSaved) Text("進捗を保存しました", color = MaterialTheme.colorScheme.primary)
+    if (state.replanApplied) Text("再計画を保存しました", color = MaterialTheme.colorScheme.primary)
     if (goal.progressLogs.isNotEmpty()) {
         Card(Modifier.fillMaxWidth()) {
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -140,6 +153,13 @@ private fun GoalDetail(
             }
         }
     }
+    ReplanEntry(
+        state = state,
+        onReplanReasonChange = onReplanReasonChange,
+        onPreviewReplan = onPreviewReplan,
+        onCancelReplan = onCancelReplan,
+        onApplyReplan = onApplyReplan,
+    )
     ProgressHistory(goal)
     Text("達成までのMilestone", style = MaterialTheme.typography.titleLarge)
     goal.milestones.sortedBy { it.position }.forEachIndexed { index, milestone ->
@@ -154,6 +174,61 @@ private fun GoalDetail(
         }
     }
     Text("作成日時  ${goal.createdAt}", style = MaterialTheme.typography.bodySmall)
+}
+
+@Composable
+private fun ReplanEntry(
+    state: GoalDetailUiState,
+    onReplanReasonChange: (String) -> Unit,
+    onPreviewReplan: () -> Unit,
+    onCancelReplan: () -> Unit,
+    onApplyReplan: () -> Unit,
+) {
+    Text("計画を見直す", style = MaterialTheme.typography.titleLarge)
+    Card(Modifier.fillMaxWidth()) {
+        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+            OutlinedTextField(
+                value = state.replanReason,
+                onValueChange = onReplanReasonChange,
+                label = { Text("見直し理由") },
+                supportingText = { Text("例：予定より忙しく、期限と冊数を調整したい") },
+                enabled = !state.isLoadingReplan && !state.isApplyingReplan,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Button(
+                onClick = onPreviewReplan,
+                enabled = !state.isLoadingReplan && !state.isApplyingReplan,
+            ) {
+                Text(if (state.isLoadingReplan) "生成中…" else "再計画候補を作る")
+            }
+            state.replanProposal?.let { proposal ->
+                Text("変更候補を確認", style = MaterialTheme.typography.titleMedium)
+                Text("まだ保存されていません。変更内容を確認してから適用してください。")
+                proposal.diff.forEach { item ->
+                    Card(Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            Text(item.targetLabel, style = MaterialTheme.typography.titleMedium)
+                            Text("${item.before ?: "なし"} → ${item.after ?: "なし"}")
+                            Text(item.rationale)
+                        }
+                    }
+                }
+                Text("新しい期限 ${proposal.proposedPlan.targetDate}")
+                proposal.proposedPlan.metrics.forEach { metric ->
+                    Text("${metric.name}: ${formatNumber(metric.targetValue)} ${metric.unit}")
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    TextButton(onClick = onCancelReplan, enabled = !state.isApplyingReplan) {
+                        Text("候補を取り消す")
+                    }
+                    Button(onClick = onApplyReplan, enabled = !state.isApplyingReplan) {
+                        Text(if (state.isApplyingReplan) "保存中…" else "この変更を保存")
+                    }
+                }
+            }
+            state.replanError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+        }
+    }
 }
 
 @Composable

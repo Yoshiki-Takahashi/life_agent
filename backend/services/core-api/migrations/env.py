@@ -1,14 +1,20 @@
 from logging.config import fileConfig
 
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import URL, engine_from_config, pool
 
 from life_agent_core import models  # noqa: F401
 from life_agent_core.config import get_settings
 from life_agent_core.database import Base
 
 config = context.config
-config.set_main_option("sqlalchemy.url", get_settings().database_url)
+connection_url = get_settings().database_connection_url
+database_url = (
+    connection_url.render_as_string(hide_password=False)
+    if isinstance(connection_url, URL)
+    else connection_url
+)
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)

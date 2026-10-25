@@ -28,6 +28,7 @@ Cloud Runでは非公開serviceとしてdeployし、Core APIのruntime service a
 - `GOAL_PLANNER_PROVIDER`: 通常は`openai`。キー不要E2Eだけ`fake`を使用
 - `PROGRESS_PARSER_PROVIDER`: `openai`または`fake`。既定値は`fake`
 - `ADVISOR_PROVIDER`: `openai`または`fake`。既定値は`fake`
+- `REPLANNER_PROVIDER`: `openai`または`fake`。既定値は`fake`。内部APIは`POST /internal/v1/replan`
 - `OPENAI_API_KEY`: 実AI利用時に必須
 - `OPENAI_MODEL`: 既定値`gpt-5.6-luna`
 - `OPENAI_TIMEOUT_SECONDS`: 既定値20秒
@@ -49,6 +50,11 @@ OPENAI_API_KEY=... uv run pytest -m live_ai
 OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --repeat 2 --output /tmp/progress-quality.json
 OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --suite holdout --repeat 2 --output /tmp/progress-quality-holdout.json
 ```
+
+再計画を含む全実AI回帰は`RUN_LIVE_AI=1 uv run pytest -m live_ai`で明示実行します。
+キーはSecret Managerから取得してこのプロセスだけに渡せます。`REPLAN_EVALUATION_OUTPUT_DIR`
+を指定すると合成ケースの再計画候補を保存でき、キーは出力しません。痛みがある運動目標では、
+追加の運動回数や再開日を指定せず、休止と状態確認を優先することを内容レビューします。
 
 `fake` Providerは独立サービス境界をToken消費なしで検証するためのものです。通常のアプリ確認では使用しません。リポジトリルートから次を実行すると、隔離されたPostgreSQL、Fake Goal Planner、Core APIを起動し、終了時に自動削除します。
 

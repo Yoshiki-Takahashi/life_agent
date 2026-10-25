@@ -78,6 +78,11 @@ private class ListRepository(private val goals: List<GoalSummary>) : GoalReposit
         com.yoshiki.lifeagent.data.ProgressPreview(emptyList(), emptyList())
     override suspend fun getAdvice(goalId: String): com.yoshiki.lifeagent.data.Advice =
         com.yoshiki.lifeagent.data.Advice("保存済み進捗", listOf("次の行動"))
+    override suspend fun previewReplan(
+        goalId: String,
+        reason: String,
+    ): com.yoshiki.lifeagent.data.ReplanProposal = error("unused")
+    override suspend fun applyReplan(goalId: String, proposalId: String): Goal = error("unused")
     override suspend fun recordProgress(
         goalId: String,
         body: String,

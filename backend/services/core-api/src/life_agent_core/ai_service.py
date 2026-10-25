@@ -9,7 +9,7 @@ from pydantic import ValidationError
 
 from life_agent_core.config import Settings
 from life_agent_core.progress_ai import Advice, AIUnavailableError, ProgressPreview
-from life_agent_core.schemas import GoalResponse
+from life_agent_core.schemas import GoalResponse, ReplanCandidate
 
 logger = logging.getLogger(__name__)
 
@@ -25,6 +25,7 @@ class InternalAIClient:
         base_url = settings.goal_planner_url.rstrip("/")
         self.progress_preview_url = f"{base_url}/internal/v1/progress-preview"
         self.advice_url = f"{base_url}/internal/v1/advice"
+        self.replan_url = f"{base_url}/internal/v1/replan"
         self.timeout = settings.goal_planner_timeout_seconds
         self.id_token_audience = settings.goal_planner_id_token_audience
 
@@ -43,6 +44,14 @@ class InternalAIClient:
         except ValidationError as error:
             logger.warning("Internal AI advice contract failed validation")
             raise AIUnavailableError("Internal AI service returned invalid advice") from error
+
+    def replan(self, context: GoalResponse, reason: str) -> ReplanCandidate:
+        payload = {"goal": context.model_dump(mode="json"), "reason": reason}
+        try:
+            return ReplanCandidate.model_validate(self._post(self.replan_url, payload))
+        except ValidationError as error:
+            logger.warning("Internal AI replan contract failed validation")
+            raise AIUnavailableError("Internal AI service returned invalid replan") from error
 
     def _post(self, url: str, payload: dict[str, Any]) -> Any:
         try:
@@ -85,3 +94,11 @@ class HttpAdvisor:
 
     def advise(self, context: GoalResponse) -> Advice:
         return self.client.advise(context)
+
+
+class HttpReplanner:
+    def __init__(self, settings: Settings) -> None:
+        self.client = InternalAIClient(settings)
+
+    def propose(self, context: GoalResponse, reason: str) -> ReplanCandidate:
+        return self.client.replan(context, reason)

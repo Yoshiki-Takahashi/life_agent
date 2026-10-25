@@ -1,12 +1,18 @@
 """Progress parsing and advice have separate ports; neither can write to the database."""
 
 import re
+from datetime import date, timedelta
 from decimal import Decimal
 from typing import Annotated, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from life_agent_core.schemas import GoalResponse, ProgressMetricUpdateRequest
+from life_agent_core.schemas import (
+    GoalResponse,
+    ProgressMetricUpdateRequest,
+    ReplanCandidate,
+    ReplanDiffItem,
+)
 
 
 class AIUnavailableError(Exception):
@@ -48,6 +54,10 @@ class Advisor(Protocol):
     def advise(self, context: GoalResponse) -> Advice: ...
 
 
+class Replanner(Protocol):
+    def propose(self, context: GoalResponse, reason: str) -> ReplanCandidate: ...
+
+
 def validate_candidates(result: ProgressPreview, context: GoalResponse) -> ProgressPreview:
     metrics = {m.id: m for m in context.metrics}
     for item in result.metric_updates:
@@ -57,6 +67,17 @@ def validate_candidates(result: ProgressPreview, context: GoalResponse) -> Progr
             > Decimal(str(metric.target_value))
         ):
             raise ValueError("Invalid metric or value exceeds target")
+    return result
+
+
+def validate_replan(result: ReplanCandidate, context: GoalResponse) -> ReplanCandidate:
+    current_by_position = {metric.position: metric for metric in context.metrics}
+    for index, item in enumerate(result.proposed_plan.metrics):
+        current = current_by_position.get(index)
+        if current is not None and Decimal(str(item.target_value)) < Decimal(
+            str(current.current_value)
+        ):
+            raise ValueError("Proposed metric target is below saved progress")
     return result
 
 
@@ -100,5 +121,61 @@ class FakeAdvisor:
             next_actions=[
                 f"次は「{metric.name}」に取り組む時間を決めましょう。",
                 "無理のない量を進めて、終わったら今回の増加量を記録しましょう。",
+            ],
+        )
+
+
+class FakeReplanner:
+    def propose(self, context: GoalResponse, reason: str) -> ReplanCandidate:
+        today = date.today()
+        target_date = max(context.target_date + timedelta(days=14), today + timedelta(days=21))
+        metric = context.metrics[0]
+        current = Decimal(str(metric.current_value))
+        current_target = Decimal(str(metric.target_value))
+        proposed_target = max(current, (current_target * Decimal("0.75")).quantize(Decimal("0.01")))
+        if proposed_target == current_target:
+            proposed_target = current_target + Decimal("1.00")
+        days = max((target_date - today).days, 0)
+        return ReplanCandidate(
+            proposed_plan={
+                "title": context.title,
+                "description": context.description,
+                "target_date": target_date,
+                "metrics": [
+                    {
+                        "name": metric.name,
+                        "target_value": float(proposed_target),
+                        "unit": metric.unit,
+                    }
+                ],
+                "milestones": [
+                    {
+                        "title": "見直し後の最初の一歩を完了する",
+                        "target_date": today + timedelta(days=days // 3),
+                    },
+                    {
+                        "title": "中間地点の進捗を確認する",
+                        "target_date": today + timedelta(days=(days * 2) // 3),
+                    },
+                    {"title": "更新後のGoal期限を迎える", "target_date": target_date},
+                ],
+            },
+            diff=[
+                ReplanDiffItem(
+                    change_type="update",
+                    target_type="goal",
+                    target_label="Goal期限",
+                    before=context.target_date.isoformat(),
+                    after=target_date.isoformat(),
+                    rationale="現在の進捗と見直し理由に合わせて期限を延ばします。",
+                ),
+                ReplanDiffItem(
+                    change_type="update",
+                    target_type="metric",
+                    target_label=metric.name,
+                    before=f"{metric.target_value:g} {metric.unit}",
+                    after=f"{proposed_target:g} {metric.unit}",
+                    rationale="保存済み進捗を残したまま達成量を調整します。",
+                ),
             ],
         )

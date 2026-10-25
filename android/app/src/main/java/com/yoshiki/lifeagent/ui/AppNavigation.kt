@@ -97,6 +97,10 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                 onCancelPreview = detailViewModel::cancelPreview,
                 onLoadAdvice = detailViewModel::loadAdvice,
                 onReview = { navController.navigate("review") },
+                onReplanReasonChange = detailViewModel::updateReplanReason,
+                onPreviewReplan = detailViewModel::previewReplan,
+                onCancelReplan = detailViewModel::cancelReplan,
+                onApplyReplan = detailViewModel::applyReplan,
             )
         }
     }

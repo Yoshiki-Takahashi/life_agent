@@ -70,18 +70,18 @@ fun GoalDetailScreen(
                 state.goal != null -> {
                     TextButton(onClick = onReview) { Text("振り返り・通知設定") }
                     GoalDetail(
-                    state = state,
-                    onProgressBodyChange = onProgressBodyChange,
-                    onMetricProgressChange = onMetricProgressChange,
-                    onSaveProgress = { focusManager.clearFocus(); keyboard?.hide(); onSaveProgress() },
-                    onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
-                    onCancelPreview = onCancelPreview,
-                    onLoadAdvice = onLoadAdvice,
-                    onReplanReasonChange = onReplanReasonChange,
-                    onPreviewReplan = { focusManager.clearFocus(); keyboard?.hide(); onPreviewReplan() },
-                    onCancelReplan = onCancelReplan,
-                    onApplyReplan = { focusManager.clearFocus(); keyboard?.hide(); onApplyReplan() },
-                )
+                        state = state,
+                        onProgressBodyChange = onProgressBodyChange,
+                        onMetricProgressChange = onMetricProgressChange,
+                        onSaveProgress = { focusManager.clearFocus(); keyboard?.hide(); onSaveProgress() },
+                        onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
+                        onCancelPreview = onCancelPreview,
+                        onLoadAdvice = onLoadAdvice,
+                        onReplanReasonChange = onReplanReasonChange,
+                        onPreviewReplan = { focusManager.clearFocus(); keyboard?.hide(); onPreviewReplan() },
+                        onCancelReplan = onCancelReplan,
+                        onApplyReplan = { focusManager.clearFocus(); keyboard?.hide(); onApplyReplan() },
+                    )
                 }
             }
         }

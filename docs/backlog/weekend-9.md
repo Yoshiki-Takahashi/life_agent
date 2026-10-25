@@ -45,3 +45,6 @@ Weekend 8との統合、計画履歴の推定、任意グラフ生成、追加Me
 - Git管理外の実Firebase設定を用い、`installDebug -Plifeagent.useCloudFirebase=true`が成功。
 - Pixel_8 Emulatorで既存ログインを維持したGoal一覧とGoal詳細を表示し、クラウドGoalの「進捗の推移」「現在の目標」「まだ記録がありません」を確認。
 - 記録ありのグラフ描画・進捗保存後の更新は画面デモ未確認。既存クラウドデータへのテスト記録は追加していない。
+
+## 利用者確認
+利用者がクラウド接続Emulatorでの操作確認完了を報告。Weekend 10と合わせてPR化する。

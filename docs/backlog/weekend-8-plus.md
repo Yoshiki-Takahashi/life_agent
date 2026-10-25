@@ -12,6 +12,8 @@ Weekend 8は実装中。以下は実施順の枠であり、確定日程では�
 
 **Sprint Goal / User Story:** ユーザーとして、実績に合わなくなった計画を、変更点を確認したうえで見直したい。
 
+2026-10-25に実AI回帰とクラウド反映を確認した。[検証結果と残件](weekend-8-status.md)を参照。
+
 **実装方針:**
 
 - Re-plannerはGoal Planner / AI接続サービス内に配置し、既存Goal、Metric、Milestone、最新ProgressLog、見直し理由から未確定の変更候補だけを返す。

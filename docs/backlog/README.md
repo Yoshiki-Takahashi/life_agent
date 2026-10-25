@@ -21,7 +21,7 @@ Weekend 6の自動デプロイ・クラウド計画生成経路・手入力進�
 | 5 | [GCP開発環境](weekend-5.md)・[完了証跡](weekend-5-status.md) | Complete |
 | 6 | [開発環境自動デプロイ、クラウド実AI計画生成、進捗記録](weekend-6.md)・[進捗](weekend-6-status.md) | In Progress / 旧キー失効確認など運用残件あり |
 | 7 | [AI進捗解析と助言](weekend-7.md)・[検証結果](weekend-7-status.md) | Complete |
-| 8 | [再計画](weekend-8-plus.md#weekend-8-計画の見直し) | In Progress |
+| 8 | [再計画](weekend-8-plus.md#weekend-8-計画の見直し)・[検証結果](weekend-8-status.md) | In Progress / 実AI・クラウド受け入れ済み、Android再計画E2Eは未実施 |
 | 9〜14 | [可視化、通知、音声、基盤、認証、本番化](weekend-8-plus.md) | Planned / 条件付き項目あり |
 
 Weekend 6では、6.A相当の自動デプロイ、6.B相当のGoal Plannerクラウド結合、進捗記録の順に実施します。各段階をデモ可能な状態で完了させてから次へ進みます。8以降は日程確約ではなく実施枠です。未採用の機能を実装済みとは扱いません。

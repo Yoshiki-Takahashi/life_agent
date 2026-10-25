@@ -40,6 +40,7 @@ fun GoalDetailScreen(
     onParseProgress: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
     onLoadAdvice: () -> Unit = {},
+    onReview: () -> Unit = {},
     onReplanReasonChange: (String) -> Unit = {},
     onPreviewReplan: () -> Unit = {},
     onCancelReplan: () -> Unit = {},
@@ -66,19 +67,22 @@ fun GoalDetailScreen(
                     Text(state.error, color = MaterialTheme.colorScheme.error)
                     Button(onClick = onRetry) { Text("再読み込み") }
                 }
-                state.goal != null -> GoalDetail(
-                    state = state,
-                    onProgressBodyChange = onProgressBodyChange,
-                    onMetricProgressChange = onMetricProgressChange,
-                    onSaveProgress = { focusManager.clearFocus(); keyboard?.hide(); onSaveProgress() },
-                    onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
-                    onCancelPreview = onCancelPreview,
-                    onLoadAdvice = onLoadAdvice,
-                    onReplanReasonChange = onReplanReasonChange,
-                    onPreviewReplan = { focusManager.clearFocus(); keyboard?.hide(); onPreviewReplan() },
-                    onCancelReplan = onCancelReplan,
-                    onApplyReplan = { focusManager.clearFocus(); keyboard?.hide(); onApplyReplan() },
-                )
+                state.goal != null -> {
+                    TextButton(onClick = onReview) { Text("振り返り・通知設定") }
+                    GoalDetail(
+                        state = state,
+                        onProgressBodyChange = onProgressBodyChange,
+                        onMetricProgressChange = onMetricProgressChange,
+                        onSaveProgress = { focusManager.clearFocus(); keyboard?.hide(); onSaveProgress() },
+                        onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
+                        onCancelPreview = onCancelPreview,
+                        onLoadAdvice = onLoadAdvice,
+                        onReplanReasonChange = onReplanReasonChange,
+                        onPreviewReplan = { focusManager.clearFocus(); keyboard?.hide(); onPreviewReplan() },
+                        onCancelReplan = onCancelReplan,
+                        onApplyReplan = { focusManager.clearFocus(); keyboard?.hide(); onApplyReplan() },
+                    )
+                }
             }
         }
     }
@@ -125,6 +129,11 @@ private fun GoalDetail(
                 )
             }
         }
+    }
+    Text("進捗の推移", style = MaterialTheme.typography.titleLarge)
+    Text("保存済みの累積記録を表示します。未記録期間の活動は推定しません。")
+    goal.metrics.sortedBy { it.position }.forEach { metric ->
+        MetricTrendCard(metric, goal.progressLogs)
     }
     ProgressEntry(
         state = state,

@@ -40,6 +40,7 @@ fun GoalDetailScreen(
     onParseProgress: () -> Unit = {},
     onCancelPreview: () -> Unit = {},
     onLoadAdvice: () -> Unit = {},
+    onReview: () -> Unit = {},
 ) {
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -62,7 +63,9 @@ fun GoalDetailScreen(
                     Text(state.error, color = MaterialTheme.colorScheme.error)
                     Button(onClick = onRetry) { Text("再読み込み") }
                 }
-                state.goal != null -> GoalDetail(
+                state.goal != null -> {
+                    TextButton(onClick = onReview) { Text("振り返り・通知設定") }
+                    GoalDetail(
                     state = state,
                     onProgressBodyChange = onProgressBodyChange,
                     onMetricProgressChange = onMetricProgressChange,
@@ -70,7 +73,8 @@ fun GoalDetailScreen(
                     onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
                     onCancelPreview = onCancelPreview,
                     onLoadAdvice = onLoadAdvice,
-                )
+                    )
+                }
             }
         }
     }
@@ -113,6 +117,11 @@ private fun GoalDetail(
                 )
             }
         }
+    }
+    Text("進捗の推移", style = MaterialTheme.typography.titleLarge)
+    Text("保存済みの累積記録を表示します。未記録期間の活動は推定しません。")
+    goal.metrics.sortedBy { it.position }.forEach { metric ->
+        MetricTrendCard(metric, goal.progressLogs)
     }
     ProgressEntry(
         state = state,

@@ -55,6 +55,9 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                 onSignOut = onSignOut,
             )
         }
+        composable("review") {
+            ReviewScreen(detailState.goal, userId, onBack = { navController.navigateUp() })
+        }
         composable("create") {
             GoalFormScreen(
                 state = planState,
@@ -93,6 +96,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                 onParseProgress = detailViewModel::parseProgress,
                 onCancelPreview = detailViewModel::cancelPreview,
                 onLoadAdvice = detailViewModel::loadAdvice,
+                onReview = { navController.navigate("review") },
             )
         }
     }

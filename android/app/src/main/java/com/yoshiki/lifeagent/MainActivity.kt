@@ -39,6 +39,9 @@ class MainActivity : ComponentActivity() {
                         authRepository::idToken,
                     )
                 }
+                androidx.compose.runtime.LaunchedEffect(authState.user?.uid) {
+                    com.yoshiki.lifeagent.reminders.ReviewReminder(this@MainActivity).setUser(authState.user?.uid)
+                }
                 if (authState.user == null) {
                     AuthScreen(
                         state = authState,
@@ -52,7 +55,10 @@ class MainActivity : ComponentActivity() {
                 LifeAgentApp(
                     repository = repository,
                     userId = requireNotNull(authState.user).uid,
-                    onSignOut = authViewModel::signOut,
+                    onSignOut = {
+                        com.yoshiki.lifeagent.reminders.ReviewReminder(this@MainActivity).setUser(null)
+                        authViewModel.signOut()
+                    },
                 )
             }
         }

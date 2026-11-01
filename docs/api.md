@@ -1,6 +1,7 @@
 # APIの約束
 
 業務APIは`Authorization: Bearer <Firebase ID Token>`を要求します。
+メール認証とGoogle認証で同じFirebaseのuidを所有者として扱います。Google ID TokenはAndroidでFirebaseへ交換し、業務APIにはFirebase ID Tokenだけを送ります。
 現在の正確なフィールドと型はCore APIの`/openapi.json`、内部通信の型は各サービスのPydanticモデルが正本です。
 この文書では利用者に影響する規則を説明します。生成されたSchemaの写しは手編集しません。
 

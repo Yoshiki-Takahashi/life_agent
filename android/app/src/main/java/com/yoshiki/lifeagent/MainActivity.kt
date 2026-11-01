@@ -14,10 +14,10 @@ import com.google.firebase.FirebaseApp
 import com.google.firebase.FirebaseOptions
 import com.google.firebase.auth.FirebaseAuth
 import com.yoshiki.lifeagent.data.FirebaseAuthRepository
+import com.yoshiki.lifeagent.data.CredentialManagerGoogleSignIn
 import com.yoshiki.lifeagent.data.Network
-import com.yoshiki.lifeagent.ui.AuthScreen
 import com.yoshiki.lifeagent.ui.AuthViewModel
-import com.yoshiki.lifeagent.ui.LifeAgentApp
+import com.yoshiki.lifeagent.ui.LifeAgentSession
 import com.yoshiki.lifeagent.ui.theme.LifeAgentTheme
 
 class MainActivity : ComponentActivity() {
@@ -29,6 +29,7 @@ class MainActivity : ComponentActivity() {
         setContent {
             LifeAgentTheme {
                 val authRepository = remember { FirebaseAuthRepository(FirebaseAuth.getInstance()) }
+                val google = remember { CredentialManagerGoogleSignIn(this@MainActivity, BuildConfig.GOOGLE_WEB_CLIENT_ID) }
                 val authViewModel: AuthViewModel = viewModel(
                     factory = AuthViewModel.factory(authRepository)
                 )
@@ -42,22 +43,13 @@ class MainActivity : ComponentActivity() {
                 androidx.compose.runtime.LaunchedEffect(authState.user?.uid) {
                     com.yoshiki.lifeagent.reminders.ReviewReminder(this@MainActivity).setUser(authState.user?.uid)
                 }
-                if (authState.user == null) {
-                    AuthScreen(
-                        state = authState,
-                        onEmailChange = authViewModel::updateEmail,
-                        onPasswordChange = authViewModel::updatePassword,
-                        onSignIn = authViewModel::signIn,
-                        onCreateAccount = authViewModel::createAccount,
-                    )
-                    return@LifeAgentTheme
-                }
-                LifeAgentApp(
+                LifeAgentSession(
                     repository = repository,
-                    userId = requireNotNull(authState.user).uid,
+                    auth = authViewModel,
+                    google = google,
                     onSignOut = {
                         com.yoshiki.lifeagent.reminders.ReviewReminder(this@MainActivity).setUser(null)
-                        authViewModel.signOut()
+                        authViewModel.signOut { if (google.configured) google.clear() }
                     },
                 )
             }
@@ -65,7 +57,7 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun initializeFirebase() {
-        if (FirebaseApp.getApps(this).isEmpty()) {
+        if (FirebaseApp.getApps(this).none { it.name == FirebaseApp.DEFAULT_APP_NAME }) {
             FirebaseApp.initializeApp(
                 this,
                 FirebaseOptions.Builder()

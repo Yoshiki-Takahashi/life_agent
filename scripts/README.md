@@ -65,3 +65,11 @@ W7_ANDROID_TEST_CLASS=com.yoshiki.lifeagent.AppFlowTestを設定します。
 start-auth-emulator.shはローカルアカウントを.secrets/firebase-auth-emulator/へ
 正常終了時にexportし、次回起動時にimportします。永続化導入前の失われたアカウントは復元できません。
 実ユーザーのクラウド認証情報と混同せず、exportデータをGitへ追加しないでください。
+
+## Google認証のローカル検証
+
+`start-auth-emulator.sh`で認証エミュレーターを起動した状態で、
+`ANDROID_HOME="$HOME/Library/Android/sdk" ./scripts/test-google-auth.sh`を実行します。
+専用DBとCore APIを使い、Firebase SDKのGoogle連携・再ログイン・所有者分離を検証します。
+Googleのアカウント選択だけを差し替え、実Firebaseや個人のGoogleアカウントは使用しません。
+実装と外部設定の受け入れ状況は[Issue #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)で管理します。

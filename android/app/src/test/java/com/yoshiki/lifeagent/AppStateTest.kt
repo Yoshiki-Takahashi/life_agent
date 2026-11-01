@@ -108,18 +108,21 @@ class AppStateTest {
         assertEquals(2, detail.uiState.value.goal!!.planRevision)
     }
 
-    @Test fun logoutClearsUserAndCredentials() {
+    @Test fun logoutClearsUserAndCredentials() = runTest(dispatcher) {
         var signedOut = false
         val auth = object : AuthRepository {
             override fun currentUser() = AuthUser("a", "a@example.com")
             override suspend fun signIn(email: String, password: String) = AuthUser("a", email)
             override suspend fun createAccount(email: String, password: String) = signIn(email, password)
             override suspend fun idToken() = "test"
-            override fun signOut() { signedOut = true }
+            override suspend fun signInWithGoogle(idToken: String) = error("unused")
+            override suspend fun linkGoogle(idToken: String, expectedUserId: String) = error("unused")
+            override suspend fun signOut() { signedOut = true }
         }
         val vm = AuthViewModel(auth)
         vm.updatePassword("private")
         vm.signOut()
+        advanceUntilIdle()
         assertTrue(signedOut)
         assertNull(vm.uiState.value.user)
         assertEquals("", vm.uiState.value.password)

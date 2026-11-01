@@ -33,22 +33,23 @@ import androidx.navigation.navArgument
 import com.yoshiki.lifeagent.data.GoalRepository
 
 @Composable
-fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Unit) {
+fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Unit,
+    sessionKey: String = userId, accountAction: @Composable () -> Unit = {}) {
     val navController = rememberNavController()
     val planViewModel: GoalViewModel = viewModel(
-        key = "plan-$userId",
+        key = "plan-$sessionKey",
         factory = GoalViewModel.factory(repository),
     )
     val listViewModel: GoalListViewModel = viewModel(
-        key = "list-$userId",
+        key = "list-$sessionKey",
         factory = GoalListViewModel.factory(repository),
     )
     val detailViewModel: GoalDetailViewModel = viewModel(
-        key = "detail-$userId",
+        key = "detail-$sessionKey",
         factory = GoalDetailViewModel.factory(repository),
     )
     val coachViewModel: CoachViewModel = viewModel(
-        key = "coach-$userId", factory = CoachViewModel.factory(repository),
+        key = "coach-$sessionKey", factory = CoachViewModel.factory(repository),
     )
     DisposableEffect(userId) {
         onDispose { coachViewModel.reset() }
@@ -151,6 +152,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onGoalClick = { detailViewModel.loadGoal(it); navController.navigate("goals/$it") },
                     onRetry = listViewModel::loadGoals,
                     onSignOut = onSignOut,
+                    accountAction = accountAction,
                 )
             }
             composable("coach") {

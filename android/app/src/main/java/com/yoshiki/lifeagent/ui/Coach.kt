@@ -395,6 +395,8 @@ fun CoachScreen(
                             label = { Text("コーチに話す") }, modifier = Modifier.fillMaxWidth(),
                             enabled = state.canEditBody, maxLines = 3,
                         )
+                        SpeechInputButton(body = state.body, enabled = !state.busy && state.canEditBody,
+                            onBodyChange = onBodyChange)
                         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
                         Button(

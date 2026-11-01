@@ -1,8 +1,10 @@
 # Backlog
 
+> 2026-11-01計画改訂: 今後は[音声入力（Weekend 10 / #19）](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)と[Google認証（Weekend 11 / #20）](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)をGitHub Issueで管理します。以下は改訂前の履歴です。定期振り返り・通知の追加開発、基盤強化、本番化は今後の計画に含めません。
+
 > 履歴資料です。現在の実装仕様は[仕様の入口](../../README.md)を参照してください。
 
-Sprintごとにファイルを作り、以下を記載します。
+当時はSprintごとにファイルを作り、以下を記載していました。今後はGitHub Issueへ記載します。
 
 - Sprint Goal
 - ユーザーストーリー
@@ -14,7 +16,7 @@ Sprintごとにファイルを作り、以下を記載します。
 
 すべてのSprintで[サービス設計・拡張指針](../../service-design-guidelines.md)を参照し、機能の配置先と契約を決めます。開発中に配置方針を見直した場合は、共通指針と関連文書も同じ変更で更新します。
 
-## 現在の計画
+## 当時の計画（更新停止）
 
 Weekend 6の自動デプロイ・クラウド計画生成経路・手入力進捗記録は実装済みです。Weekend 7の進捗解析・助言はCloud受け入れまで完了し、ADR 0002に合わせてOpenAI接続責務を内部AI接続サービスへ移しました。[検証結果と残件](weekend-7-status.md)を参照してください。Weekend 8は再計画候補の生成、差分確認、承認適用を実装中です。
 

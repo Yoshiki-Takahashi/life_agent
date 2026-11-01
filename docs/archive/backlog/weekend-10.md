@@ -1,5 +1,7 @@
 # Weekend 10: 定期振り返りと通知
 
+> 2026-11-01計画改訂: 今後は[音声入力（Weekend 10 / #19）](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)と[Google認証（Weekend 11 / #20）](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)をGitHub Issueで管理します。以下は改訂前の履歴です。定期振り返り・通知の追加開発、基盤強化、本番化は今後の計画に含めません。
+
 > 履歴資料です。現在の実装仕様は[仕様の入口](../../README.md)を参照してください。
 
 ## User Story

@@ -62,3 +62,30 @@ API再起動時はDATABASE_URLのDB名にlifeagent_uiを指定し、
 AUTH_BACKEND=firebase、FIREBASE_PROJECT_ID=life-agent-local、
 FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099、
 各AI backend=fakeで起動します。クラウドの起動は不要です。
+
+## 音声入力
+
+コーチまたは目標詳細の「記録」から音声入力を開きます。説明の確認・マイク権限の許可後に録音し、
+文字起こしを編集して既存本文へ追加します。送信・解析・保存は既存の操作で行います。
+Android標準SpeechRecognizerを使い、API 31以降で利用可能なら端末内認識を選びます。
+日本語モデルが利用できない場合はエラーを表示し、外部認識へ自動切替しません。
+その他の端末では既定の認識サービスを使い、提供元への音声送信が発生する場合があります。
+LifeAgentは音声を保存せず、Core APIやOpenAIへ音声を送りません。サービス提供元の保持・削除はその設定・方針に従います。
+認識サービスがないEmulatorでも手入力は利用できます。
+
+Issue: [Weekend 10 / #19](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)。
+
+実装上の制約は[AndroidのSpeechRecognizer仕様](https://developer.android.com/reference/android/speech/SpeechRecognizer)に従います。
+マイク音声を使わず、認識サービスの結果を差し替える操作テスト:
+
+```bash
+./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.yoshiki.lifeagent.SpeechInputTest
+```
+
+このテストとAppFlowTestはマイク権限をテスト用に付与します。
+権限拒否→手入力→再試行で許可するOS境界は、マイク権限が未付与のEmulatorで次を実行します。
+すでに付与済みの場合はskipし、テスト自身では権限を取り消しません。
+
+```bash
+./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.yoshiki.lifeagent.SpeechPermissionTest
+```

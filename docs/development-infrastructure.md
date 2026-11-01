@@ -51,19 +51,17 @@ Cloud SQLはCPU、メモリ、ストレージの継続費用が発生するた�
 
 ### 後続フェーズの候補
 
-実施枠と受け入れ条件は[Weekend 8以降の計画](archive/backlog/weekend-8-plus.md)で管理します。開発環境の自動デプロイ、Goal Planner Cloud Run、Secret Manager上のOpenAI APIキー管理はWeekend 6へ統合します。Cloud SchedulerはWeekend 10、音声用Cloud StorageはWeekend 11、非同期処理とTerraformはWeekend 12で必要性を評価します。画像・エクスポート用Storageは当該機能の要求が出た際に別途計画化します。本番構成の判断はWeekend 14で行います。
-
-- Cloud Tasks / Pub/Sub: 非同期AI処理が必要になった場合
-- Cloud Scheduler: 定期的な振り返り処理が必要になった場合
-- Cloud Storage: 画像、音声、エクスポートファイルを扱う場合
-- Terraform: クラウド構成が安定し、複数環境を再現する段階
+今後の開発は[音声入力（Weekend 10 / #19）](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)と
+[Google認証（Weekend 11 / #20）](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)です。
+音声入力にはAndroid標準の認識サービスを使い、新規クラウドリソースは作成しません。
+基盤強化と本番化は予定に含めません。Cloud Tasks、Terraform等は、今後のIssueで必要性が示された場合に個別に検討します。
+端末内の既存通知にCloud Schedulerは使用しません。
 
 ## 開発環境の段階
 
 1. **Local:** Android Emulator、FastAPI、PostgreSQL、Fake AI
 2. **Cloud API:** AndroidからCloud Runへ接続。DBはまだ機能範囲に応じて限定する
 3. **Cloud Integration:** Cloud Run、Cloud SQL、Firebase Auth、実OpenAIを接続
-4. **Production:** 可用性、バックアップ、監視、セキュリティを再評価して本番構成を決定
 
 AndroidのCore API接続先は、`android/config/api-debug.properties`と`api-release.properties`でビルド種別ごとに管理します。debugはEmulatorからローカルFastAPIへ、releaseはCloud Runへ接続します。Cloud Run作成後にrelease設定を発行済みHTTPS URLへ更新します。APIキーやDB接続情報はAndroidへ含めません。
 

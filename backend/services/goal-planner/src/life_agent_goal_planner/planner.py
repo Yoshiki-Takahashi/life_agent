@@ -1,13 +1,12 @@
-import json
 import logging
 from collections.abc import Callable
 from datetime import date, timedelta
 from typing import Protocol
 
-from openai import OpenAI, OpenAIError
-from pydantic import ValidationError
+from openai import OpenAI
 
 from life_agent_goal_planner.config import Settings
+from life_agent_goal_planner.provider import AIUnavailableError, generate
 from life_agent_goal_planner.schemas import GeneratedPlan, GoalPlan, GoalPlanRequest
 
 logger = logging.getLogger(__name__)
@@ -18,10 +17,6 @@ Every metric needs a concise name, a positive numeric target_value, and a unit.
 Milestone dates must be between today's date and the goal target date, in nondecreasing order.
 Use the same language as the user's goal. Do not add fields outside the response schema.
 """
-
-
-class PlannerUnavailableError(Exception):
-    """The plan could not be generated safely and may be retried."""
 
 
 class GoalPlanner(Protocol):
@@ -60,42 +55,14 @@ class OpenAIGoalPlanner:
         self.client_factory = client_factory
 
     def generate(self, payload: GoalPlanRequest) -> GoalPlan:
-        if not self.settings.openai_api_key:
-            raise PlannerUnavailableError("OpenAI API key is not configured")
-
+        generated = generate(
+            self.settings,
+            self.client_factory,
+            GeneratedPlan,
+            SYSTEM_PROMPT,
+            {"today": date.today().isoformat(), **payload.model_dump(mode="json")},
+        )
         try:
-            client = self.client_factory(
-                api_key=self.settings.openai_api_key,
-                timeout=self.settings.openai_timeout_seconds,
-            )
-            response = client.responses.parse(
-                model=self.settings.openai_model,
-                input=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {
-                        "role": "user",
-                        "content": json.dumps(
-                            {
-                                "today": date.today().isoformat(),
-                                **payload.model_dump(mode="json"),
-                            },
-                            ensure_ascii=False,
-                        ),
-                    },
-                ],
-                text_format=GeneratedPlan,
-            )
-            generated = response.output_parsed
-            if generated is None:
-                raise PlannerUnavailableError("OpenAI returned no parsed plan")
             return GoalPlan(**payload.model_dump(), **generated.model_dump())
-        except PlannerUnavailableError:
-            raise
-        except (OpenAIError, ValidationError, ValueError, TypeError) as error:
-            logger.warning("Goal plan generation failed: %s", type(error).__name__)
-            if error.__cause__ is not None:
-                logger.warning(
-                    "Goal plan generation failure cause: %s",
-                    type(error.__cause__).__name__,
-                )
-            raise PlannerUnavailableError("OpenAI plan generation failed") from error
+        except ValueError as error:
+            raise AIUnavailableError("Invalid generated plan") from error

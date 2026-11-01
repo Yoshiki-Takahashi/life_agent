@@ -1,5 +1,7 @@
 package com.yoshiki.lifeagent.data
 
+import java.math.BigDecimal
+
 data class Goal(
     val id: String,
     val title: String,
@@ -85,3 +87,10 @@ data class ReplanDiffItem(
     val after: String?,
     val rationale: String,
 )
+
+fun validProgressValue(text: String, current: Double, target: Double): Boolean {
+    val value = text.toBigDecimalOrNull() ?: return false
+    return value > BigDecimal.ZERO && value <= BigDecimal("1000000000") &&
+        value.stripTrailingZeros().scale() <= 2 &&
+        value + BigDecimal.valueOf(current) <= BigDecimal.valueOf(target)
+}

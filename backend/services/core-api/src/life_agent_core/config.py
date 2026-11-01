@@ -21,6 +21,7 @@ class Settings(BaseSettings):
     progress_parser_backend: Literal["fake", "http", "openai"] = "fake"
     advisor_backend: Literal["fake", "http", "openai"] = "fake"
     replanner_backend: Literal["fake", "http", "openai"] = "fake"
+    coach_backend: Literal["fake", "http"] = "fake"
     auth_backend: Literal["firebase", "fake"] = "firebase"
 
     model_config = SettingsConfigDict(

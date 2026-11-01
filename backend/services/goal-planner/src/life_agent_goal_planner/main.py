@@ -3,26 +3,28 @@ from typing import Annotated
 
 from fastapi import Depends, FastAPI, HTTPException, status
 
+from life_agent_goal_planner.coach import Coach, FakeCoach, OpenAICoach, validate_reply
 from life_agent_goal_planner.config import get_settings
 from life_agent_goal_planner.planner import (
     FakeGoalPlanner,
     GoalPlanner,
     OpenAIGoalPlanner,
-    PlannerUnavailableError,
 )
 from life_agent_goal_planner.progress import (
     Advisor,
-    AIUnavailableError,
     FakeAdvisor,
     FakeProgressParser,
     OpenAIAdvisor,
     OpenAIProgressParser,
     ProgressParser,
 )
+from life_agent_goal_planner.provider import AIUnavailableError
 from life_agent_goal_planner.replan import FakeReplanner, OpenAIReplanner, Replanner
 from life_agent_goal_planner.schemas import (
     Advice,
     AdviceAIRequest,
+    CoachAIRequest,
+    CoachReply,
     GeneratedReplan,
     GoalPlan,
     GoalPlanRequest,
@@ -83,7 +85,7 @@ def health() -> dict[str, str]:
 def create_goal_plan(payload: GoalPlanRequest, planner: Planner) -> GoalPlan:
     try:
         return planner.generate(payload)
-    except PlannerUnavailableError as error:
+    except AIUnavailableError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="計画を生成できませんでした。再試行してください",
@@ -123,3 +125,19 @@ def create_replan(payload: ReplanAIRequest, replanner: ReplannerDependency) -> G
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="再計画候補を生成できませんでした。再試行してください",
         ) from error
+
+
+@lru_cache
+def get_coach() -> Coach:
+    settings = get_settings()
+    return FakeCoach() if settings.coach_provider == "fake" else OpenAICoach(settings)
+
+
+@app.post("/internal/v1/coach", response_model=CoachReply)
+def coach_message(
+    payload: CoachAIRequest, coach: Annotated[Coach, Depends(get_coach)]
+) -> CoachReply:
+    try:
+        return validate_reply(CoachReply.model_validate(coach.respond(payload)), payload)
+    except (AIUnavailableError, ValueError, TypeError) as error:
+        raise HTTPException(status_code=503, detail="返答を作れませんでした") from error

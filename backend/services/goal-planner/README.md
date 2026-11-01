@@ -61,3 +61,11 @@ OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --suite holdout
 ```bash
 scripts/test-weekend-3.sh
 ```
+
+## 全目標対話コーチ
+
+`POST /internal/v1/coach`は所有者で絞り込まれた全Goalと直近12発話を受け取り、
+固定Schemaの返答・記録意図を返す。`COACH_PROVIDER=fake`（既定）または`openai`。
+実AIでは既存のStructured Output、timeout、再試行・保存無効化の設定を共有する。
+Coreから呼ぶ場合は`COACH_BACKEND=http`を設定する。Goalの書込み・ユーザー認可はCoreのみ。
+通常のテストはモックとFakeで行い、実AI評価やクラウド起動は自動実行しない。

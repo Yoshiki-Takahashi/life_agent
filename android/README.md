@@ -41,16 +41,24 @@ cd android
 
 debugビルドだけローカルHTTPを許可します。Android 17以降では初回起動時にローカルネットワーク権限を許可してください。releaseビルドではこの権限を宣言しません。認証後も、アプリはCore API以外のBackendサービスへ直接接続しません。
 
-### 進捗の推移（Weekend 9）
-Goal詳細にMetricごとの累積推移を表示します。破線は現在の目標値です。
-履歴合計と現在値の不一致、無効な日時・単位では推移を表示しません。
-未記録では達成率を表示せず、目標値がない場合は目標線と率を省略します。
-既存APIを利用するためBackendやWeekend 8の再計画変更は不要です。
-仕様と残件は [Weekend 9](../docs/backlog/weekend-9.md) を参照してください。
+現在の動作は[画面と操作](../docs/ui.md)を参照してください。
 
-### 定期振り返り・通知（Weekend 10）
-Goal詳細の「振り返り・通知設定」から直近7日／30日の記録と固定ルールの助言を確認できます。
-通知は初期無効で、全Goal共通・端末内・ユーザー別に保存します。
-毎日または毎週日曜の20時頃（指定IANAタイムゾーン）に端末で通知します。
-省電力等で遅延する場合があり、通知拒否時も手動の振り返りは利用可能です。
-ログアウト時は予約を停止します。Cloud SchedulerやBackend再デプロイは不要です。
+専用PostgreSQLとFake APIを通すEmulator検証:
+~~~bash
+ANDROID_HOME="$HOME/Library/Android/sdk" W7_ANDROID_TEST_CLASS=com.yoshiki.lifeagent.AppFlowTest ./scripts/test-weekend-7.sh --android
+~~~
+上記はリポジトリルートで実行します。Dockerと起動済みEmulatorが必要です。
+終了時に専用DBとAPIを停止し、テストデータを削除します。
+
+### ログアウト後に認証できない場合（通常のDebug版）
+通常のDebug版はクラウド認証ではなく、Mac上のAuthentication Emulator（9099）に接続します。
+ローカルサービスが停止している場合、正しい入力でもログインできません。
+リポジトリルートでscripts/start-auth-emulator.shを起動してください。
+アカウントは.secrets/firebase-auth-emulator/へ保存・復元します（Git管理外）。
+初回導入前の未保存アカウントや、クラウド上のアカウントが自動的に移るわけではありません。
+
+2026-10-31のUI確認では、既存の古いローカルDBを保持するため、別DB lifeagent_ui を作成しました。
+API再起動時はDATABASE_URLのDB名にlifeagent_uiを指定し、
+AUTH_BACKEND=firebase、FIREBASE_PROJECT_ID=life-agent-local、
+FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099、
+各AI backend=fakeで起動します。クラウドの起動は不要です。

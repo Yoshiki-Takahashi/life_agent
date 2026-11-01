@@ -39,8 +39,8 @@ import com.yoshiki.lifeagent.speech.AndroidSpeechRecognition
 import com.yoshiki.lifeagent.speech.SpeechRecognition
 import kotlinx.coroutines.delay
 
-val LocalSpeechRecognitionFactory = staticCompositionLocalOf<(Context) -> SpeechRecognition> {
-    { AndroidSpeechRecognition(it) }
+val LocalSpeechRecognitionFactory = staticCompositionLocalOf<(Context, Boolean) -> SpeechRecognition> {
+    { context, preferOnDevice -> AndroidSpeechRecognition(context, preferOnDevice) }
 }
 
 private enum class SpeechPhase { READY, PERMISSION, LISTENING, TRANSCRIBING, RESULT }
@@ -57,7 +57,8 @@ fun SpeechInputButton(body: String, enabled: Boolean, onBodyChange: (String) -> 
 private fun SpeechInputDialog(body: String, onBodyChange: (String) -> Unit, onDismiss: () -> Unit) {
     val context = LocalContext.current
     val factory = LocalSpeechRecognitionFactory.current
-    val recognition = remember(context, factory) { factory(context) }
+    var preferOnDevice by remember { mutableStateOf(true) }
+    val recognition = remember(context, factory, preferOnDevice) { factory(context, preferOnDevice) }
     val lifecycle = LocalLifecycleOwner.current.lifecycle
     var phase by remember { mutableStateOf(SpeechPhase.READY) }
     var transcript by remember { mutableStateOf("") }
@@ -128,7 +129,7 @@ private fun SpeechInputDialog(body: String, onBodyChange: (String) -> Unit, onDi
         title = { Text("音声で入力") },
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                Text(if (recognition.onDevice) "この端末内で日本語を文字起こしします。"
+                Text(if (recognition.onDevice) "端末内の音声認識を使います。日本語モデルが必要です。"
                     else "端末の既定の音声認識サービスを使います。音声がサービス提供元のサーバーへ送信される場合があります。保持期間・削除方法は提供元の設定とプライバシーポリシーをご確認ください。")
                 Text("LifeAgentは音声を保存しません。文字起こしを本文に追加し、編集・確認してから送信してください。")
                 if (!recognition.available) Text("この端末では音声認識を利用できません。手入力してください。")
@@ -159,6 +160,12 @@ private fun SpeechInputDialog(body: String, onBodyChange: (String) -> Unit, onDi
                         permission.launch(Manifest.permission.RECORD_AUDIO)
                     }
                 }) { Text(if (phase == SpeechPhase.RESULT) "録音し直す" else "録音開始") }
+                if (!active && recognition.onDevice) TextButton(onClick = {
+                    cancelRecognition()
+                    transcript = ""
+                    error = null
+                    preferOnDevice = false
+                }) { Text("既定の音声認識に切り替える") }
             }
         },
         confirmButton = {

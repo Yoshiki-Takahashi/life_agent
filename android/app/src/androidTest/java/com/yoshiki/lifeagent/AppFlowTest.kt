@@ -47,7 +47,7 @@ class AppFlowTest {
         }
         lateinit var speech: FakeSpeechRecognition
         compose.setContent {
-            CompositionLocalProvider(LocalSpeechRecognitionFactory provides {
+            CompositionLocalProvider(LocalSpeechRecognitionFactory provides { _, _ ->
                 FakeSpeechRecognition().also { speech = it }
             }) { LifeAgentTheme { LifeAgentApp(repository, owner, {}) } }
         }

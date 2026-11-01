@@ -17,8 +17,8 @@ interface SpeechRecognition {
     fun close()
 }
 
-class AndroidSpeechRecognition(private val context: Context) : SpeechRecognition {
-    override val onDevice = Build.VERSION.SDK_INT >= 31 &&
+class AndroidSpeechRecognition(private val context: Context, preferOnDevice: Boolean = true) : SpeechRecognition {
+    override val onDevice = preferOnDevice && Build.VERSION.SDK_INT >= 31 &&
         SpeechRecognizer.isOnDeviceRecognitionAvailable(context)
     override val available = onDevice || SpeechRecognizer.isRecognitionAvailable(context)
     private var recognizer: SpeechRecognizer? = null

@@ -35,8 +35,8 @@ class SpeechInputTest {
 
     private fun setup() {
         compose.setContent {
-            CompositionLocalProvider(LocalSpeechRecognitionFactory provides {
-                FakeSpeechRecognition(available).also { recognition = it }
+            CompositionLocalProvider(LocalSpeechRecognitionFactory provides { _, preferOnDevice ->
+                FakeSpeechRecognition(available, onDevice = preferOnDevice).also { recognition = it }
             }) {
                 LifeAgentTheme {
                     Text(body)
@@ -94,6 +94,26 @@ class SpeechInputTest {
         compose.runOnIdle { recognition.result("別の利用者の録音"); assertTrue(recognition.closed); assertEquals("元のメモ", body) }
     }
 
+    @Test fun unavailableJapaneseModelCanSwitchServiceOnlyAfterExplicitUserAction() {
+        setup()
+        start()
+        val original = recognition
+        compose.runOnIdle { recognition.error("日本語モデルがありません") }
+        compose.onNodeWithText("既定の音声認識に切り替える").performScrollTo().performClick()
+        compose.onNodeWithText("音声がサービス提供元のサーバーへ送信される場合があります。", substring = true).assertExists()
+        compose.runOnIdle {
+            assertTrue(original.closed)
+            assertFalse(recognition.started)
+            original.result("切替前の結果")
+            assertEquals("元のメモ", body)
+        }
+        compose.onNodeWithText("本文に追加").assertIsNotEnabled()
+        compose.onNodeWithText("録音開始").performScrollTo().performClick()
+        compose.runOnIdle { assertTrue(recognition.started); recognition.result("1冊読み終えた") }
+        compose.onNodeWithText("本文に追加").performClick()
+        compose.runOnIdle { assertEquals("元のメモ\n1冊読み終えた", body) }
+    }
+
 }
 
 /** Run separately with microphone permission denied; the test never revokes a granted permission. */
@@ -105,7 +125,7 @@ class SpeechPermissionTest {
         var body by mutableStateOf("元のメモ")
         val recognition = FakeSpeechRecognition()
         compose.setContent {
-            CompositionLocalProvider(LocalSpeechRecognitionFactory provides { recognition }) {
+            CompositionLocalProvider(LocalSpeechRecognitionFactory provides { _, _ -> recognition }) {
                 LifeAgentTheme {
                     OutlinedTextField(body, { body = it }, label = { Text("本文") })
                     SpeechInputButton(body, true) { body = it }
@@ -139,13 +159,14 @@ class SpeechPermissionTest {
     }
 }
 
-internal class FakeSpeechRecognition(override val available: Boolean = true) : SpeechRecognition {
-    override val onDevice = true
+internal class FakeSpeechRecognition(override val available: Boolean = true, override val onDevice: Boolean = true) : SpeechRecognition {
     lateinit var result: (String) -> Unit
     lateinit var error: (String) -> Unit
     var stopped = false
     var closed = false
+    var started = false
     override fun start(onResult: (String) -> Unit, onError: (String) -> Unit, onEnd: () -> Unit) {
+        started = true
         closed = false
         result = onResult
         error = onError

@@ -586,6 +586,8 @@ private fun ProgressEntry(
                 supportingText = { Text("例：今日は2冊読み終えた") },
                 modifier = Modifier.fillMaxWidth(),
             )
+            SpeechInputButton(body = state.progressBody, enabled = !state.isParsing && !state.isSavingProgress,
+                onBodyChange = onProgressBodyChange)
             Button(onClick = onParseProgress, enabled = !state.isParsing && !state.isSavingProgress) {
                 Text(if (state.isParsing) "解析中…" else "進捗メモを解析")
             }

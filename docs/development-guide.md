@@ -26,7 +26,7 @@ PostgreSQL
 
 ## 各作業単位の共通手順
 
-1. 共通のサービス設計指針を確認し、`docs/archive/backlog/`にユーザーストーリー、受け入れ条件、対象外、責務の配置先を書く。
+1. 共通のサービス設計指針を確認し、GitHub Issueにユーザーストーリー、受け入れ条件、完了条件、対象外、責務の配置先を書く。今後の開発内容・進捗はIssueを正本とし、PR本文の`Closes #番号`で紐づける。
 2. APIまたはSchemaの契約を先に決める。
 3. 最小の失敗テストを追加する。
 4. 一つの利用経路だけを実装する。
@@ -36,7 +36,10 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。旧キー失効確認等の運用残件は[`Weekend 6ステータス`](archive/backlog/weekend-6-status.md)で追跡します。Weekend 7はクラウド受け入れとADR 0002に基づくAI接続責務の移行まで完了しました。[検証結果](archive/backlog/weekend-7-status.md)を参照してください。Weekend 8では再計画候補の生成、差分確認、承認適用、古い提案の拒否、Metric履歴保持を実装中です。現在の計画は[`backlog/README.md`](archive/backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
+2026-11-01に今後の計画を改訂しました。目標作成、進捗解析・助言、再計画、可視化、全目標コーチは実装済みです。
+今後は**Weekend 10の音声入力、Weekend 11のGoogle認証**を開発します。
+開発範囲・受け入れ条件・検証結果・進捗は[GitHub Issues](https://github.com/Yoshiki-Takahashi/life_agent/issues)で管理します。
+旧Sprint資料は履歴であり、未更新の状態表記を今後の計画として扱いません。Weekend番号は日程の確約ではありません。
 
 ### Weekend 0: 開発基盤
 
@@ -115,7 +118,7 @@ Metric、Milestone、AI、ログインは対象外です。
 - 全データへ所有者IDを追加する。
 - 他ユーザーのGoalを取得できないテストを追加する。
 
-最初はメールアドレスとパスワードで開始します。GoogleログインはWeekend 13、電話番号認証は同枠で必要性と費用を評価して採否を決めます。
+最初はメールアドレスとパスワードで開始します。GoogleログインはWeekend 11で追加します。電話番号認証は今後の開発範囲に含めません。
 
 ### Weekend 4.A: Android Goal体験の拡充
 
@@ -168,19 +171,18 @@ Progress ParserとAdvisorの呼出し境界と業務検証をCore API内で分�
 
 詳細は[`backlog/weekend-7.md`](archive/backlog/weekend-7.md)を参照してください。この段階で、プロダクト概要にある進捗記録と助言を含むMVPの利用経路が揃います。
 
-### Weekend 8以降: 段階的な強化
+### Weekend 8以降
 
-| 実施枠 | 内容 | 完成状態 |
+| 実施枠 | 内容 | 管理先・完成状態 |
 | --- | --- | --- |
-| Weekend 8 | Re-planner、計画差分の比較・確認 | ユーザーの承認後だけ計画を更新できる |
-| Weekend 9 | 進捗可視化 | 保存済みの履歴とMetricに基づく推移を確認できる |
-| Weekend 10 | 定期振り返り・通知 | 利用者が設定したタイミングで振り返れる |
-| Weekend 11 | 音声入力 | 音声から起こした本文を確認して進捗登録できる |
-| Weekend 12 | 非同期処理・環境再現 | 必要性を評価し、必要な場合にCloud Tasks等とTerraformを導入する |
-| Weekend 13 | 認証方式の拡充 | Googleログインを追加し、電話番号認証の採否を決める |
-| Weekend 14 | 本番化判断・運用整備 | 公開要否を判断し、公開する場合の復旧・監視・セキュリティ条件を満たす |
+| Weekend 8 | 再計画、計画差分の比較・確認 | 実装済み。本人が承認して計画を更新する |
+| Weekend 9 | 進捗可視化 | 実装済み。保存済み履歴から推移を確認する |
+| Weekend 10 | 音声による進捗入力 | [Issue #19](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)。文字起こしを編集・確認し、既存の進捗登録へ進む |
+| Weekend 11 | Google認証 | [Issue #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)。既存アカウントと目標へのアクセスを維持してGoogleでログインする |
 
-詳細なストーリー、受け入れ条件、対象外は[`backlog/weekend-8-plus.md`](archive/backlog/weekend-8-plus.md)にまとめます。MVP対象外の拡張であり、着手前に利用実績をもとに範囲を再確認します。条件付き項目は採否と理由の記録も完了条件とし、必要性のない基盤は作成しません。
+定期振り返り・通知の追加開発、基盤強化、本番化判断・運用整備は今後の計画に含めません。
+旧Weekend 10として実装済みの端末内振り返り・通知は維持します。
+非同期処理やTerraform等は、今後のIssueで具体的な必要性が生じた場合だけ個別に採否を決めます。
 
 毎回、一つのユーザー経路をFakeで完成させてから外部サービスへ接続します。
 
@@ -197,4 +199,4 @@ Weekend 8の再計画では、Core APIが`replan_proposals`を保持し、`plan_
 - API契約と実装が一致する。
 - 秘密情報やローカル固有値をコミットしていない。
 - 作業途中でも既存のデモ経路が壊れていない。
-- 次回の最初の作業がバックログに一つだけ明記されている。
+- 検証結果・残件・次の作業がGitHub Issueまたは紐づくPRに明記されている。

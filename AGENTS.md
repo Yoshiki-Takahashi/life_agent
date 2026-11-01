@@ -15,7 +15,8 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 - `docs/development-guide.md`: 開発順序、各段階の完成状態、サービス分離基準
 - `docs/coding-standards.md`: 実装時の簡潔さ、構成、品質ルール
 - `docs/decisions/`: 採用済みの技術判断
-- `docs/archive/backlog/`: Sprintごとの作業と受け入れ条件
+- GitHub Issues: 今後の開発内容、受け入れ条件、進捗の正本
+- `docs/archive/backlog/`: 過去のSprint記録（今後のチケットは追加しない）
 
 ## 開発原則
 
@@ -38,7 +39,7 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 
 ## 品質基準
 
-- チケットにはユーザーストーリー、受け入れ条件、完了条件を記載する。
+- 開発はGitHub Issueで管理し、ユーザーストーリー、受け入れ条件、完了条件を記載する。PR本文に`Closes #番号`を記載して対応Issueへ紐づける。
 - テストは利用者の振る舞い、認証、保存・競合・再送、外部サービス境界に絞る。内部状態の写し、表示文言ごとのテスト、生成Schemaのスナップショットを増やさない。
 - 公開動作を変更した場合は必要な回帰テストを更新し、関連するlint・型検査・テストを実行する。
 - AI機能には「読書」「アプリ開発」「筋トレ」の回帰評価を維持する。

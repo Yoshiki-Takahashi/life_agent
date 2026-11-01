@@ -5,4 +5,5 @@ AIが提案し、利用者が確認して保存します。
 
 - [現在の仕様](docs/README.md)
 - [画面と操作](docs/ui.md)
+- [今後の開発・進捗（GitHub Issues）](https://github.com/Yoshiki-Takahashi/life_agent/issues)
 - [Backendの開発手順](backend/README.md) / [Androidの開発手順](android/README.md)

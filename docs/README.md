@@ -15,3 +15,6 @@
 これらは利用仕様とは分けて管理します。
 [設計原則](service-design-guidelines.md)と[ADR](decisions/README.md)は開発者向けの判断記録です。
 旧構想やSprint別の経緯は[履歴](archive/README.md)にあります。
+
+今後の開発は[GitHub Issues](https://github.com/Yoshiki-Takahashi/life_agent/issues)で管理します。
+Weekend 10は[音声入力 #19](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)、Weekend 11は[Google認証 #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)です。

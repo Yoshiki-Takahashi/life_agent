@@ -6,15 +6,16 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 
 作業前に以下を確認してください。
 
-- `docs/product-overview.md`: 機能、MVP、対象外
-- `docs/architecture-overview.md`: システム境界とデータ設計
+- `docs/product-overview.md`: 現在の機能と対象外
+- `docs/ui.md`: 現在の画面と操作
+- `docs/api.md`: APIと保存の規則
 - `docs/system-architecture.md`: サービス責務、連携、セキュリティ境界
 - `docs/service-design-guidelines.md`: 全Sprint共通の責務配置、既存サービスの拡張先、設計変更・サービス分離の判断基準
 - `docs/development-infrastructure.md`: 開発環境、クラウドリソース、コスト管理
 - `docs/development-guide.md`: 開発順序、各段階の完成状態、サービス分離基準
 - `docs/coding-standards.md`: 実装時の簡潔さ、構成、品質ルール
 - `docs/decisions/`: 採用済みの技術判断
-- `docs/backlog/`: Sprintごとの作業と受け入れ条件
+- `docs/archive/backlog/`: Sprintごとの作業と受け入れ条件
 
 ## 開発原則
 
@@ -38,7 +39,8 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 ## 品質基準
 
 - チケットにはユーザーストーリー、受け入れ条件、完了条件を記載する。
-- 変更に対応するテストを追加し、関連するlint・型検査・テストを実行する。
+- テストは利用者の振る舞い、認証、保存・競合・再送、外部サービス境界に絞る。内部状態の写し、表示文言ごとのテスト、生成Schemaのスナップショットを増やさない。
+- 公開動作を変更した場合は必要な回帰テストを更新し、関連するlint・型検査・テストを実行する。
 - AI機能には「読書」「アプリ開発」「筋トレ」の回帰評価を維持する。
 - APIや設計判断を変更した場合は、同じ変更で`docs/`も更新する。
 - 実装前に`docs/coding-standards.md`を読み、不要な抽象化を追加しない。

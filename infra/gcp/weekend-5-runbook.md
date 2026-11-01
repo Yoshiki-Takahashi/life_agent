@@ -4,7 +4,7 @@
 
 Google Cloudの主要サービスを一度ずつ作成・接続し、AndroidからCloud Run上のCore APIを経由してCloud SQLへGoalを保存する。学習のための重複操作は避け、最後まで動く縦切りと課金停止を優先する。
 
-進捗と証跡は[Weekend 5 Status](../../docs/backlog/weekend-5-status.md)へ記録する。
+進捗と証跡は[Weekend 5 Status](../../docs/archive/backlog/weekend-5-status.md)へ記録する。
 
 ## 実行方針
 

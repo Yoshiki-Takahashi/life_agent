@@ -10,6 +10,7 @@ class Settings(BaseSettings):
     progress_parser_provider: Literal["openai", "fake"] = "fake"
     advisor_provider: Literal["openai", "fake"] = "fake"
     replanner_provider: Literal["openai", "fake"] = "fake"
+    coach_provider: Literal["openai", "fake"] = "fake"
     openai_api_key: str | None = None
     openai_model: str = "gpt-5.6-luna"
     openai_timeout_seconds: float = 20.0

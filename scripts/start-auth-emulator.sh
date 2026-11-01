@@ -7,4 +7,13 @@ if ! command -v firebase >/dev/null 2>&1; then
 fi
 
 cd "$(dirname "$0")/.."
-exec firebase emulators:start --only auth --project life-agent-local
+# Emulator users are local test data. Keep exports outside Git and private to this user.
+umask 077
+state_dir=".secrets/firebase-auth-emulator"
+mkdir -p "$state_dir"
+if [ -f "$state_dir/firebase-export-metadata.json" ]; then
+  exec firebase emulators:start --only auth --project life-agent-local \
+    --import "$state_dir" --export-on-exit "$state_dir"
+fi
+exec firebase emulators:start --only auth --project life-agent-local \
+  --export-on-exit "$state_dir"

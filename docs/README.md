@@ -1,17 +1,17 @@
-# LifeAgent Documentation
+# LifeAgentの仕様
 
-このディレクトリを、プロダクト要件と技術設計の参照元とします。
+現在のコードで利用できる機能を説明します。読み始める順番は次のとおりです。
 
-- `product-overview.md`: サービス構想、MVP、機能範囲
-- `architecture-overview.md`: システム構成、データ、AI境界
-- `system-architecture.md`: サービスの責務、連携、主要処理フロー
-- [service-design-guidelines.md](service-design-guidelines.md): 全Sprint共通の責務配置と拡張指針。開発中の発見に応じてGit上で更新する
-- `development-infrastructure.md`: 開発フェーズの使用リソース、技術、課金抑制方針
-- `development-guide.md`: 週末単位の実装順序とサービス分離方針
-- `progress-ai-quality.md`: 進捗解析・助言のユーザー価値、ケース別期待、合格基準
-- `progress-ai-quality-results.md`: Weekend 7の実AI品質評価結果、改善履歴、最終レビュー
-- `coding-standards.md`: コードの簡潔さ、構成、品質ルール
-- `decisions/`: Architecture Decision Record（ADR）
-- `backlog/`: Sprint計画、チケット、受け入れ条件
+| 文書 | 分かること |
+| --- | --- |
+| [サービスの仕様](product-overview.md) | 目的、できること、できないこと |
+| [画面と操作](ui.md) | 画面の移動、対話、確認と保存 |
+| [データとシステム](system-architecture.md) | 保存する情報、サービスの役割、認証 |
+| [APIの約束](api.md) | 通信の入口、入力・保存・競合の規則 |
+| [AIの動作](progress-ai-quality.md) | 生成範囲、送信する情報、不確実な結果の扱い |
 
-実装と文書が矛盾する場合は、意図を確認したうえで同じ変更内で解消してください。
+開発手順は[Backend](../backend/README.md)、[Android](../android/README.md)、
+[インフラ](development-infrastructure.md)、[開発ガイド](development-guide.md)にあります。
+これらは利用仕様とは分けて管理します。
+[設計原則](service-design-guidelines.md)と[ADR](decisions/README.md)は開発者向けの判断記録です。
+旧構想やSprint別の経緯は[履歴](archive/README.md)にあります。

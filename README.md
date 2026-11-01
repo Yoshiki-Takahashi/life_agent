@@ -1,12 +1,8 @@
 # LifeAgent
 
-自然言語の目標を実行可能な計画へ変換し、進捗管理と改善を支援するAndroidアプリです。
+自然言語の目標を計画にし、実績の記録、全目標コーチとの相談、振り返り・再計画を支援するAndroidアプリです。
+AIが提案し、利用者が確認して保存します。
 
-## 現在の機能
-
-- AndroidからGoalのタイトルと説明を入力
-- FastAPIで入力を検証
-- PostgreSQLへGoalを保存
-- 保存したGoal詳細をAndroidで表示
-
-ローカル起動方法は`backend/README.md`と`android/README.md`を参照してください。プロダクトと設計の入口は`docs/README.md`です。
+- [現在の仕様](docs/README.md)
+- [画面と操作](docs/ui.md)
+- [Backendの開発手順](backend/README.md) / [Androidの開発手順](android/README.md)

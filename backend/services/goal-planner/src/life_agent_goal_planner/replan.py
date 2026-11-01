@@ -6,7 +6,7 @@ from typing import Protocol
 from openai import OpenAI
 
 from life_agent_goal_planner.config import Settings
-from life_agent_goal_planner.progress import generate
+from life_agent_goal_planner.provider import generate
 from life_agent_goal_planner.schemas import (
     GeneratedReplan,
     GoalPlan,

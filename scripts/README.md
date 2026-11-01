@@ -54,4 +54,14 @@ Docker、uv、起動済みAndroidエミュレータを用意します。
 ANDROID_HOME="$HOME/Library/Android/sdk" ./scripts/test-weekend-7.sh --android
 ```
 
-専用PostgreSQL（15437）とFake認証・Fake AIのCore API（18007）を起動し、終了時に専用コンテナとデータを削除します。通常の開発DBは使いません。ポート使用中は停止し、既存プロセスを終了しません。Android確認はadb reverseを使います。スクリーンショットとinstrumentation結果は`android/app/build/weekend7/`（`W7_OUTPUT_DIR`で変更可能）へ保存されます。クラウドFirebase・Cloud Runの確認はこのテストに含みません。
+専用PostgreSQL（15437）とFake認証・Fake AIのCore API（18007）を起動し、終了時に専用コンテナとデータを削除します。通常の開発DBは使いません。ポート使用中は停止し、既存プロセスを終了しません。Android確認はadb reverseを使います。検証ログとinstrumentation結果は`android/app/build/weekend7/`（`W7_OUTPUT_DIR`で変更可能）へ保存されます。クラウドFirebase・Cloud Runの確認はこのテストに含みません。
+
+## 対話コーチのローカル検証
+test-weekend-7.shのAndroid実行を指定クラスに絞るには、
+W7_ANDROID_TEST_CLASS=com.yoshiki.lifeagent.AppFlowTestを設定します。
+クラウドを起動せず、既存の隔離DBとFake APIで候補取消・修正・保存・参照、
+応答喪失後の同一payload再送を検証できます。W7_OUTPUT_DIRで証跡の出力先を変更できます。
+
+start-auth-emulator.shはローカルアカウントを.secrets/firebase-auth-emulator/へ
+正常終了時にexportし、次回起動時にimportします。永続化導入前の失われたアカウントは復元できません。
+実ユーザーのクラウド認証情報と混同せず、exportデータをGitへ追加しないでください。

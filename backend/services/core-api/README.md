@@ -2,15 +2,7 @@
 
 Androidに公開する唯一のBackend APIです。
 
-責務:
-
-- Firebase ID Tokenの検証とユーザー認可
-- Goal、Metric、Milestone、ProgressLogの業務ルール
-- PostgreSQLへの永続化とトランザクション
-- Goal Planner / AI接続サービス等の内部サービス呼び出し
-- AI出力の最終検証
-
-このサービスだけがアプリケーションDBを所有します。
+[現在の仕様](../../../docs/README.md)と[API](../../../docs/api.md)を参照してください。
 
 ## Setup
 
@@ -82,18 +74,7 @@ cd backend/services/core-api
 CORE_API_URL=http://127.0.0.1:8000 uv run pytest ../../../tests/e2e
 ```
 
-公開API:
-
-- `GET /health`
-- `GET /api/v1/goals`
-- `POST /api/v1/goals/preview`
-- `POST /api/v1/goals/confirm`
-- `GET /api/v1/goals/{goal_id}`
-- `POST /api/v1/goals/{goal_id}/progress/preview`
-- `POST /api/v1/goals/{goal_id}/progress`
-- `POST /api/v1/goals/{goal_id}/advice`
-
-Goal一覧はTokenの`uid`で所有者を絞り、更新日時の新しい順で概要を返します。`preview`は設定されたPlannerを呼び、DBへ保存せずに計画案を返します。通常のローカル実行とテストでは決定論的Fakeを使用します。独立したGoal Planner / AI接続サービスを使う場合は次を設定します。
+独立したAIサービスへの接続設定:
 
 ```bash
 GOAL_PLANNER_BACKEND=http
@@ -109,20 +90,7 @@ GOAL_PLANNER_URL=https://<goal-planner-service-url>
 GOAL_PLANNER_ID_TOKEN_AUDIENCE=https://<goal-planner-service-url>
 ```
 
-内部サービスの通信障害や契約違反は`503`となり、Goalや進捗は保存されません。`confirm`は編集済みのMetricとMilestoneを再検証し、Goalと同じTransactionで保存します。
-Core APIの内部サービス待機時間は、AI接続サービス側のOpenAI待機時間より長く設定してください。
-
-`progress`は認証済みユーザーが所有するGoalだけを対象に、進捗本文とMetric更新値を保存します。
-Metric更新は加算で、`Metric.current_value`が`target_value`を超える更新、別GoalのMetric、
-重複Metric、不正な入力は拒否します。`client_request_id`はGoal内で一意に扱い、同じIDの
-再送はMetricへ二重反映しません。ProgressLog、Metric更新履歴、Metric現在値、Goal更新日時は
-同一Transactionで保存します。
-
-## Weekend 7: Progress Parser / Advisor
-
-Goal詳細の進捗メモを解析し、ユーザーが修正・確認してから既存進捗APIで保存します。保存後の助言取得は独立しているため、助言生成だけ失敗しても履歴は残ります。公開契約は[`contracts/README.md`](../../../contracts/README.md)を参照してください。
-
-Core APIはOpenAIへ直接接続しません。`PROGRESS_PARSER_BACKEND=http`と`ADVISOR_BACKEND=http`を設定すると、`GOAL_PLANNER_URL`で指定した内部AI接続サービスへ`/internal/v1/progress-preview`と`/internal/v1/advice`を呼びます。移行互換のため`openai`も内部HTTP呼び出しとして解釈しますが、Core APIに`OPENAI_API_KEY`は設定しません。通常テストとキー不要E2Eでは両方`fake`です。
+解析・助言を内部AIサービスへ接続する設定:
 
 ```bash
 GOAL_PLANNER_BACKEND=http \
@@ -132,9 +100,7 @@ ADVISOR_BACKEND=http \
 uv run uvicorn life_agent_core.main:app
 ```
 
-Core APIの責務は、所有者確認済みGoalだけをAI接続サービスへ渡すこと、返ってきた候補をPydantic Schemaとドメインルールで再検証すること、ユーザー確認後の保存をTransactionで行うことです。OpenAI SDK、プロンプト、Structured Output schema、Provider timeout/retry/refusal処理、実AI回帰評価はGoal Planner Service側に置きます。
-
-リポジトリルートから`./scripts/test-weekend-7.sh`で専用PostgreSQL・Fake APIを使った同時保存テストを実行できます。`--android`を付けると起動済みエミュレータで解析・取消・修正・保存・助言障害・再試行・再訪を確認し、スクリーンショットを`android/app/build/weekend7/files/`に保存します。認証はこの隔離E2Eに限りFakeです。
+隔離DB・サービス間検証は[結合テスト](../../../tests/e2e/README.md)を参照してください。
 
 ### ユーザー価値の評価
 
@@ -146,4 +112,9 @@ OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --repeat 2 --ou
 OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --suite holdout --repeat 2 --output /tmp/progress-quality-holdout.json
 ```
 
-このコマンドは実OpenAIを呼び出します。通常CIでは実行しません。終了コード0は機械チェックの合格のみで、全返答の内容レビューも必要です。キー・providerエラー全文はレポートに記録しません。Weekend 7時点の内容レビュー結果は[進捗解析・助言 実AI品質評価結果](../../../docs/progress-ai-quality-results.md)に記録しています。
+このコマンドは実OpenAIを呼び出します。通常CIでは実行しません。終了コード0は機械チェックの合格のみで、全返答の内容レビューも必要です。キー・providerエラー全文はレポートに記録しません。Weekend 7時点の内容レビュー結果は[進捗解析・助言 実AI品質評価結果](../../../docs/archive/progress-ai-quality-results.md)に記録しています。
+
+## 全目標コーチの接続
+
+`COACH_BACKEND=fake`（既定）または`http`。内部サービス側は`COACH_PROVIDER=fake|openai`。
+URL・timeout・IAM認証は他のAI機能と共有します。CoreへOpenAIキーを設定しません。

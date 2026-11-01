@@ -11,7 +11,7 @@
 
 リソース作成時は、設定値、課金抑制策、削除手順を同じ変更で記録します。
 
-Weekend 5では、Google Cloud Consoleによる初回作成とユーザー端末のCLIによる確認・開始・停止・削除訓練を[Weekend 5 GCP実習ランブック](weekend-5-runbook.md)の順序で行います。進行状況と作成済みリソースは[Weekend 5 Status](../../docs/backlog/weekend-5-status.md)へ記録します。
+Weekend 5では、Google Cloud Consoleによる初回作成とユーザー端末のCLIによる確認・開始・停止・削除訓練を[Weekend 5 GCP実習ランブック](weekend-5-runbook.md)の順序で行います。進行状況と作成済みリソースは[Weekend 5 Status](../../docs/archive/backlog/weekend-5-status.md)へ記録します。
 
 日常の状態確認、開始、課金抑制のための停止には、リポジトリルートから次を実行します。
 
@@ -85,3 +85,41 @@ OpenAI API keyは次のスクリプトで登録します。保存ファイルの
 ```bash
 ./scripts/gcp/register-openai-secret.sh
 ```
+
+## Cloud Runも無効化した場合の再開
+
+2026-10-25の開発終了時、全実行サービス停止の依頼により、次の状態を確認しました。
+
+| リソース | 停止状態 |
+| --- | --- |
+| lifeagent-dev-db | STOPPED / activationPolicy=NEVER |
+| lifeagent-core-api | scalingMode=manual / manualInstanceCount=0 |
+| lifeagent-goal-planner | scalingMode=manual / manualInstanceCount=0 |
+
+Core APIのhealthはHTTP 503となり、トラフィックタグによる別revisionの公開はありません。
+Cloud Run migration Jobは完了済み、実行中Cloud Build・Compute Engine VM・Pub/Sub subscriptionはなし。
+App Engine applicationは未作成、Cloud Scheduler APIは未使用または無効でした。
+DB・サービス定義・保存イメージ・秘密情報は削除していません。
+
+通常のstop-dev.shはCloud Runをmin=0のリクエスト駆動として残す手順です。
+今回のmanual=0はリクエストでも再起動しない無効化です。
+start-dev.shだけではCloud Runが再有効化されないため、次回はDBを起動してから
+両サービスをautoへ戻してください。下記は再開時に明示実行するコマンドで、
+今回の停止時には実行していません。
+
+~~~bash
+gcloud sql instances patch lifeagent-dev-db --activation-policy=ALWAYS --project=lifeagent-505614 --quiet
+gcloud run services update lifeagent-goal-planner --scaling=auto --project=lifeagent-505614 --region=asia-northeast1 --quiet
+gcloud run services update lifeagent-core-api --scaling=auto --project=lifeagent-505614 --region=asia-northeast1 --quiet
+./scripts/gcp/start-dev.sh
+~~~
+
+停止でも保存領域等の費用は残ります。Cloud SQLは停止後もstorage・IPの料金対象です。
+- [Cloud Runの無効化・再有効化](https://docs.cloud.google.com/run/docs/configuring/services/manual-scaling)
+- [Cloud SQLの停止と継続課金](https://docs.cloud.google.com/sql/docs/postgres/start-stop-restart-instance)
+
+### 全目標コーチの設定（UI刷新2）
+手動deploy-devの`coach_backend`は既定`fake`。実AIを使うときだけ`openai`を選ぶと、
+内部サービスに`COACH_PROVIDER=openai`、Coreに`COACH_BACKEND=http`を設定する。
+既存の内部サービスURL・IAM・OpenAI Secretを使い、新しいサービスやDBは作らない。
+今回のUI開発ではworkflowを実行せず、停止中のクラウドも再起動していない。

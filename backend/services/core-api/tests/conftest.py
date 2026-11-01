@@ -55,3 +55,23 @@ def unauthenticated_client(db_session: Session) -> Generator[TestClient]:
     with TestClient(app) as test_client:
         yield test_client
     app.dependency_overrides.clear()
+
+
+@pytest.fixture
+def create_goal(client):
+    from datetime import date, timedelta
+
+    def create(title="本を読む", owner="user-a", extra_metric=False):
+        plan = client.post(
+            "/api/v1/goals/preview",
+            json={"title": title, "target_date": str(date.today() + timedelta(days=90))},
+        ).json()
+        if extra_metric:
+            plan["metrics"].append({"name": "補助の成果", "target_value": 3, "unit": "件"})
+        result = client.post(
+            "/api/v1/goals/confirm", json=plan, headers={"Authorization": f"Bearer {owner}"}
+        )
+        assert result.status_code == 201
+        return result.json()
+
+    return create

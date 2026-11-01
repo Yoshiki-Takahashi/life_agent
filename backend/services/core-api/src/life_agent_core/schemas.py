@@ -1,5 +1,7 @@
 import uuid
 from datetime import date, datetime
+from typing import Annotated, Literal
+from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
@@ -216,3 +218,80 @@ class GoalSummary(BaseModel):
     milestone_count: int
     created_at: datetime
     updated_at: datetime
+
+
+class ProgressPreviewRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    body: str = Field(min_length=1, max_length=2000)
+
+
+class ProgressPreview(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    metric_updates: list[ProgressMetricUpdateRequest] = Field(max_length=3)
+    warnings: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(max_length=3)
+
+    @model_validator(mode="after")
+    def unique_metrics(self) -> "ProgressPreview":
+        ids = [item.metric_id for item in self.metric_updates]
+        if len(ids) != len(set(ids)):
+            raise ValueError("Duplicate metric")
+        return self
+
+
+class Advice(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    summary: str = Field(min_length=1, max_length=500)
+    next_actions: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(
+        min_length=1,
+        max_length=3,
+    )
+
+
+class CoachMessage(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    role: Literal["user", "assistant"]
+    content: str = Field(min_length=1, max_length=2000)
+
+
+class CoachRequest(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    body: str = Field(min_length=1, max_length=2000)
+    history: list[CoachMessage] = Field(default_factory=list, max_length=12)
+
+
+class CoachMetric(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    name: str
+    current_value: float
+    target_value: float
+    unit: str
+
+
+class CoachGoal(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    id: UUID
+    title: str
+    target_date: date
+    metrics: list[CoachMetric]
+
+
+class CoachAIRequest(CoachRequest):
+    goals: list[CoachGoal]
+    as_of_date: date
+
+
+class CoachReply(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+    reply: str = Field(min_length=1, max_length=2000)
+    intent: Literal["discuss", "record"]
+    goal_id: UUID | None
+    record_body: str | None = Field(max_length=2000)
+
+    @model_validator(mode="after")
+    def coherent_action(self) -> "CoachReply":
+        if self.intent == "record":
+            if self.goal_id is None or not self.record_body:
+                raise ValueError("Record needs an explicit target and source text")
+        elif self.goal_id is not None or self.record_body is not None:
+            raise ValueError("Discussion cannot carry a write target")
+        return self

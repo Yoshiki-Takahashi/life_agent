@@ -26,7 +26,7 @@ PostgreSQL
 
 ## 各作業単位の共通手順
 
-1. 共通のサービス設計指針を確認し、`docs/backlog/`にユーザーストーリー、受け入れ条件、対象外、責務の配置先を書く。
+1. 共通のサービス設計指針を確認し、`docs/archive/backlog/`にユーザーストーリー、受け入れ条件、対象外、責務の配置先を書く。
 2. APIまたはSchemaの契約を先に決める。
 3. 最小の失敗テストを追加する。
 4. 一つの利用経路だけを実装する。
@@ -36,7 +36,7 @@ PostgreSQL
 
 ## 開発ロードマップ
 
-Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。旧キー失効確認等の運用残件は[`Weekend 6ステータス`](backlog/weekend-6-status.md)で追跡します。Weekend 7はクラウド受け入れとADR 0002に基づくAI接続責務の移行まで完了しました。[検証結果](backlog/weekend-7-status.md)を参照してください。Weekend 8では再計画候補の生成、差分確認、承認適用、古い提案の拒否、Metric履歴保持を実装中です。現在の計画は[`backlog/README.md`](backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
+Weekend 6の自動デプロイ、Goal Plannerクラウド結合、手入力進捗記録まで実装済みです。旧キー失効確認等の運用残件は[`Weekend 6ステータス`](archive/backlog/weekend-6-status.md)で追跡します。Weekend 7はクラウド受け入れとADR 0002に基づくAI接続責務の移行まで完了しました。[検証結果](archive/backlog/weekend-7-status.md)を参照してください。Weekend 8では再計画候補の生成、差分確認、承認適用、古い提案の拒否、Metric履歴保持を実装中です。現在の計画は[`backlog/README.md`](archive/backlog/README.md)を参照してください。Weekend番号は実施順を示し、日程の確約ではありません。
 
 ### Weekend 0: 開発基盤
 
@@ -136,7 +136,7 @@ Metric、Milestone、AI、ログインは対象外です。
 
 **完成状態:** AndroidからCloud Run上のCore APIへ接続し、クラウドDBへGoalを保存できる。
 
-詳細な受け入れ条件は[`backlog/weekend-5.md`](backlog/weekend-5.md)、UIとCLIの実習順序は[`infra/gcp/weekend-5-runbook.md`](../infra/gcp/weekend-5-runbook.md)、進捗は[`backlog/weekend-5-status.md`](backlog/weekend-5-status.md)で管理する。
+詳細な受け入れ条件は[`backlog/weekend-5.md`](archive/backlog/weekend-5.md)、UIとCLIの実習順序は[`infra/gcp/weekend-5-runbook.md`](../infra/gcp/weekend-5-runbook.md)、進捗は[`backlog/weekend-5-status.md`](archive/backlog/weekend-5-status.md)で管理する。
 
 - Artifact RegistryとCloud Runを作成する。
 - Secret Managerへ必要な秘密情報を登録する。
@@ -158,7 +158,7 @@ Goal Plannerは最初はローカルまたはFakeでもよく、Core APIのク�
 - Metric更新の意味、再送時の重複防止、所有者検証を契約化する。
 - 自然言語からの値の抽出はWeekend 7で追加する。
 
-詳細は[`backlog/weekend-6.md`](backlog/weekend-6.md)を参照してください。
+詳細は[`backlog/weekend-6.md`](archive/backlog/weekend-6.md)を参照してください。
 
 ### Weekend 7: AI進捗解析と助言
 
@@ -166,7 +166,7 @@ Goal Plannerは最初はローカルまたはFakeでもよく、Core APIのク�
 
 Progress ParserとAdvisorの呼出し境界と業務検証をCore API内で分け、生成処理はGoal Planner / AI接続サービスに配置します。Fakeで利用経路を完成させてから実AI Adapterを追加します。新しいデプロイ単位への分離は共通指針の判断基準を満たした場合だけ行います。
 
-詳細は[`backlog/weekend-7.md`](backlog/weekend-7.md)を参照してください。この段階で、プロダクト概要にある進捗記録と助言を含むMVPの利用経路が揃います。
+詳細は[`backlog/weekend-7.md`](archive/backlog/weekend-7.md)を参照してください。この段階で、プロダクト概要にある進捗記録と助言を含むMVPの利用経路が揃います。
 
 ### Weekend 8以降: 段階的な強化
 
@@ -180,7 +180,7 @@ Progress ParserとAdvisorの呼出し境界と業務検証をCore API内で分�
 | Weekend 13 | 認証方式の拡充 | Googleログインを追加し、電話番号認証の採否を決める |
 | Weekend 14 | 本番化判断・運用整備 | 公開要否を判断し、公開する場合の復旧・監視・セキュリティ条件を満たす |
 
-詳細なストーリー、受け入れ条件、対象外は[`backlog/weekend-8-plus.md`](backlog/weekend-8-plus.md)にまとめます。MVP対象外の拡張であり、着手前に利用実績をもとに範囲を再確認します。条件付き項目は採否と理由の記録も完了条件とし、必要性のない基盤は作成しません。
+詳細なストーリー、受け入れ条件、対象外は[`backlog/weekend-8-plus.md`](archive/backlog/weekend-8-plus.md)にまとめます。MVP対象外の拡張であり、着手前に利用実績をもとに範囲を再確認します。条件付き項目は採否と理由の記録も完了条件とし、必要性のない基盤は作成しません。
 
 毎回、一つのユーザー経路をFakeで完成させてから外部サービスへ接続します。
 

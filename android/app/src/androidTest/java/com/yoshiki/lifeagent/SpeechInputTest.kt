@@ -83,12 +83,14 @@ class SpeechInputTest {
     @Test fun backgroundAndScreenRemovalInvalidateRecognitionResults() {
         setup()
         start()
-        val background = recognition
-        compose.activityRule.scenario.moveToState(Lifecycle.State.CREATED)
-        compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
-        compose.runOnIdle { assertTrue(background.closed); background.result("古い録音") }
-        compose.onNodeWithText("本文に追加").assertIsNotEnabled()
-        compose.onNodeWithText("録音開始").performClick()
+        for (destination in listOf(Lifecycle.State.STARTED, Lifecycle.State.CREATED)) {
+            val background = recognition
+            compose.activityRule.scenario.moveToState(destination)
+            compose.activityRule.scenario.moveToState(Lifecycle.State.RESUMED)
+            compose.runOnIdle { assertTrue(background.closed); background.result("古い録音") }
+            compose.onNodeWithText("本文に追加").assertIsNotEnabled()
+            compose.onNodeWithText("録音開始").performClick()
+        }
         compose.runOnIdle { visible = false }
         compose.waitForIdle()
         compose.runOnIdle { recognition.result("別の利用者の録音"); assertTrue(recognition.closed); assertEquals("元のメモ", body) }

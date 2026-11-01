@@ -105,7 +105,8 @@ private fun SpeechInputDialog(body: String, onBodyChange: (String) -> Unit, onDi
     }
     DisposableEffect(recognition, lifecycle) {
         val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_STOP) {
+            val recording = phase == SpeechPhase.LISTENING || phase == SpeechPhase.TRANSCRIBING
+            if (event == Lifecycle.Event.ON_STOP || (event == Lifecycle.Event.ON_PAUSE && recording)) {
                 cancelRecognition()
                 error = "音声入力を中断しました。再開するには録音開始を選んでください。"
             }

@@ -76,10 +76,14 @@ LifeAgentは音声を保存せず、Core APIやOpenAIへ音声を送りません
 Issue: [Weekend 10 / #19](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)。
 
 実装上の制約は[AndroidのSpeechRecognizer仕様](https://developer.android.com/reference/android/speech/SpeechRecognizer)に従います。
-マイク音声を使わず、認識サービスの結果を差し替える操作テスト:
+マイク音声を使わず、認識サービスの結果を差し替える操作テストは、APKを上書きインストールして実行します。
+`connectedDebugAndroidTest`は終了時にアプリを削除する場合があるため、既存アプリデータを持つEmulatorでは次の手順を使います。
 
 ```bash
-./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.yoshiki.lifeagent.SpeechInputTest
+./gradlew assembleDebug assembleDebugAndroidTest
+"$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/debug/app-debug.apk
+"$ANDROID_HOME/platform-tools/adb" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
+"$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.yoshiki.lifeagent.SpeechInputTest com.yoshiki.lifeagent.test/androidx.test.runner.AndroidJUnitRunner
 ```
 
 このテストとAppFlowTestはマイク権限をテスト用に付与します。
@@ -87,5 +91,5 @@ Issue: [Weekend 10 / #19](https://github.com/Yoshiki-Takahashi/life_agent/issues
 すでに付与済みの場合はskipし、テスト自身では権限を取り消しません。
 
 ```bash
-./gradlew connectedDebugAndroidTest -Pandroid.testInstrumentationRunnerArguments.class=com.yoshiki.lifeagent.SpeechPermissionTest
+"$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.yoshiki.lifeagent.SpeechPermissionTest com.yoshiki.lifeagent.test/androidx.test.runner.AndroidJUnitRunner
 ```

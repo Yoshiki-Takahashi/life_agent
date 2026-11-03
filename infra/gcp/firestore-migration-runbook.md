@@ -29,7 +29,7 @@ dumpは`legacy-verified.dump`。保存期限はユーザー管理。中身・接
 | 項目 | 結果 |
 | --- | --- |
 | メンテナンス | 23:36:16〜23:39:34、約3分18秒 |
-| 現在のtraffic | `lifeagent-core-api-firestore23b` 100%、タグなし |
+| 初回切替のtraffic | `lifeagent-core-api-firestore23b` 100%、タグなし |
 | 旧SQLの排出 | 120秒以上待機、active transaction 0、書込みカウンタ87の不変を切替後にも確認 |
 | 最終退避 | `~/.local/share/lifeagent/migrations/20261103T233616/legacy-final.dump`、20,021 bytes、ローカル復元合格 |
 | SHA256 | `d2ea91bb2e272946796d716dd4e8a1d8737bc40977320a8731b4174a2640b31c` |
@@ -51,6 +51,19 @@ PR merge後にFirestore版を確認して再有効化し、SQL専用参照を再
 Cloud MonitoringでDB作成後の成功操作を確認した時点では、読取り534、書込み72、削除36だった。
 集計遅延があり、保存容量メトリクスはまだ未反映。これは請求確定値ではない。
 課金情報の反映後に、SQLの削除後利用日について費用が止まったことをIssue #23へ追記する。
+
+## 切替後のコード検証・更新（2026-11-04）
+
+最新mainのGoogle認証・アイコン変更を取り込み、Google連携のローカル検証もFirestore Emulatorへ更新した。
+Google連携・再ログイン・所有者分離2件、Android unit/build/lintに合格。
+現在値と履歴の一致はGoalのサーバーread_timeで揃え、読取りtransactionを保持しない方式とした。
+読取り途中の実績到着でも一貫することを回帰テストで確認した。Emulator接続時のみ競合再試行は180秒、実クラウドは45秒を維持する。
+
+実装commit `9380299`のCIは`41660723792`と`41660736694`の両方が成功（Core 35件）。
+実Firestore検証Job `lifeagent-firestore-check-dhk2m`も、並行保存・上限超過の拒否・再送・再計画を含め合格した。
+現行revisionは`lifeagent-core-api-firestore23c`（traffic 100%、メンテナンスなしで更新）。
+imageは`asia-northeast1-docker.pkg.dev/lifeagent-505614/lifeagent-dev/lifeagent-core-api@sha256:c8e3bfdbd6c78ee1b0d6c860aaa54c391c2c1d47b1bcf808aec0a8ff9bdceed1`。
+保存形式・公開API・ユーザーデータは維持している。
 
 ## 事前確認
 

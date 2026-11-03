@@ -17,7 +17,7 @@ show_targets() {
     echo "- Artifact Registry repository and images: ${repository} (${region})"
     echo "- Service account: ${runtime_service_account}"
     echo
-    echo "Legacy Cloud SQL retirement is separate; see the migration runbook."
+    echo "Legacy Cloud SQL was retired in issue #23; see the migration record."
     echo "The GCP project, Firebase project, Firebase users, and Billing Budgets are not deleted."
 }
 

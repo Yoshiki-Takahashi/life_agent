@@ -13,17 +13,6 @@
         { "percent": 1.0, "basis": "current-spend" },
         { "percent": 1.0, "basis": "forecasted-spend" }
       ]
-    },
-    {
-      "displayName": "LifeAgent Cloud SQL 月額 1,500円アラート",
-      "amount": 1500,
-      "services": ["services/9662-B51E-5089"],
-      "thresholds": [
-        { "percent": 0.5, "basis": "current-spend" },
-        { "percent": 0.8, "basis": "current-spend" },
-        { "percent": 1.0, "basis": "current-spend" },
-        { "percent": 1.0, "basis": "forecasted-spend" }
-      ]
     }
   ],
   "consoleManagedControls": [

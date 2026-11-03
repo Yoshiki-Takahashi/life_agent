@@ -23,7 +23,7 @@ AndroidはDBやOpenAIへ直接接続しません。Core APIはOpenAI SDK・キ�
 AI接続サービスはステートレスで、アプリのDBや利用者の認可を扱いません。
 移管後のクラウド構成はCloud Run二つとFirestore、Secret Manager等を利用します。
 ローカルでは同じ境界でFirestore Emulator・認証エミュレータ・Fakeを使えます。
-2026-11-03時点ではFirestoreを準備済みで、既存トラフィックのSQLからの切替は未実施です。
+2026-11-03 23:39（日本時間）にFirestore版へ切替済みです。旧Cloud SQLはユーザーの即時削除指示に基づき同日23:48に削除済みです。
 採用判断は[ADR 0003](decisions/0003-firestore-standard.md)、段階と完了条件は[移管計画](plans/firestore-standard-migration.md)を参照してください。
 
 ## 保存するデータ

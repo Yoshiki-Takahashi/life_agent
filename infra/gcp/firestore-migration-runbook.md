@@ -9,12 +9,12 @@
 - Firestore: `lifeagent-505614 / (default)`、`asia-northeast1`、STANDARD / FIRESTORE_NATIVE。
 - 無料枠対象`freeTier=true`、PITR無効、削除保護有効。定期バックアップなし。
 - Core IAMは対象DB限定のdatastore.user、Rules全拒否、複合索引3件READY。
-- 元のSQL版: `lifeagent-core-api-00008-7d6`。利用中トラフィック100%を保持して準備する。
+- 元のSQL版: `lifeagent-core-api-00008-7d6`。準備時にはトラフィック100%を保持した。
 - 候補は`--no-traffic`で配置し、`firestore-check`タグで認証付きHTTPを確認する。
 - Core実行アカウントの検証Job `lifeagent-firestore-check-89pxg`で、保存・小数・並行再送・二重適用・所有者分離に合格。
 - 最終候補: `lifeagent-core-api-firestore23b`。maintenance: `lifeagent-core-api-firestore23-maint`。
   image: `asia-northeast1-docker.pkg.dev/lifeagent-505614/lifeagent-dev/lifeagent-core-api@sha256:f6d043a2e3d1bdeec91aef740723c16e956fd869c04c1f6307dd9ce511627a2c`。
-  両revisionはtraffic 0%。候補タグで実Firebase・全AI backend=http / provider=openai・FirestoreのHTTP検証にも合格。
+  準備時は両revisionがtraffic 0%。候補タグで実Firebase・全AI backend=http / provider=openai・FirestoreのHTTP検証にも合格。
 - APIテスト33件と読取り競合の追加回帰1件、内部AIサービス10件、HTTP結合1件・同時保存2件、
   Android unit/assemble・AppFlowTest 1件に合格。実AIの三領域テストは維持し、今回は全領域の再評価は実行していない。
 - ローカルdumpの復元リハーサル: 約3秒、約20KB。現在は9 Goal / 6実績 / 2候補。
@@ -23,6 +23,30 @@
 元のCloud Run設定とdumpはリポジトリ外の非公開ディレクトリ
 `~/.local/share/lifeagent/migrations/20261103-rehearsal/`に保管する。
 dumpは`legacy-verified.dump`。保存期限はユーザー管理。中身・接続値・TokenをIssueやログへ転載しない。
+
+## 切替実績（2026-11-03、日本時間）
+
+| 項目 | 結果 |
+| --- | --- |
+| メンテナンス | 23:36:16〜23:39:34、約3分18秒 |
+| 現在のtraffic | `lifeagent-core-api-firestore23b` 100%、タグなし |
+| 旧SQLの排出 | 120秒以上待機、active transaction 0、書込みカウンタ87の不変を切替後にも確認 |
+| 最終退避 | `~/.local/share/lifeagent/migrations/20261103T233616/legacy-final.dump`、20,021 bytes、ローカル復元合格 |
+| SHA256 | `d2ea91bb2e272946796d716dd4e8a1d8737bc40977320a8731b4174a2640b31c` |
+| Androidクラウド確認 | `CloudPersistenceTest` 1件合格。空一覧、保存、0.1の加算、同一ID再送、助言、再計画、再訪と詳細表示 |
+| アクセス境界 | 未認証API 401、FirebaseクライアントからFirestore直接アクセス403 |
+| 検証データ | 一時Firebase利用者と所有Goal/実績/候補を削除済み |
+| 当初の観察開始 | 2026-11-03 23:41 JST。その後ユーザーが48時間保持を撤回 |
+| 旧SQL撤去 | ユーザーの即時削除指示に基づき2026-11-03 23:48:42 JSTに削除 |
+
+CI run `41620956143`は34件のCore APIテスト、AIサービス、build、HTTP結合・競合テストに合格。
+Androidはunit/assembleおよび実Cloud Runを通すinstrumentationに合格した。
+Cloud SQL本体、SQL専用の旧revision 8件、migration Job、DB Secret、Coreのcloudsql.client、
+GitHub deployerのcloudsql.admin、GitHubのSQL接続変数、SQL専用予算を撤去済み。
+SQL instanceと全バックアップの一覧は空。全体予算、Firestore・Firebase・OpenAI関連は維持した。
+最終クラウドバックアップは作成せず、SQL dumpはローカルPCだけに保管する。請求反映は後日確認する。
+mainに残る旧SQL版のdeploy/manage workflowは、誤って旧構成へ再配置しないよう一時無効化する。
+PR merge後にFirestore版を確認して再有効化し、SQL専用参照を再導入しない。
 
 ## 事前確認
 
@@ -79,17 +103,17 @@ gcloud run services update-traffic lifeagent-core-api \
 Androidの旧一覧・候補は再読込みする。確認済み実績の再送が二重加算しないことも確認する。
 新規業務データを受け始めた後は、SQL版に戻すだけのrollbackを行わない。
 Firestore側で修正し、SQL復帰が必要なら新データを退避し逆移管をユーザーへ相談する。
-成功した切替時刻と48時間後の最短撤去時刻をJSTでIssueに記録する。
+成功した切替時刻、即時削除へのユーザー指示、撤去時刻をJSTでIssueに記録する。
 
-## 48時間の観察・旧SQLの撤去
+## 旧SQLの撤去（ユーザー指示で即時実施済み）
 
-時間経過だけで削除しない。5xx/競合失敗、保存の整合性、Firestore read/write/storage、旧SQLへの接続・書込みがないことを確認する。
-旧SQLを保持している間は料金が継続する。受け入れ不合格なら削除せず調べる。
-合格後に次を参照照合し、対象を明記して撤去する。
+当初は48時間保持する計画だったが、切替後のユーザー指示で即時削除へ変更した。
+5xx/競合失敗、保存の整合性、旧SQLへの接続・書込みがないこと、最終dumpの復元を確認し、次を参照照合して撤去した。
+この手順は実施記録であり、48時間後の自動処理は予約していない。
 
 1. 全Cloud Run service/revisionのtraffic/tag、稼働中Job、workflowにSQLへの到達経路がないことを確認する。
    旧SQL revisionを削除し、旧migration Job `lifeagent-db-migrate`を削除する。
-2. `lifeagent-dev-db`の対象、48時間経過、最終dumpとチェックサムを再確認する。
+2. `lifeagent-dev-db`の対象、ユーザーの即時削除指示、最終dumpとチェックサムを再確認する。
    SQLの削除保護を解除し、同インスタンスを削除する。保持されるバックアップ・IPの有無を確認する。
 3. `lifeagent-db-password`、Coreのcloudsql.client、GitHub deployerのcloudsql.admin、SQL専用GitHub Variable `CLOUD_SQL_CONNECTION_NAME`を
    他用途で使わないことを確認して整理する。Firestore・Firebase・OpenAI Secret・内部AI IAMを保持する。
@@ -101,5 +125,5 @@ Firestore側で修正し、SQL復帰が必要なら新データを退避し逆�
 ## 最終記録
 
 Issue #23へimage digest、revision、検証結果、最終dumpの保存先・復元結果、JST切替時刻、
-48時間観察、削除結果、課金確認を記録する。利用者データと秘密値は載せない。
+保持方針の変更、削除結果、課金確認を記録する。利用者データと秘密値は載せない。
 実装PRのmergeだけで移管全体を完了扱いにしない。

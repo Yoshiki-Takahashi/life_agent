@@ -1,7 +1,7 @@
 # ADR 0003: 正本DBをFirestore Standardへ変更する
 
 - 日付: 2026-11-03
-- 状態: accepted（クラウドのトラフィック切替は別途実施）
+- 状態: accepted（2026-11-03切替済み、ユーザー指示で旧SQLも即時撤去済み）
 - 管理: [Issue #23](https://github.com/Yoshiki-Takahashi/life_agent/issues/23)
 
 ## 背景
@@ -37,6 +37,6 @@ SQLAlchemy・Alembicの恒久的な二重対応は設けず、旧コードとイ
 ローカル・CIはloopbackのEmulatorと`demo-`プロジェクトを使い、未起動時にクラウドへ接続しない。
 
 定期バックアップ・PITRは設けない。切替時のSQL dumpをローカルPCだけに保管し、期限はユーザーが管理する。
-SQLは切替後48時間の検証合格後に削除する。Firestoreに新規保存した後のSQL復帰は逆移管の判断が必要となる。
+当初のSQLの48時間保持は、切替検証後のユーザー指示により即時削除へ変更した。SQLは2026-11-03に削除済み。Firestoreに新規保存した後のSQL復帰は逆移管の判断が必要となる。
 切替・退避・復旧は[移管計画](../plans/firestore-standard-migration.md)と
 [運用手順](../../infra/gcp/firestore-migration-runbook.md)に従う。

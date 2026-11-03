@@ -2,8 +2,8 @@
 
 現在の実装はCore API・内部AIサービスのCloud Run、Firestore Standard、Firebase Authentication、
 Artifact Registry、Secret Manager、Cloud Loggingを使用します。
-2026-11-03時点ではFirestoreの準備と検証を実施し、既存SQLへのトラフィック切替は調整中です。
-切替・48時間の観察・旧SQL撤去は[移管ランブック](firestore-migration-runbook.md)で管理します。
+2026-11-03 23:39（日本時間）にFirestore版へ切替済みです。ユーザーの即時削除指示に基づき、旧SQLも23:48に削除しました。
+切替・旧SQLの即時撤去の実績は[移管ランブック](firestore-migration-runbook.md)で管理します。
 [Weekend 5実習](weekend-5-runbook.md)とarchiveは過去のSQL構成の記録です。
 
 ## 状態・開始・停止
@@ -16,12 +16,14 @@ Artifact Registry、Secret Manager、Cloud Loggingを使用します。
 
 startはCloud Runをauto/min 0/max 1へ戻し、stopはmanual 0へ変更します。
 Firestoreは停止せずデータを保持します。無料枠超過の保存・操作は課金対象です。
-移管中の旧SQLはこれらのコマンドでは操作せず、48時間の確認後に別手順で削除します。
+旧Cloud SQLは撤去済みで、これらのコマンドでは再作成・再起動しません。
 `manage-dev.yml`も同じスクリプトを使います。
+移管PRが未mergeの間は、mainに残る旧SQL版workflowの誤実行を防ぐためdeploy/manageを一時無効化しています。
+PR merge後にFirestore版の内容を確認して再有効化します。Backend Qualityは継続しています。
 
 `destroy-dev.sh`は既定で候補表示だけを行います。実削除には`--execute`と端末での二重確認が必要です。
 対象にFirestoreの全データを含みます。project、Firebase利用者、予算は削除しません。
-旧SQLは移管ランブックの対象照合・観察条件を満たしてから扱います。
+旧SQLの削除証跡は移管ランブックに記録しています。
 
 ## Firestore
 

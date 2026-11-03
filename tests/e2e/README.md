@@ -23,3 +23,8 @@ Emulatorのロック解放には最大30秒程度かかる場合があり、HTTP
 `firestore_cloud.py`は`firestore-check`タグの候補URLと公開Firebase APIキーを環境変数で指定する明示実行用です。
 実Firebase利用者を一時作成し、既存のAI provider設定でAPIを一周した後、作成したGoalと一時利用者だけを削除します。
 Core実行アカウントのIAM検証は別のCloud Run Jobで行います。通常CIでは実AIもクラウドも呼びません。
+
+Androidの`CloudPersistenceTest`は明示実行専用です。APKをbuild/installしたうえで、
+`uv run --project backend/services/core-api python scripts/gcp/check-android-cloud.py --firebase-sdk <firebase apps:sdkconfigのJSONファイル>`
+をリポジトリルートから実行します。実Firebaseの一時利用者を作成し、Tokenをアプリの非公開一時ファイル経由で渡します。
+Tokenは引数・ログへ出さず、テスト終了後に検証用Goal/実績/候補と一時利用者を削除します。通常CIはクラウドを呼びません。

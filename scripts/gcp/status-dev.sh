@@ -8,8 +8,3 @@ for service in lifeagent-core-api lifeagent-goal-planner; do
     gcloud run services describe "${service}" --project="${project_id}" --region="${region}" \
         --format='json(metadata.name,metadata.annotations,spec.template.metadata.annotations,status.traffic,status.latestReadyRevisionName)'
 done
-# Until issue #23 retirement is complete, explicitly report remaining SQL charges.
-if ! gcloud sql instances list --project="${project_id}" \
-    --format='table(name,state,settings.activationPolicy)'; then
-    echo 'Legacy SQL listing unavailable. Verify retirement evidence in issue #23; absence is not confirmed.' >&2
-fi

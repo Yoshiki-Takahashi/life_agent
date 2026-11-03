@@ -7,4 +7,3 @@ for service in lifeagent-goal-planner lifeagent-core-api; do
         --scaling=auto --min-instances=0 --max-instances=1 --quiet
 done
 echo 'Cloud Run scaling: auto. Firestore remains available and stored data is retained.'
-echo 'Before SQL retirement completes, check the legacy SQL instance separately; this command does not modify it.'

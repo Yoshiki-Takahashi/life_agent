@@ -39,8 +39,9 @@ Cloud Run、Artifact Registry、Secret Manager、Cloud Loggingは無料枠超過
 ## Firestoreと移管期間
 
 `lifeagent-505614`の`(default)`を東京`asia-northeast1`、Standard / Native modeで使用します。
-2026-11-03にDB・IAM・Rules・索引を準備しました。既存トラフィックは切替調整中でSQLのままです。
-切替後48時間の観察に合格するまで旧Cloud SQLを保持し、料金も継続します。
+2026-11-03にDB・IAM・Rules・索引を準備し、23:39（日本時間）にFirestore版へ切り替えました。
+当初の48時間保持はユーザーの即時削除指示で撤回し、旧Cloud SQLを同日23:48に削除しました。
+SQL専用Job・Secret・権限・GitHub変数・予算も撤去済みです。請求表示への反映は後日確認します。
 設計は[ADR 0003](decisions/0003-firestore-standard.md)、実施条件は[移管計画](plans/firestore-standard-migration.md)を参照してください。
 
 無料枠は保存1GiB、日次読取り5万・書込み2万・削除2万、外向き転送10GiB/月です。
@@ -49,7 +50,7 @@ Cloud Run、Artifact Registry、Secret Manager、Cloud Loggingは無料枠超過
 保存期限はユーザーが管理します。Firestoreの新規データはこのdumpから戻せません。
 
 Cloud Runの停止ではFirestoreを削除しません。`stop-dev.sh`はサービスをmanual 0にし、
-`start-dev.sh`はauto/min 0/max 1に戻します。旧SQLの保持・撤去はこの操作と分けます。
+`start-dev.sh`はauto/min 0/max 1に戻します。旧SQLの再作成・再起動は行いません。
 
 ### 後続フェーズの候補
 

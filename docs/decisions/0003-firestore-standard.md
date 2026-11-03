@@ -22,7 +22,7 @@ Goal文書に固定上限のMetric・Milestoneを含め、増え続ける実績�
 実績保存はGoalと重複IDを読み、現在値更新と履歴作成を同一transactionで確定する。
 再計画も同じGoalを読み書きし、基準版・最新実績・適用状態を検証する。
 SDKのcommit競合再試行に加え、読取り中のAbortedはtransaction全体を再試行する。
-詳細・助言はread-only transactionの同一snapshotで現在値と履歴を読む。
+詳細・助言はGoalのサーバーread_timeで同じ時点の履歴を読み、現在値と履歴を揃える。読取り用transactionは保持しない。
 AI呼出しはtransaction外に置く。
 
 一覧・コーチは所有者を含む索引クエリを使い、全実績を読み込まない。
@@ -34,6 +34,7 @@ SQLAlchemy・Alembicの恒久的な二重対応は設けず、旧コードとイ
 
 無料枠を超えれば従量課金され、詳細の全履歴取得は利用期間に比例して読取りが増える。
 ページングは契約変更を伴うため別Issueで扱う。EmulatorはIAM・索引の検証を代替しない。
+Emulatorは競合ロック解放が遅れるため、その接続時のみ再試行上限を180秒にする。実クラウドは45秒を維持する。
 ローカル・CIはloopbackのEmulatorと`demo-`プロジェクトを使い、未起動時にクラウドへ接続しない。
 
 定期バックアップ・PITRは設けない。切替時のSQL dumpをローカルPCだけに保管し、期限はユーザーが管理する。

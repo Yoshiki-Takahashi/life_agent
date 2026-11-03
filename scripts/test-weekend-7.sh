@@ -51,7 +51,7 @@ if [[ "${1:-}" == "--android" ]]; then
     "${adb}" shell input keyevent KEYCODE_WAKEUP
     "${adb}" shell wm dismiss-keyguard
     cd "${repository_root}/android"
-    ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest
+    ./gradlew -Plifeagent.useCloudFirebase=false testDebugUnitTest assembleDebug assembleDebugAndroidTest
     "${adb}" install -r app/build/outputs/apk/debug/app-debug.apk
     "${adb}" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
     mkdir -p "${output_dir}"

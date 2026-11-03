@@ -16,7 +16,7 @@ def test_parallel_progress_is_atomic(same_id):
         pytest.skip("Set W7_API_URL to isolated Fake API backed by Firestore")
     headers = {"Authorization": f"Bearer e2e-{uuid.uuid4()}"}
     # Emulator contention may hold locks for up to 30 seconds (unlike production).
-    with httpx.Client(base_url=url, headers=headers, timeout=60) as client:
+    with httpx.Client(base_url=url, headers=headers, timeout=240) as client:
         plan = client.post(
             "/api/v1/goals/preview",
             json={

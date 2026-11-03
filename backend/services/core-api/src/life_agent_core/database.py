@@ -77,15 +77,17 @@ def request_key(client_request_id: str) -> str:
     return hashlib.sha256(client_request_id.encode()).hexdigest()
 
 
-def run_transaction(db: firestore.Client, operation, *, read_only: bool = False):
+def run_transaction(db: firestore.Client, operation):
     # The SDK retries commit conflicts, but a pessimistic transaction can also
     # abort while reading. Retry that whole transaction with a fresh snapshot.
-    @Retry(predicate=if_exception_type(Aborted), initial=0.05, maximum=1, timeout=45)
+    # Emulator contention can keep locks for 30s per attempt. Its verification
+    # budget is longer; Cloud Run retains the 45s production retry budget.
+    timeout = 180 if get_settings().firestore_emulator_host else 45
+
+    @Retry(predicate=if_exception_type(Aborted), initial=0.05, maximum=1, timeout=timeout)
     def execute():
         try:
-            return firestore.transactional(operation)(
-                db.transaction(max_attempts=10, read_only=read_only)
-            )
+            return firestore.transactional(operation)(db.transaction(max_attempts=10))
         except ValueError as error:
             if isinstance(error.__cause__, Aborted):
                 # Exhausting the SDK's immediate commit retries still represents

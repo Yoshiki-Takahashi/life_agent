@@ -10,7 +10,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from life_agent_core.ai_service import AIUnavailableError, InternalAIClient
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import Settings, get_settings
-from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.database import Database, decode, document
 from life_agent_core.models import Goal, Metric, Milestone, ProgressLog
 from life_agent_core.schemas import (
     GoalConfirmRequest,
@@ -159,6 +159,10 @@ def get_goal(goal_id: uuid.UUID, db: Database, user_id: CurrentUserId) -> GoalRe
 
 def load_goal(goal_id: uuid.UUID, db: firestore.Client, user_id: str, transaction=None) -> Goal:
     snapshot = db.collection("goals").document(str(goal_id)).get(transaction=transaction)
+    return owned_goal(snapshot, user_id)
+
+
+def owned_goal(snapshot, user_id: str) -> Goal:
     if not snapshot.exists:
         raise HTTPException(status_code=404, detail="Goalが見つかりません")
     goal = Goal.model_validate(decode(snapshot.to_dict()))
@@ -180,19 +184,18 @@ def load_goal_with_details(
     if history_limit is not None:
         query = query.limit(history_limit)
 
-    def read(transaction):
-        # One snapshot keeps history/current values consistent with concurrent writes.
-        goal = load_goal(goal_id, db, user_id, transaction)
-        metrics = {metric.id: metric for metric in goal.metrics}
-        for snapshot in query.stream(transaction=transaction):
-            log = ProgressLog.model_validate(decode(snapshot.to_dict()))
-            for update in log.metric_updates:
-                metric = metrics[update.metric_id]
-                update.metric_name, update.unit = metric.name, metric.unit
-            goal.progress_logs.append(log)
-        return goal
-
-    return run_transaction(db, read, read_only=True)
+    snapshot = db.collection("goals").document(str(goal_id)).get()
+    goal = owned_goal(snapshot, user_id)
+    metrics = {metric.id: metric for metric in goal.metrics}
+    # Use the Goal's server read time for history too. A snapshot needs no
+    # read transaction or locks, even when another progress save arrives here.
+    for item in query.stream(read_time=snapshot.read_time):
+        log = ProgressLog.model_validate(decode(item.to_dict()))
+        for update in log.metric_updates:
+            metric = metrics[update.metric_id]
+            update.metric_name, update.unit = metric.name, metric.unit
+        goal.progress_logs.append(log)
+    return goal
 
 
 def goal_response(goal: Goal) -> GoalResponse:

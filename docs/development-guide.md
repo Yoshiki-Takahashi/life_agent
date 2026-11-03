@@ -44,7 +44,7 @@ Core APIの`uv run pytest`は一時Firestore Emulatorを自動起動します。
 ## 開発ロードマップ
 
 2026-11-01に今後の計画を改訂しました。目標作成、進捗解析・助言、再計画、可視化、全目標コーチは実装済みです。
-今後は**Weekend 10の音声入力、Weekend 11のGoogle認証**を開発します。
+Weekend 10の音声入力はPR #21でマージ済みです。Weekend 11のGoogle認証は[Issue #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)で管理します。
 開発範囲・受け入れ条件・検証結果・進捗は[GitHub Issues](https://github.com/Yoshiki-Takahashi/life_agent/issues)で管理します。
 旧Sprint資料は履歴であり、未更新の状態表記を今後の計画として扱いません。Weekend番号は日程の確約ではありません。
 

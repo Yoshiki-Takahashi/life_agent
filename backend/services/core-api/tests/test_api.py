@@ -7,6 +7,7 @@ from uuid import uuid4
 import pytest
 from google.api_core.exceptions import Aborted, ServiceUnavailable
 from google.cloud.firestore_v1.document import DocumentReference
+from google.cloud.firestore_v1.query import Query
 from google.cloud.firestore_v1.transaction import Transaction
 
 from life_agent_core.ai_service import AIUnavailableError
@@ -163,6 +164,28 @@ def test_read_conflict_retries_without_duplicate_progress(client, create_goal, m
     saved = client.get(f"/api/v1/goals/{goal['id']}").json()
     assert saved["metrics"][0]["current_value"] == 1
     assert len(saved["progress_logs"]) == 1
+
+
+def test_detail_stays_consistent_when_progress_arrives_between_reads(
+    client, create_goal, monkeypatch
+):
+    goal = create_goal()
+    original_stream = Query.stream
+    injected = False
+
+    def stream_after_progress(query, *args, **kwargs):
+        nonlocal injected
+        if kwargs.get("read_time") is not None and not injected:
+            injected = True
+            assert save(client, goal).status_code == 200
+        return original_stream(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "stream", stream_after_progress)
+    path = f"/api/v1/goals/{goal['id']}"
+    assert client.get(path).json() == goal
+    current = client.get(path).json()
+    assert current["metrics"][0]["current_value"] == 1
+    assert len(current["progress_logs"]) == 1
 
 
 def test_replan_hides_metrics_without_losing_old_records(client, create_goal):

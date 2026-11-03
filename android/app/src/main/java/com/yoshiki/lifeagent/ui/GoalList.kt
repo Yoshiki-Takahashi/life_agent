@@ -75,12 +75,13 @@ fun GoalHomeScreen(
     onGoalClick: (String) -> Unit,
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
+    accountAction: @Composable () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("LifeAgent") },
-                actions = { TextButton(onClick = onSignOut) { Text("ログアウト") } },
+                actions = { accountAction(); TextButton(onClick = onSignOut) { Text("ログアウト") } },
             )
         },
     ) { padding ->

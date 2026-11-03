@@ -76,3 +76,11 @@ start-auth-emulator.shはローカルアカウントを.secrets/firebase-auth-em
 
 バックアップはローカルPCだけに保管し、保存期限はユーザーが管理します。
 切替・ユーザー指示によるSQL即時撤去の記録は[運用手順](../infra/gcp/firestore-migration-runbook.md)を参照してください。
+
+## Google認証のローカル検証
+
+`start-auth-emulator.sh`で認証エミュレーターを起動した状態で、
+`ANDROID_HOME="$HOME/Library/Android/sdk" ./scripts/test-google-auth.sh`を実行します。
+一時Firestore EmulatorとCore APIを使い、Firebase SDKのGoogle連携・再ログイン・所有者分離を検証します。
+Googleのアカウント選択だけを差し替え、実Firebaseや個人のGoogleアカウントは使用しません。
+実装と外部設定の受け入れ状況は[Issue #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)で管理します。

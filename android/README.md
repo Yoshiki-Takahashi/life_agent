@@ -94,3 +94,47 @@ Issue: [Weekend 10 / #19](https://github.com/Yoshiki-Takahashi/life_agent/issues
 ```bash
 "$ANDROID_HOME/platform-tools/adb" shell am instrument -w -e class com.yoshiki.lifeagent.SpeechPermissionTest com.yoshiki.lifeagent.test/androidx.test.runner.AndroidJUnitRunner
 ```
+
+## Googleログイン（Issue #20）
+
+Googleでログインする処理はCredential Manager、認証と連携はFirebase Authenticationを使います。
+既存のメールユーザーは先にメールでログインし、目標一覧の「Googleを連携」から連携してください。
+この経路はuidと既存パスワードを維持します。別アカウントに属するGoogle資格情報の連携は拒否し、DBの所有者を書き換えません。
+Googleで直接ログインした際の同一メールの扱いはFirebaseに従います。
+未確認のメール・パスワードへ信頼済みGoogleアカウントで直接ログインすると、未確認のパスワードが削除される場合があります。
+メールアドレスだけでの独自統合、パスワードの保存・復元、認証方式の事前照会は行いません。
+[Firebaseのアカウント連携](https://firebase.google.com/docs/auth/android/account-linking)と
+[信頼済みプロバイダの規則](https://firebase.google.com/docs/auth/users/#verified_email_addresses)を参照してください。
+
+実Firebaseに必要な設定:
+
+1. Firebase AuthenticationでGoogleを有効にし、同一メールに複数のアカウントを作らない設定を維持する。
+2. Androidアプリ`com.yoshiki.lifeagent`に実際のdebug／release署名のSHA-1・SHA-256を登録する。`./gradlew signingReport`で確認する。
+3. 同じプロジェクトのWeb OAuthクライアントID（AndroidクライアントIDではない）を、利用する`config/auth-*.properties`へ追加する。
+4. クラウド検証ではGit管理外の`config/auth-cloud-debug.properties`へ実Firebaseの公開設定と以下の項目を設定し、`./gradlew installDebug -Plifeagent.useCloudFirebase=true`を使う。
+
+```properties
+GOOGLE_WEB_CLIENT_ID=your-web-client-id.apps.googleusercontent.com
+```
+
+WebクライアントIDは公開設定です。OAuthクライアントSecret、サービスアカウント鍵、ID TokenをAndroid・Git・ログへ入れません。
+ID未指定ではGoogleのボタンを無効化し、メール認証は利用できます。ローカル設定と実Firebase設定を混ぜません。
+Google IDライブラリは既存Kotlin 2.2系に対応し、Firebaseガイドでも使用されている1.1.1を使用します。
+GoogleのG画像は[公式ブランド素材](https://developers.google.com/identity/branding-guidelines)から取得しています。
+
+実Firebaseでの受け入れは、Googleログイン、取消・失敗後の再試行、既存メールユーザーからの明示連携、
+連携後のGoogle／パスワード両方での再ログインと既存Goal表示、別利用者の目標分離、ログアウトを確認します。
+OAuth設定と端末アカウントが必要なため、通常テストでは個人のGoogleアカウントを使用しません。
+
+Firebase SDKと認証エミュレーターを通す検証はリポジトリルートから実行します。
+
+```bash
+./scripts/start-auth-emulator.sh
+# 別ターミナル（Dockerと起動済みAndroid Emulatorが必要）
+ANDROID_HOME="$HOME/Library/Android/sdk" ./scripts/test-google-auth.sh
+```
+
+Googleのアカウント選択だけを差し替え、署名なしの合成Google Tokenを認証エミュレーターへ渡します。
+Firestore Emulator・Core APIで実際のFirebase ID Tokenを検証し、既存Goalへのアクセスと他利用者の404を確認します。
+既存の開発DB・デフォルトFirebaseセッションは使いません。テスト用の名前付きFirebase Appとアカウントだけを使用し、作成ユーザーと専用DBを終了時に削除します。
+実Googleの署名検証・OAuthアカウント選択を検証した扱いにはしません。

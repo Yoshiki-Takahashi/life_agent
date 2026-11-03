@@ -71,6 +71,12 @@ async def main():
             assert all(r.status_code == 200 for r in results), [r.status_code for r in results]
             saved = (await client.get(path)).json()
             assert saved["metrics"][0]["current_value"] == 1.6 and len(saved["progress_logs"]) == 7
+            results = await asyncio.gather(*(save(f"limit-{i}", 3) for i in range(6)))
+            assert sorted(r.status_code for r in results) == [200] * 3 + [422] * 3
+            saved = (await client.get(path)).json()
+            assert (
+                saved["metrics"][0]["current_value"] == 10.6 and len(saved["progress_logs"]) == 10
+            )
             assert (await client.post(path + "/advice")).status_code == 200
             proposal = (await client.post(path + "/replan/preview", json={"reason": "調整"})).json()
             results = await asyncio.gather(

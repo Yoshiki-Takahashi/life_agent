@@ -16,7 +16,7 @@
 
 Java 21とgcloudの`cloud-firestore-emulator` componentが必要です。
 各スクリプトはloopbackのEmulatorを一時起動し、ランダムな`demo-`プロジェクトを使います。
-Emulatorのロック解放には最大30秒程度かかる場合があり、HTTP競合テストのtimeoutは60秒です。
+Emulatorのロック解放には最大30秒程度かかる場合があり、HTTP競合テストのtimeoutは240秒です。
 これは実環境の性能基準ではありません。索引・IAMは実Firestoreで別途確認します。
 実Firestore用の`check-firestore-api.py`は非公開Cloud Run Job専用で、Fake AIと検証専用UIDを使い、作成データだけを終了時に削除します。
 
@@ -28,3 +28,7 @@ Androidの`CloudPersistenceTest`は明示実行専用です。APKをbuild/instal
 `uv run --project backend/services/core-api python scripts/gcp/check-android-cloud.py --firebase-sdk <firebase apps:sdkconfigのJSONファイル>`
 をリポジトリルートから実行します。実Firebaseの一時利用者を作成し、Tokenをアプリの非公開一時ファイル経由で渡します。
 Tokenは引数・ログへ出さず、テスト終了後に検証用Goal/実績/候補と一時利用者を削除します。通常CIはクラウドを呼びません。
+
+Google連携の`./scripts/test-google-auth.sh`もFirestore Emulatorを自動起動します。
+Auth Emulatorを別途起動し、同じFirebase uidのGoal保持・Google連携・再ログイン・他所有者404を確認します。
+ローカル検証用Gradleは`-Plifeagent.useCloudFirebase=false`を明示し、端末確認用の既定値に依存しません。

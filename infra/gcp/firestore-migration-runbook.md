@@ -48,6 +48,10 @@ SQL instanceと全バックアップの一覧は空。全体予算、Firestore�
 mainに残る旧SQL版のdeploy/manage workflowは、誤って旧構成へ再配置しないよう一時無効化する。
 PR merge後にFirestore版を確認して再有効化し、SQL専用参照を再導入しない。
 
+Cloud MonitoringでDB作成後の成功操作を確認した時点では、読取り534、書込み72、削除36だった。
+集計遅延があり、保存容量メトリクスはまだ未反映。これは請求確定値ではない。
+課金情報の反映後に、SQLの削除後利用日について費用が止まったことをIssue #23へ追記する。
+
 ## 事前確認
 
 1. PRのBackend検査、サービス境界・HTTP同時保存、Android unit/assemble/UI経路が合格していること。

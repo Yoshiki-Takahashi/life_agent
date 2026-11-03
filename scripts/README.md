@@ -75,4 +75,4 @@ start-auth-emulator.shはローカルアカウントを.secrets/firebase-auth-em
 - `gcp/backup-legacy-sql.py --output <repo外の絶対パス>`: SQL Auth Proxy（127.0.0.1:15438）経由でローカルdumpし、隔離Docker PostgreSQL 17へ復元検証。パスワードはSecretから環境変数へ一時取得する。
 
 バックアップはローカルPCだけに保管し、保存期限はユーザーが管理します。
-切替・48時間観察・SQL撤去の前提は[運用手順](../infra/gcp/firestore-migration-runbook.md)を参照してください。
+切替・ユーザー指示によるSQL即時撤去の記録は[運用手順](../infra/gcp/firestore-migration-runbook.md)を参照してください。

@@ -17,7 +17,7 @@
 
 - Pythonの実行・依存管理にはuvだけを使う。
 - FastAPIのrequest/responseはPydantic Schemaで明示する。
-- DB操作は短いSession境界に閉じ、Migrationを必ず用意する。
+- DB操作は短いtransaction境界に閉じる。保存形式は固定モデルと`schema_version`で管理し、形式変更時は既存文書の読取り・移管手順を用意する。再試行されるtransactionに外部への副作用を置かない。
 - API Layer、Model、Schemaを基本構成とし、必要になるまでRepositoryやService層を増やさない。
 - Ruffとpytestを完了条件にする。
 

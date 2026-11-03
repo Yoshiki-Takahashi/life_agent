@@ -1,20 +1,4 @@
 services:
-  postgres:
-    image: postgres:17
-    environment:
-      POSTGRES_DB: ${POSTGRES_DB:-lifeagent}
-      POSTGRES_USER: ${POSTGRES_USER:-lifeagent}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-lifeagent_local}
-    ports:
-      - "5432:5432"
-    volumes:
-      - postgres-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-lifeagent} -d ${POSTGRES_DB:-lifeagent}"]
-      interval: 5s
-      timeout: 5s
-      retries: 5
-
   goal-planner:
     profiles: ["ai"]
     build:
@@ -26,6 +10,3 @@ services:
       OPENAI_TIMEOUT_SECONDS: ${OPENAI_TIMEOUT_SECONDS:-20}
     ports:
       - "8001:8001"
-
-volumes:
-  postgres-data:

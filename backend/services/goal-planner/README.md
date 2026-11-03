@@ -56,7 +56,7 @@ OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --suite holdout
 を指定すると合成ケースの再計画候補を保存でき、キーは出力しません。痛みがある運動目標では、
 追加の運動回数や再開日を指定せず、休止と状態確認を優先することを内容レビューします。
 
-`fake` Providerは独立サービス境界をToken消費なしで検証するためのものです。通常のアプリ確認では使用しません。リポジトリルートから次を実行すると、隔離されたPostgreSQL、Fake Goal Planner、Core APIを起動し、終了時に自動削除します。
+`fake` Providerは独立サービス境界をToken消費なしで検証するためのものです。通常のアプリ確認では使用しません。リポジトリルートから次を実行すると、隔離されたFirestore Emulator、Fake Goal Planner、Core APIを起動し、終了時に自動削除します。
 
 ```bash
 scripts/test-weekend-3.sh

@@ -17,4 +17,6 @@
 旧構想やSprint別の経緯は[履歴](archive/README.md)にあります。
 
 今後の開発は[GitHub Issues](https://github.com/Yoshiki-Takahashi/life_agent/issues)で管理します。
+保存先の変更計画は[Firestore Standard移管計画書](plans/firestore-standard-migration.md)を参照してください。
+対応する[Issue #23](https://github.com/Yoshiki-Takahashi/life_agent/issues/23)を進捗の正本とし、移管前の現行仕様とは区別します。
 Weekend 10は[音声入力 #19](https://github.com/Yoshiki-Takahashi/life_agent/issues/19)、Weekend 11は[Google認証 #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)です。

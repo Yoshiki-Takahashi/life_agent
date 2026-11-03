@@ -20,6 +20,7 @@
 | 全目標を相談する | POST /api/v1/coach/messages | なし |
 
 `GET /health`は認証不要の稼働確認です。
+メンテナンス中は`/api/`以下に503と`Retry-After: 60`を返します。保存結果が不明な実績は、再開後も同じ保存IDで再送します。
 内部AI APIは`/internal/v1/goal-plans`、`progress-preview`、`advice`、`replan`、`coach`です。
 Androidから直接呼びません。
 
@@ -41,6 +42,7 @@ Androidから直接呼びません。
 `client_request_id`は1〜64文字。同じ保存操作の再試行では同じIDと内容を送ります。
 同じIDによる保存は一回だけ反映します。新しい実績には新しいIDを使います。
 助言の再取得は保存APIとは別です。
+Firestoreへの変更後も公開JSON・UUID・順序・全履歴返却を維持します。内部の数値は整数で保存し、APIでは従来どおり小数として扱います。
 
 ## 全目標コーチ
 

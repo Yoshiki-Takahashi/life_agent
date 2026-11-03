@@ -12,7 +12,7 @@
 | API通信 | Retrofit、Kotlin Serialization | Androidアプリ内 |
 | Backend | Python 3.13、FastAPI、Pydantic v2 | ローカル / Cloud Run |
 | Python管理 | uv | ローカル / CI |
-| Database | PostgreSQL、SQLAlchemy 2、Alembic | 通常はローカル |
+| Database | Firestore Standard / Native mode、サーバーSDK | ローカル・CIはEmulator |
 | 認証 | Firebase Authentication | Firebase |
 | AI | OpenAI API、Structured Outputs | FastAPIから呼び出す |
 | AIテスト | 決定論的なFake実装 | ローカル / CI |
@@ -26,6 +26,7 @@ AI APIキーをAndroidへ含めません。AndroidはFirebase ID TokenをFastAPI
 
 | サービス | 用途 | 課金抑制方針 |
 | --- | --- | --- |
+| Firestore Standard | Core APIの正本データ | 通常無料枠内を目標とし、不要な索引・全件取得を減らす |
 | Cloud Run | FastAPIの結合確認環境 | request-based billing、最小インスタンス0、最大1〜2 |
 | Artifact Registry | Backendのコンテナ保存 | 古いイメージを自動削除し、保存量を抑える |
 | Firebase Authentication | Google/メール認証 | SMS課金のある電話番号認証は使用しない |
@@ -35,19 +36,20 @@ AI APIキーをAndroidへ含めません。AndroidはFirebase ID TokenをFastAPI
 
 Cloud Run、Artifact Registry、Secret Manager、Cloud Loggingは無料枠超過後に従量課金されます。OpenAI APIはGCPとは別に従量課金されます。
 
-## 必要になるまで作成しないリソース
+## Firestoreと移管期間
 
-### Cloud SQL for PostgreSQL
+`lifeagent-505614`の`(default)`を東京`asia-northeast1`、Standard / Native modeで使用します。
+2026-11-03にDB・IAM・Rules・索引を準備しました。既存トラフィックは切替調整中でSQLのままです。
+切替後48時間の観察に合格するまで旧Cloud SQLを保持し、料金も継続します。
+設計は[ADR 0003](decisions/0003-firestore-standard.md)、実施条件は[移管計画](plans/firestore-standard-migration.md)を参照してください。
 
-Cloud SQLはCPU、メモリ、ストレージの継続費用が発生するため、通常開発ではローカルPostgreSQLを使用します。クラウド上で永続化を含むE2E確認が必要になった時点で、以下の最小構成から開始します。
+無料枠は保存1GiB、日次読取り5万・書込み2万・削除2万、外向き転送10GiB/月です。
+課金上限ではなく、超過分には料金が発生し得ます。Core APIだけがDBに接続し、クライアント向けRulesは全拒否です。
+定期バックアップ・PITRは設けず、切替時の旧SQL dumpだけをローカルPCに保管します。
+保存期限はユーザーが管理します。Firestoreの新規データはこのdumpから戻せません。
 
-- 東京リージョン
-- Enterprise editionの最小構成
-- Single Zone
-- High Availabilityなし
-- 開発用データのみ
-
-停止中もストレージ等の費用が残り得るため、長期間使わない開発インスタンスはバックアップ要否を確認して削除します。
+Cloud Runの停止ではFirestoreを削除しません。`stop-dev.sh`はサービスをmanual 0にし、
+`start-dev.sh`はauto/min 0/max 1に戻します。旧SQLの保持・撤去はこの操作と分けます。
 
 ### 後続フェーズの候補
 
@@ -59,9 +61,9 @@ Cloud SQLはCPU、メモリ、ストレージの継続費用が発生するた�
 
 ## 開発環境の段階
 
-1. **Local:** Android Emulator、FastAPI、PostgreSQL、Fake AI
+1. **Local:** Android Emulator、FastAPI、Firestore Emulator、Fake AI
 2. **Cloud API:** AndroidからCloud Runへ接続。DBはまだ機能範囲に応じて限定する
-3. **Cloud Integration:** Cloud Run、Cloud SQL、Firebase Auth、実OpenAIを接続
+3. **Cloud Integration:** Cloud Run、Firestore、Firebase Auth、実OpenAIを接続
 
 AndroidのCore API接続先は、`android/config/api-debug.properties`と`api-release.properties`でビルド種別ごとに管理します。debugはEmulatorからローカルFastAPIへ、releaseはCloud Runへ接続します。Cloud Run作成後にrelease設定を発行済みHTTPS URLへ更新します。APIキーやDB接続情報はAndroidへ含めません。
 
@@ -74,4 +76,4 @@ AndroidのCore API接続先は、`android/config/api-debug.properties`と`api-re
 - リソース作成時は、削除条件と担当チケットを同時に記録する。
 - 月ごとにBillingレポートを確認する。
 
-料金は変更されるため、作成前に公式の[Cloud Run料金](https://cloud.google.com/run/pricing)、[Cloud SQL料金](https://cloud.google.com/sql/pricing)、[Firebase料金](https://firebase.google.com/pricing)を確認します。
+料金は変更されるため、作成前に公式の[Cloud Run料金](https://cloud.google.com/run/pricing)、[Firestore料金](https://firebase.google.com/docs/firestore/pricing)、[Firebase料金](https://firebase.google.com/pricing)を確認します。

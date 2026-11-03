@@ -3,8 +3,10 @@ set -euo pipefail
 
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 repository_root="$(cd "${script_dir}/.." && pwd)"
-compose_file="${repository_root}/backend/compose.e2e.yaml"
 core_api_dir="${repository_root}/backend/services/core-api"
+if [[ -z "${FIRESTORE_EMULATOR_HOST:-}" ]]; then
+    exec uv run --no-project python "${repository_root}/scripts/run-with-firestore.py" -- bash "$0" "$@"
+fi
 core_api_pid=""
 planner_pid=""
 
@@ -17,11 +19,9 @@ cleanup() {
         kill "${planner_pid}" 2>/dev/null || true
         wait "${planner_pid}" 2>/dev/null || true
     fi
-    docker compose -p lifeagent-weekend3-e2e -f "${compose_file}" down --volumes
 }
 trap cleanup EXIT
 
-docker compose -p lifeagent-weekend3-e2e -f "${compose_file}" up -d --wait
 
 cd "${repository_root}/backend/services/goal-planner"
 GOAL_PLANNER_PROVIDER=fake PROGRESS_PARSER_PROVIDER=fake ADVISOR_PROVIDER=fake \
@@ -36,9 +36,6 @@ done
 curl --fail --silent http://127.0.0.1:18001/health >/dev/null
 
 cd "${core_api_dir}"
-DATABASE_URL=postgresql+psycopg://lifeagent:lifeagent_e2e@127.0.0.1:15432/lifeagent \
-    uv run alembic upgrade head
-DATABASE_URL=postgresql+psycopg://lifeagent:lifeagent_e2e@127.0.0.1:15432/lifeagent \
 GOAL_PLANNER_BACKEND=http \
 GOAL_PLANNER_URL=http://127.0.0.1:18001 \
 PROGRESS_PARSER_BACKEND=http ADVISOR_BACKEND=http REPLANNER_BACKEND=http COACH_BACKEND=http \

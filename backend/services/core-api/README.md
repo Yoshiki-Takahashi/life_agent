@@ -6,12 +6,13 @@ Androidに公開する唯一のBackend APIです。
 
 ## Setup
 
-先に`backend/`でPostgreSQLを起動します。その後、次を実行します。
+[Backend手順](../../README.md)でFirestore Emulatorを起動し、次を実行します。
 
 ```bash
 cd backend/services/core-api
 uv sync --frozen
-uv run alembic upgrade head
+export FIRESTORE_PROJECT_ID=demo-lifeagent
+export FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 uv run uvicorn life_agent_core.main:app --reload
 ```
 
@@ -53,25 +54,24 @@ curl http://127.0.0.1:8080/health
 ```
 
 本番設定や秘密値はimageへ含めず、Cloud Runの環境変数とSecret Managerから渡します。
-Database migrationはコンテナ起動時には実行せず、deploy前の明示的な手順として適用します。
-
-Cloud RunではCloud SQL connectionをserviceへ追加し、次の環境変数を設定します。
+Cloud RunではCoreの実行アカウントを対象Firestore DBの`roles/datastore.user`へ限定し、次を設定します。
 
 ```text
-CLOUD_SQL_CONNECTION_NAME=lifeagent-505614:asia-northeast1:lifeagent-dev-db
-DB_USER=lifeagent_app
-DB_NAME=lifeagent
-DB_PASSWORD=<Secret Managerのlifeagent-db-password version 2>
+FIRESTORE_PROJECT_ID=lifeagent-505614
+FIRESTORE_DATABASE_ID=(default)
+MAINTENANCE_MODE=false
 ```
 
-`DB_PASSWORD`は通常の環境変数へ直接入力せず、Cloud RunのSecret参照として設定します。
-ローカル開発では従来どおり`DATABASE_URL`を使用します。
+クラウドではEmulator環境変数を設定しません。DBパスワード・Cloud SQL接続は使いません。
+`MAINTENANCE_MODE=true`は`/api/`へ503を返し、healthを維持します。
+Rules・索引の配置と切替手順は[クラウド運用](../../../infra/gcp/README.md)を参照してください。
+公開APIは維持し、SQLテストデータは取り込みません。
 
-PostgreSQLとCore APIを起動した状態で、リポジトリルートからE2Eを実行できます。
+キー不要の独立サービスE2Eはリポジトリルートで実行します。
 
 ```bash
-cd backend/services/core-api
-CORE_API_URL=http://127.0.0.1:8000 uv run pytest ../../../tests/e2e
+./scripts/test-weekend-3.sh
+./scripts/test-weekend-7.sh
 ```
 
 独立したAIサービスへの接続設定:

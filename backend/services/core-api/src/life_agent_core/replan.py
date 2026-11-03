@@ -5,7 +5,6 @@ from functools import lru_cache
 from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 
 from life_agent_core.ai_service import (
     AIUnavailableError,
@@ -13,8 +12,8 @@ from life_agent_core.ai_service import (
 )
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
-from life_agent_core.database import DatabaseSession, commit
-from life_agent_core.goals import goal_response, load_goal_with_details
+from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.goals import goal_response, load_goal, load_goal_with_details
 from life_agent_core.models import Goal, Metric, Milestone, ReplanProposalStatus
 from life_agent_core.models import ReplanProposal as ReplanProposalModel
 from life_agent_core.schemas import (
@@ -113,12 +112,11 @@ def get_replanner() -> Replanner:
 def preview_replan(
     goal_id: uuid.UUID,
     payload: ReplanRequest,
-    db: DatabaseSession,
+    db: Database,
     user_id: CurrentUserId,
     replanner: Annotated[Replanner, Depends(get_replanner)],
 ) -> ReplanProposal:
-    context = goal_response(load_goal_with_details(goal_id, db, user_id))
-    db.rollback()
+    context = goal_response(load_goal(goal_id, db, user_id))
     try:
         candidate = validate_replan(replanner.propose(context, payload.reason), context)
     except (AIUnavailableError, ValueError, TypeError) as error:
@@ -127,16 +125,19 @@ def preview_replan(
         ) from error
 
     proposal = ReplanProposalModel(
-        goal_id=goal_id,
         owner_id=user_id,
         base_plan_revision=context.plan_revision,
         reason=payload.reason,
         proposed_plan=candidate.proposed_plan.model_dump(mode="json"),
         diff=[item.model_dump(mode="json") for item in candidate.diff],
     )
-    db.add(proposal)
-    commit(db)
-    db.refresh(proposal)
+    (
+        db.collection("goals")
+        .document(str(goal_id))
+        .collection("replan_proposals")
+        .document(str(proposal.id))
+        .create(document(proposal))
+    )
     return replan_response(proposal)
 
 
@@ -144,35 +145,37 @@ def preview_replan(
 def apply_replan(
     goal_id: uuid.UUID,
     payload: ReplanApplyRequest,
-    db: DatabaseSession,
+    db: Database,
     user_id: CurrentUserId,
 ) -> GoalResponse:
-    goal = load_goal_with_details(goal_id, db, user_id, lock=True)
-    proposal = db.scalar(
-        select(ReplanProposalModel).where(
-            ReplanProposalModel.id == payload.proposal_id,
-            ReplanProposalModel.goal_id == goal_id,
-            ReplanProposalModel.owner_id == user_id,
-        )
-    )
-    if proposal is None:
-        raise HTTPException(status_code=404, detail="再計画候補が見つかりません")
-    if proposal.status != ReplanProposalStatus.PENDING:
-        raise HTTPException(status_code=409, detail="この再計画候補はすでに処理済みです")
-    if goal.plan_revision != proposal.base_plan_revision:
-        raise HTTPException(
-            status_code=409,
-            detail="Goalが更新されています。再計画候補を作り直してください",
-        )
+    goal_ref = db.collection("goals").document(str(goal_id))
+    proposal_ref = goal_ref.collection("replan_proposals").document(str(payload.proposal_id))
 
-    proposed_plan = GoalPlan.model_validate(proposal.proposed_plan)
-    validate_metric_targets(proposed_plan, goal)
-    apply_plan(goal, proposed_plan)
-    goal.plan_revision += 1
-    goal.updated_at = datetime.now(UTC)
-    proposal.status = ReplanProposalStatus.APPLIED
-    proposal.applied_at = datetime.now(UTC)
-    commit(db)
+    def persist(transaction):
+        goal = load_goal(goal_id, db, user_id, transaction)
+        snapshot = proposal_ref.get(transaction=transaction)
+        if not snapshot.exists:
+            raise HTTPException(status_code=404, detail="再計画候補が見つかりません")
+        proposal = ReplanProposalModel.model_validate(decode(snapshot.to_dict()))
+        if proposal.owner_id != user_id:
+            raise HTTPException(status_code=404, detail="再計画候補が見つかりません")
+        if proposal.status != ReplanProposalStatus.PENDING:
+            raise HTTPException(status_code=409, detail="この再計画候補はすでに処理済みです")
+        if goal.plan_revision != proposal.base_plan_revision:
+            raise HTTPException(
+                status_code=409, detail="Goalが更新されています。再計画候補を作り直してください"
+            )
+        proposed_plan = GoalPlan.model_validate(proposal.proposed_plan)
+        validate_metric_targets(proposed_plan, goal)
+        apply_plan(goal, proposed_plan)
+        goal.plan_revision += 1
+        goal.updated_at = datetime.now(UTC)
+        proposal.status = ReplanProposalStatus.APPLIED
+        proposal.applied_at = goal.updated_at
+        transaction.set(goal_ref, document(goal))
+        transaction.set(proposal_ref, document(proposal))
+
+    run_transaction(db, persist)
     return goal_response(load_goal_with_details(goal_id, db, user_id))
 
 

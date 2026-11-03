@@ -6,7 +6,6 @@ from functools import lru_cache
 from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
 
 from life_agent_core.ai_service import (
     AIUnavailableError,
@@ -15,10 +14,9 @@ from life_agent_core.ai_service import (
 )
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
-from life_agent_core.database import DatabaseSession, commit
-from life_agent_core.goals import goal_response, load_goal_with_details
+from life_agent_core.database import Database, document, request_key, run_transaction
+from life_agent_core.goals import goal_response, load_goal, load_goal_with_details
 from life_agent_core.models import (
-    Metric,
     ProgressLog,
     ProgressMetricUpdate,
 )
@@ -118,50 +116,41 @@ def get_advisor() -> Advisor:
 def record_progress(
     goal_id: uuid.UUID,
     payload: ProgressLogCreateRequest,
-    db: DatabaseSession,
+    db: Database,
     user_id: CurrentUserId,
 ) -> GoalResponse:
-    goal = load_goal_with_details(goal_id, db, user_id, lock=True)
-    existing = db.scalar(
-        select(ProgressLog).where(
-            ProgressLog.goal_id == goal_id,
-            ProgressLog.client_request_id == payload.client_request_id,
-        )
-    )
-    if existing is not None:
-        return goal_response(goal)
-
-    metrics_by_id = {metric.id: metric for metric in goal.metrics if metric.archived_at is None}
-    missing_metric_ids = [
-        item.metric_id for item in payload.metric_updates if item.metric_id not in metrics_by_id
-    ]
-    if missing_metric_ids:
-        raise HTTPException(status_code=422, detail="Goalに含まれないMetricは更新できません")
-
-    validated_updates: list[tuple[Metric, Decimal]] = []
-    for item in payload.metric_updates:
-        metric = metrics_by_id[item.metric_id]
-        value = Decimal(str(item.value))
-        next_value = metric.current_value + value
-        if next_value > metric.target_value:
-            raise HTTPException(
-                status_code=422,
-                detail="Metricの目標値を超える進捗は保存できません",
-            )
-        validated_updates.append((metric, value))
-
-    progress_log = ProgressLog(
-        goal=goal,
+    log = ProgressLog(
         body=payload.body,
         client_request_id=payload.client_request_id,
+        metric_updates=[
+            ProgressMetricUpdate(metric_id=item.metric_id, value=Decimal(str(item.value)))
+            for item in payload.metric_updates
+        ],
     )
-    for metric, value in validated_updates:
-        metric.current_value = metric.current_value + value
-        progress_log.metric_updates.append(ProgressMetricUpdate(metric=metric, value=value))
+    goal_ref = db.collection("goals").document(str(goal_id))
+    log_ref = goal_ref.collection("progress_logs").document(request_key(payload.client_request_id))
 
-    goal.updated_at = datetime.now(UTC)
-    db.add(progress_log)
-    commit(db)
+    def persist(transaction):
+        goal = load_goal(goal_id, db, user_id, transaction)
+        if log_ref.get(transaction=transaction).exists:
+            return
+        metrics = {m.id: m for m in goal.metrics if m.archived_at is None}
+        for update in log.metric_updates:
+            metric = metrics.get(update.metric_id)
+            if metric is None:
+                raise HTTPException(
+                    status_code=422, detail="Goalに含まれないMetricは更新できません"
+                )
+            if metric.current_value + update.value > metric.target_value:
+                raise HTTPException(
+                    status_code=422, detail="Metricの目標値を超える進捗は保存できません"
+                )
+            metric.current_value += update.value
+        goal.updated_at = datetime.now(UTC)
+        transaction.set(goal_ref, document(goal))
+        transaction.create(log_ref, document(log))
+
+    run_transaction(db, persist)
     return goal_response(load_goal_with_details(goal_id, db, user_id))
 
 
@@ -169,12 +158,11 @@ def record_progress(
 def preview_progress(
     goal_id: uuid.UUID,
     payload: ProgressPreviewRequest,
-    db: DatabaseSession,
+    db: Database,
     user_id: CurrentUserId,
     parser: Annotated[ProgressParser, Depends(get_progress_parser)],
 ) -> ProgressPreview:
-    context = goal_response(load_goal_with_details(goal_id, db, user_id))
-    db.rollback()  # Do not keep a transaction open during AI generation.
+    context = goal_response(load_goal(goal_id, db, user_id))
     try:
         result = ProgressPreview.model_validate(parser.parse(context, payload.body))
         return validate_candidates(result, context)
@@ -187,13 +175,11 @@ def preview_progress(
 @router.post("/api/v1/goals/{goal_id}/advice", response_model=Advice)
 def generate_advice(
     goal_id: uuid.UUID,
-    db: DatabaseSession,
+    db: Database,
     user_id: CurrentUserId,
     advisor: Annotated[Advisor, Depends(get_advisor)],
 ) -> Advice:
-    context = goal_response(load_goal_with_details(goal_id, db, user_id))
-    context.progress_logs = context.progress_logs[:10]
-    db.rollback()
+    context = goal_response(load_goal_with_details(goal_id, db, user_id, history_limit=10))
     try:
         return Advice.model_validate(advisor.advise(context))
     except (AIUnavailableError, ValueError, TypeError) as error:

@@ -27,6 +27,17 @@ jobs:
           python-version: "3.13"
           enable-cache: true
 
+      - name: Install Java for Firestore Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Firestore Emulator
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: cloud-firestore-emulator
+
       - name: Check Core API
         working-directory: backend/services/core-api
         run: |

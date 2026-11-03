@@ -2,6 +2,9 @@
 
 重要な技術判断を、`NNNN-short-title.md`形式で記録します。
 
+- [0002 AI接続責務](0002-ai-connection-boundary.md)
+- [0003 Firestore Standard](0003-firestore-standard.md)
+
 各ADRには最低限、背景、決定、理由、影響、状態（proposed/accepted/superseded）を含めます。
 
 初期に決定する項目:

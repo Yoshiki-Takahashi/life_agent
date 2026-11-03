@@ -4,14 +4,14 @@ from functools import lru_cache
 from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlalchemy import select
-from sqlalchemy.orm import Session, selectinload
+from google.cloud import firestore
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from life_agent_core.ai_service import AIUnavailableError, InternalAIClient
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import Settings, get_settings
-from life_agent_core.database import DatabaseSession, commit
-from life_agent_core.models import Goal, Metric, Milestone, ProgressLog, ProgressMetricUpdate
+from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.models import Goal, Metric, Milestone, ProgressLog
 from life_agent_core.schemas import (
     GoalConfirmRequest,
     GoalPlan,
@@ -108,9 +108,7 @@ def preview_goal(payload: GoalPreviewRequest, planner: Planner, user_id: Current
 @router.post(
     "/api/v1/goals/confirm", response_model=GoalResponse, status_code=status.HTTP_201_CREATED
 )
-def confirm_goal(
-    payload: GoalConfirmRequest, db: DatabaseSession, user_id: CurrentUserId
-) -> GoalResponse:
+def confirm_goal(payload: GoalConfirmRequest, db: Database, user_id: CurrentUserId) -> GoalResponse:
     goal = Goal(
         owner_id=user_id,
         title=payload.title,
@@ -125,20 +123,20 @@ def confirm_goal(
             for index, item in enumerate(payload.milestones)
         ],
     )
-    db.add(goal)
-    commit(db)
-    db.refresh(goal)
+    db.collection("goals").document(str(goal.id)).create(document(goal))
     return goal_response(goal)
 
 
 @router.get("/api/v1/goals", response_model=list[GoalSummary])
-def list_goals(db: DatabaseSession, user_id: CurrentUserId) -> list[GoalSummary]:
-    goals = db.scalars(
-        select(Goal)
-        .options(selectinload(Goal.metrics), selectinload(Goal.milestones))
-        .where(Goal.owner_id == user_id)
-        .order_by(Goal.updated_at.desc(), Goal.id.desc())
-    ).all()
+def list_goals(db: Database, user_id: CurrentUserId) -> list[GoalSummary]:
+    snapshots = (
+        db.collection("goals")
+        .where(filter=FieldFilter("owner_id", "==", user_id))
+        .order_by("updated_at", direction=firestore.Query.DESCENDING)
+        .order_by("id", direction=firestore.Query.DESCENDING)
+        .stream()
+    )
+    goals = [Goal.model_validate(decode(snapshot.to_dict())) for snapshot in snapshots]
     return [
         GoalSummary(
             id=goal.id,
@@ -155,28 +153,46 @@ def list_goals(db: DatabaseSession, user_id: CurrentUserId) -> list[GoalSummary]
 
 
 @router.get("/api/v1/goals/{goal_id}", response_model=GoalResponse)
-def get_goal(goal_id: uuid.UUID, db: DatabaseSession, user_id: CurrentUserId) -> GoalResponse:
+def get_goal(goal_id: uuid.UUID, db: Database, user_id: CurrentUserId) -> GoalResponse:
     return goal_response(load_goal_with_details(goal_id, db, user_id))
 
 
-def load_goal_with_details(
-    goal_id: uuid.UUID, db: Session, user_id: str, *, lock: bool = False
-) -> Goal:
-    statement = (
-        select(Goal)
-        .options(
-            selectinload(Goal.metrics),
-            selectinload(Goal.milestones),
-            selectinload(Goal.progress_logs)
-            .selectinload(ProgressLog.metric_updates)
-            .selectinload(ProgressMetricUpdate.metric),
-        )
-        .where(Goal.id == goal_id, Goal.owner_id == user_id)
-    )
-    goal = db.scalar(statement.with_for_update() if lock else statement)
-    if goal is None:
+def load_goal(goal_id: uuid.UUID, db: firestore.Client, user_id: str, transaction=None) -> Goal:
+    snapshot = db.collection("goals").document(str(goal_id)).get(transaction=transaction)
+    if not snapshot.exists:
+        raise HTTPException(status_code=404, detail="Goalが見つかりません")
+    goal = Goal.model_validate(decode(snapshot.to_dict()))
+    if goal.owner_id != user_id:
         raise HTTPException(status_code=404, detail="Goalが見つかりません")
     return goal
+
+
+def load_goal_with_details(
+    goal_id: uuid.UUID, db: firestore.Client, user_id: str, *, history_limit: int | None = None
+) -> Goal:
+    query = (
+        db.collection("goals")
+        .document(str(goal_id))
+        .collection("progress_logs")
+        .order_by("recorded_at", direction=firestore.Query.DESCENDING)
+        .order_by("id", direction=firestore.Query.DESCENDING)
+    )
+    if history_limit is not None:
+        query = query.limit(history_limit)
+
+    def read(transaction):
+        # One snapshot keeps history/current values consistent with concurrent writes.
+        goal = load_goal(goal_id, db, user_id, transaction)
+        metrics = {metric.id: metric for metric in goal.metrics}
+        for snapshot in query.stream(transaction=transaction):
+            log = ProgressLog.model_validate(decode(snapshot.to_dict()))
+            for update in log.metric_updates:
+                metric = metrics[update.metric_id]
+                update.metric_name, update.unit = metric.name, metric.unit
+            goal.progress_logs.append(log)
+        return goal
+
+    return run_transaction(db, read, read_only=True)
 
 
 def goal_response(goal: Goal) -> GoalResponse:

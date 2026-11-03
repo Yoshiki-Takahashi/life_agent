@@ -13,9 +13,7 @@ planner_runtime_account_id="${GOAL_PLANNER_RUNTIME_ACCOUNT_ID:-lifeagent-goal-pl
 planner_runtime_account="${planner_runtime_account_id}@${project_id}.iam.gserviceaccount.com"
 core_service="${CORE_API_SERVICE:-lifeagent-core-api}"
 planner_service="${GOAL_PLANNER_SERVICE:-lifeagent-goal-planner}"
-sql_connection_name="${CLOUD_SQL_CONNECTION_NAME:-lifeagent-505614:asia-northeast1:lifeagent-dev-db}"
 openai_secret_name="${OPENAI_SECRET_NAME:-lifeagent-openai-api-key}"
-db_secret_name="${DB_SECRET_NAME:-lifeagent-db-password}"
 
 project_number="$(gcloud projects describe "${project_id}" --format='value(projectNumber)')"
 deployer_account="${deployer_account_id}@${project_id}.iam.gserviceaccount.com"
@@ -96,6 +94,7 @@ gcloud services enable \
     iam.googleapis.com \
     iamcredentials.googleapis.com \
     run.googleapis.com \
+    firestore.googleapis.com \
     secretmanager.googleapis.com \
     sts.googleapis.com \
     --project="${project_id}"
@@ -104,13 +103,12 @@ ensure_service_account "${deployer_account_id}" "LifeAgent GitHub Actions Deploy
 ensure_service_account "${planner_runtime_account_id}" "LifeAgent Goal Planner"
 
 add_project_role "serviceAccount:${deployer_account}" "roles/artifactregistry.writer"
-add_project_role "serviceAccount:${deployer_account}" "roles/cloudsql.admin"
 add_project_role "serviceAccount:${deployer_account}" "roles/run.admin"
+add_project_role "serviceAccount:${deployer_account}" "roles/datastore.indexAdmin"
 add_project_role "serviceAccount:${deployer_account}" "roles/secretmanager.viewer"
 add_service_account_user "${core_runtime_account}"
 add_service_account_user "${planner_runtime_account}"
 
-add_secret_accessor_if_exists "${db_secret_name}" "${core_runtime_account}"
 add_secret_accessor_if_exists "${openai_secret_name}" "${planner_runtime_account}"
 
 if ! gcloud iam workload-identity-pools describe "${pool_id}" \
@@ -151,7 +149,6 @@ set_github_variable "CORE_API_SERVICE" "${core_service}"
 set_github_variable "CORE_API_RUNTIME_SERVICE_ACCOUNT" "${core_runtime_account}"
 set_github_variable "GOAL_PLANNER_SERVICE" "${planner_service}"
 set_github_variable "GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT" "${planner_runtime_account}"
-set_github_variable "CLOUD_SQL_CONNECTION_NAME" "${sql_connection_name}"
 set_github_variable "OPENAI_SECRET_NAME" "${openai_secret_name}"
 
 echo "Development deploy identity is configured."

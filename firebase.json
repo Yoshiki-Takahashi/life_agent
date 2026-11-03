@@ -7,6 +7,15 @@
       "enabled": true,
       "port": 4000
     },
-    "singleProjectMode": true
+    "singleProjectMode": true,
+    "firestore": {
+      "host": "127.0.0.1",
+      "port": 8080
+    }
+  },
+  "firestore": {
+    "database": "(default)",
+    "rules": "infra/gcp/firestore.rules",
+    "indexes": "infra/gcp/firestore.indexes.json"
   }
 }

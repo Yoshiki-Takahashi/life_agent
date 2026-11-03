@@ -68,7 +68,6 @@ jobs:
       CORE_API_RUNTIME_SERVICE_ACCOUNT: ${{ vars.CORE_API_RUNTIME_SERVICE_ACCOUNT }}
       GOAL_PLANNER_SERVICE: ${{ vars.GOAL_PLANNER_SERVICE }}
       GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT }}
-      DEPLOY_CLOUD_SQL_CONNECTION_NAME: ${{ vars.CLOUD_SQL_CONNECTION_NAME }}
       OPENAI_SECRET_NAME: ${{ vars.OPENAI_SECRET_NAME }}
 
     steps:
@@ -80,6 +79,17 @@ jobs:
         with:
           python-version: "3.13"
           enable-cache: true
+
+      - name: Install Java for Firestore Emulator
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "21"
+
+      - name: Install Firestore Emulator
+        uses: google-github-actions/setup-gcloud@v2
+        with:
+          install_components: cloud-firestore-emulator
 
       - name: Check Core API
         working-directory: backend/services/core-api
@@ -104,7 +114,6 @@ jobs:
           : "${CORE_API_RUNTIME_SERVICE_ACCOUNT:?CORE_API_RUNTIME_SERVICE_ACCOUNT variable is required}"
           : "${GOAL_PLANNER_SERVICE:?GOAL_PLANNER_SERVICE variable is required}"
           : "${GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT:?GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT variable is required}"
-          : "${DEPLOY_CLOUD_SQL_CONNECTION_NAME:?CLOUD_SQL_CONNECTION_NAME variable is required}"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -175,31 +184,13 @@ jobs:
             --format='value(status.url)')"
           echo "GOAL_PLANNER_URL=${planner_url}" >> "${GITHUB_ENV}"
 
-      - name: Migrate development database
+      - name: Verify Firestore is ready
         if: ${{ inputs.service == 'both' || inputs.service == 'core-api' }}
-        run: |
-          gcloud run jobs deploy lifeagent-db-migrate \
-            --project="${PROJECT_ID}" \
-            --region="${REGION}" \
-            --image="${CORE_API_IMAGE}" \
-            --service-account="${CORE_API_RUNTIME_SERVICE_ACCOUNT}" \
-            --set-cloudsql-instances="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}" \
-            --set-env-vars=CLOUD_SQL_CONNECTION_NAME="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
-            --set-secrets=DB_PASSWORD=lifeagent-db-password:latest \
-            --command=uv \
-            --args=run,--no-sync,alembic,upgrade,head \
-            --tasks=1 \
-            --parallelism=1 \
-            --max-retries=0 \
-            --task-timeout=120s \
-            --quiet
-          gcloud run jobs execute lifeagent-db-migrate \
-            --project="${PROJECT_ID}" --region="${REGION}" --wait
+        run: ./scripts/gcp/check-firestore.sh
 
-      - name: Deploy Core API
+      - name: Stage Core API without changing traffic
         if: ${{ inputs.service == 'both' || inputs.service == 'core-api' }}
         run: |
-          db_secret="lifeagent-db-password"
           progress_parser_backend="fake"
           advisor_backend="fake"
           replanner_backend="fake"
@@ -224,12 +215,12 @@ jobs:
             --allow-unauthenticated \
             --min-instances=0 \
             --max-instances=1 \
-            --add-cloudsql-instances="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}" \
-            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,PROGRESS_PARSER_BACKEND="${progress_parser_backend}",ADVISOR_BACKEND="${advisor_backend}",REPLANNER_BACKEND="${replanner_backend}",COACH_BACKEND="${coach_backend}",CLOUD_SQL_CONNECTION_NAME="${DEPLOY_CLOUD_SQL_CONNECTION_NAME}",DB_USER=lifeagent_app,DB_NAME=lifeagent \
-            --update-secrets=DB_PASSWORD="${db_secret}:latest" \
-            --remove-secrets=OPENAI_API_KEY
+            --no-traffic \
+            --clear-cloudsql-instances \
+            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,PROGRESS_PARSER_BACKEND="${progress_parser_backend}",ADVISOR_BACKEND="${advisor_backend}",REPLANNER_BACKEND="${replanner_backend}",COACH_BACKEND="${coach_backend}",FIRESTORE_PROJECT_ID="${PROJECT_ID}",FIRESTORE_DATABASE_ID="(default)",MAINTENANCE_MODE=false \
+            --remove-secrets=OPENAI_API_KEY,DB_PASSWORD
 
-      - name: Verify deployed services
+      - name: Verify services (Core health still checks the currently serving revision)
         run: |
           if [[ "${{ inputs.service }}" == "both" || "${{ inputs.service }}" == "goal-planner" ]]; then
             gcloud run services describe "${GOAL_PLANNER_SERVICE}" \

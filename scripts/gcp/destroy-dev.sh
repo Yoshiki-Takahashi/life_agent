@@ -4,7 +4,7 @@ set -euo pipefail
 project_id="lifeagent-505614"
 region="asia-northeast1"
 repository="lifeagent-dev"
-sql_instance="lifeagent-dev-db"
+database_id="(default)"
 run_service="lifeagent-core-api"
 planner_service="lifeagent-goal-planner"
 runtime_service_account="lifeagent-core-api@lifeagent-505614.iam.gserviceaccount.com"
@@ -13,12 +13,11 @@ show_targets() {
     echo "Deletion preview for project ${project_id}:"
     echo "- Cloud Run service: ${run_service} (${region})"
     echo "- Cloud Run service: ${planner_service} (${region}), if it exists"
-    echo "- Cloud SQL instance and its databases: ${sql_instance}"
-    echo "- Secret Manager secret: lifeagent-db-password"
-    echo "- Secret Manager secret: lifeagent-db-admin-password"
+    echo "- Firestore database and all documents: ${database_id}"
     echo "- Artifact Registry repository and images: ${repository} (${region})"
     echo "- Service account: ${runtime_service_account}"
     echo
+    echo "Legacy Cloud SQL was retired in issue #23; see the migration record."
     echo "The GCP project, Firebase project, Firebase users, and Billing Budgets are not deleted."
 }
 
@@ -51,11 +50,9 @@ if gcloud run services describe "${planner_service}" \
     gcloud run services delete "${planner_service}" \
         --region="${region}" --project="${project_id}" --quiet
 fi
-gcloud sql instances delete "${sql_instance}" \
-    --project="${project_id}" --quiet
-gcloud secrets delete lifeagent-db-password \
-    --project="${project_id}" --quiet
-gcloud secrets delete lifeagent-db-admin-password \
+gcloud firestore databases update --database="${database_id}" \
+    --project="${project_id}" --no-delete-protection --quiet
+gcloud firestore databases delete --database="${database_id}" \
     --project="${project_id}" --quiet
 gcloud artifacts repositories delete "${repository}" \
     --location="${region}" --project="${project_id}" --quiet

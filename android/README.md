@@ -43,11 +43,12 @@ debugビルドだけローカルHTTPを許可します。Android 17以降では�
 
 現在の動作は[画面と操作](../docs/ui.md)を参照してください。
 
-専用PostgreSQLとFake APIを通すEmulator検証:
+Firestore EmulatorとFake APIを通すEmulator検証:
 ~~~bash
 ANDROID_HOME="$HOME/Library/Android/sdk" W7_ANDROID_TEST_CLASS=com.yoshiki.lifeagent.AppFlowTest ./scripts/test-weekend-7.sh --android
 ~~~
-上記はリポジトリルートで実行します。Dockerと起動済みEmulatorが必要です。
+上記はリポジトリルートで実行します。Java 21、gcloud Firestore Emulatorと起動済みAndroid Emulatorが必要です。
+複数端末が接続されている場合は`ANDROID_SERIAL=emulator-5554`等で対象を指定します。
 終了時に専用DBとAPIを停止し、テストデータを削除します。
 
 ### ログアウト後に認証できない場合（通常のDebug版）
@@ -57,11 +58,11 @@ ANDROID_HOME="$HOME/Library/Android/sdk" W7_ANDROID_TEST_CLASS=com.yoshiki.lifea
 アカウントは.secrets/firebase-auth-emulator/へ保存・復元します（Git管理外）。
 初回導入前の未保存アカウントや、クラウド上のアカウントが自動的に移るわけではありません。
 
-2026-10-31のUI確認では、既存の古いローカルDBを保持するため、別DB lifeagent_ui を作成しました。
-API再起動時はDATABASE_URLのDB名にlifeagent_uiを指定し、
-AUTH_BACKEND=firebase、FIREBASE_PROJECT_ID=life-agent-local、
-FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099、
-各AI backend=fakeで起動します。クラウドの起動は不要です。
+APIのローカル起動は[Backend手順](../backend/README.md)に従います。
+Firestore Emulatorを`demo-lifeagent`で起動し、Coreに同じprojectとloopback接続先を渡します。
+`AUTH_BACKEND=firebase`、`FIREBASE_PROJECT_ID=life-agent-local`、
+`FIREBASE_AUTH_EMULATOR_HOST=127.0.0.1:9099`、各AI backendはfakeを使用します。
+Emulatorを終了すると、exportしていないGoalと実績は失われます。クラウドへ自動保存はしません。
 
 ## 音声入力
 
@@ -134,6 +135,6 @@ ANDROID_HOME="$HOME/Library/Android/sdk" ./scripts/test-google-auth.sh
 ```
 
 Googleのアカウント選択だけを差し替え、署名なしの合成Google Tokenを認証エミュレーターへ渡します。
-専用PostgreSQL・Core APIで実際のFirebase ID Tokenを検証し、既存Goalへのアクセスと他利用者の404を確認します。
+Firestore Emulator・Core APIで実際のFirebase ID Tokenを検証し、既存Goalへのアクセスと他利用者の404を確認します。
 既存の開発DB・デフォルトFirebaseセッションは使いません。テスト用の名前付きFirebase Appとアカウントだけを使用し、作成ユーザーと専用DBを終了時に削除します。
 実Googleの署名検証・OAuthアカウント選択を検証した扱いにはしません。

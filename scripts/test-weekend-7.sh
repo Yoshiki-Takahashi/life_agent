@@ -2,7 +2,9 @@
 set -euo pipefail
 repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 core_api_dir="${repository_root}/backend/services/core-api"
-compose_file="${repository_root}/backend/compose.weekend7.yaml"
+if [[ -z "${FIRESTORE_EMULATOR_HOST:-}" ]]; then
+    exec uv run --no-project python "${repository_root}/scripts/run-with-firestore.py" -- bash "$0" "$@"
+fi
 core_api_pid=""
 android_reverse=""
 output_dir="${W7_OUTPUT_DIR:-${repository_root}/android/app/build/weekend7}"
@@ -14,7 +16,7 @@ fi
 cd "${core_api_dir}"
 uv run python - <<'PY'
 import socket
-for port in (18007, 15437):
+for port in (18007,):
     with socket.socket() as sock:
         sock.bind(('127.0.0.1', port))
 PY
@@ -26,14 +28,10 @@ cleanup() {
         kill "${core_api_pid}" 2>/dev/null || true
         wait "${core_api_pid}" 2>/dev/null || true
     fi
-    docker compose -p lifeagent-weekend7-e2e -f "${compose_file}" down --volumes
 }
 trap cleanup EXIT
 
-docker compose -p lifeagent-weekend7-e2e -f "${compose_file}" up -d --wait
-export DATABASE_URL=postgresql+psycopg://lifeagent:lifeagent_e2e@127.0.0.1:15437/lifeagent
 export AUTH_BACKEND=fake GOAL_PLANNER_BACKEND=fake PROGRESS_PARSER_BACKEND=fake ADVISOR_BACKEND=fake REPLANNER_BACKEND=fake COACH_BACKEND=fake
-uv run alembic upgrade head
 uv run uvicorn life_agent_core.main:app --host 127.0.0.1 --port 18007 &
 core_api_pid=$!
 for _ in {1..30}; do
@@ -53,7 +51,7 @@ if [[ "${1:-}" == "--android" ]]; then
     "${adb}" shell input keyevent KEYCODE_WAKEUP
     "${adb}" shell wm dismiss-keyguard
     cd "${repository_root}/android"
-    ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest
+    ./gradlew -Plifeagent.useCloudFirebase=false testDebugUnitTest assembleDebug assembleDebugAndroidTest
     "${adb}" install -r app/build/outputs/apk/debug/app-debug.apk
     "${adb}" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
     mkdir -p "${output_dir}"

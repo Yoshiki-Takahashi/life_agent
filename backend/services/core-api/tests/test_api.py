@@ -1,10 +1,14 @@
 """User-visible contracts: confirmation, isolation, atomic writes, and conflict handling."""
 
+from concurrent.futures import ThreadPoolExecutor
 from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from sqlalchemy.exc import SQLAlchemyError
+from google.api_core.exceptions import Aborted, ServiceUnavailable
+from google.cloud.firestore_v1.document import DocumentReference
+from google.cloud.firestore_v1.query import Query
+from google.cloud.firestore_v1.transaction import Transaction
 
 from life_agent_core.ai_service import AIUnavailableError
 from life_agent_core.coach import get_coach
@@ -80,9 +84,7 @@ def test_plan_progress_advice_and_approved_replan(client, create_goal, title, bo
         )
 
 
-def test_authentication_and_owner_isolation(
-    client, unauthenticated_client, create_goal, db_session
-):
+def test_authentication_and_owner_isolation(client, unauthenticated_client, create_goal):
     own = create_goal()
     foreign = create_goal("他人の筋トレ", owner="other")
     assert unauthenticated_client.get("/api/v1/goals").status_code == 401
@@ -104,7 +106,6 @@ def test_authentication_and_owner_isolation(
         assert save(client, {**own, "id": goal_id}).status_code == 404
 
     def inspect(request):
-        assert not db_session.in_transaction()
         assert {str(g.id) for g in request.goals} == {own["id"]}
         return dict(reply="相談しましょう", intent="discuss", goal_id=None, record_body=None)
 
@@ -135,12 +136,56 @@ def test_invalid_progress_never_partially_updates(client, create_goal, invalid):
     assert client.get(path).json() == goal
 
 
-def test_commit_failure_rolls_back_progress(client, create_goal, db_session, monkeypatch):
+def test_commit_failure_rolls_back_progress(client, create_goal, monkeypatch):
     goal = create_goal()
     with monkeypatch.context() as patch:
-        patch.setattr(db_session, "commit", Mock(side_effect=SQLAlchemyError))
+        patch.setattr(
+            Transaction, "_commit", Mock(side_effect=ServiceUnavailable("private detail"))
+        )
         assert save(client, goal).status_code == 500
     assert client.get(f"/api/v1/goals/{goal['id']}").json() == goal
+
+
+def test_read_conflict_retries_without_duplicate_progress(client, create_goal, monkeypatch):
+    goal = create_goal()
+    original_get = DocumentReference.get
+    conflicted = False
+
+    def get_with_conflict(ref, *args, **kwargs):
+        nonlocal conflicted
+        if kwargs.get("transaction") is not None and not conflicted:
+            conflicted = True
+            raise Aborted("Transient read contention")
+        return original_get(ref, *args, **kwargs)
+
+    monkeypatch.setattr(DocumentReference, "get", get_with_conflict)
+    assert save(client, goal, request_id="retry-conflict").status_code == 200
+    assert save(client, goal, request_id="retry-conflict").status_code == 200
+    saved = client.get(f"/api/v1/goals/{goal['id']}").json()
+    assert saved["metrics"][0]["current_value"] == 1
+    assert len(saved["progress_logs"]) == 1
+
+
+def test_detail_stays_consistent_when_progress_arrives_between_reads(
+    client, create_goal, monkeypatch
+):
+    goal = create_goal()
+    original_stream = Query.stream
+    injected = False
+
+    def stream_after_progress(query, *args, **kwargs):
+        nonlocal injected
+        if kwargs.get("read_time") is not None and not injected:
+            injected = True
+            assert save(client, goal).status_code == 200
+        return original_stream(query, *args, **kwargs)
+
+    monkeypatch.setattr(Query, "stream", stream_after_progress)
+    path = f"/api/v1/goals/{goal['id']}"
+    assert client.get(path).json() == goal
+    current = client.get(path).json()
+    assert current["metrics"][0]["current_value"] == 1
+    assert len(current["progress_logs"]) == 1
 
 
 def test_replan_hides_metrics_without_losing_old_records(client, create_goal):
@@ -234,3 +279,92 @@ def test_progress_after_proposal_cannot_be_erased_by_replan(client, create_goal)
     current = client.get(path).json()
     assert current["metrics"][0]["current_value"] == 10
     assert current["plan_revision"] == goal["plan_revision"]
+
+
+@pytest.mark.parametrize("same_id", [True, False])
+def test_parallel_progress_preserves_history_and_current_value(client, create_goal, same_id):
+    goal = create_goal()
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(
+            pool.map(
+                lambda i: save(client, goal, request_id="same" if same_id else str(i)), range(6)
+            )
+        )
+    assert all(result.status_code == 200 for result in results), [
+        (r.status_code, r.text) for r in results
+    ]
+    result = client.get(f"/api/v1/goals/{goal['id']}").json()
+    expected = 1 if same_id else 6
+    assert result["metrics"][0]["current_value"] == expected
+    assert len(result["progress_logs"]) == expected
+    for response in results:
+        data = response.json()
+        assert data["metrics"][0]["current_value"] == len(data["progress_logs"])
+
+
+def test_parallel_progress_rechecks_target_limit(client, create_goal):
+    goal = create_goal()
+    with ThreadPoolExecutor(max_workers=6) as pool:
+        results = list(pool.map(lambda i: save(client, goal, value=3, request_id=str(i)), range(6)))
+    assert sorted(result.status_code for result in results) == [200] * 4 + [422] * 2
+    result = client.get(f"/api/v1/goals/{goal['id']}").json()
+    assert result["metrics"][0]["current_value"] == 12
+    assert len(result["progress_logs"]) == 4
+
+
+def test_replan_and_progress_cannot_overwrite_each_other(client, create_goal):
+    goal = create_goal()
+    path = f"/api/v1/goals/{goal['id']}"
+    proposal = client.post(path + "/replan/preview", json={"reason": "目標を調整"}).json()
+    assert save(client, goal, value=8).status_code == 200
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        progress = pool.submit(save, client, goal, 2, "later")
+        replan = pool.submit(
+            client.post, path + "/replan/apply", json={"proposal_id": proposal["proposal_id"]}
+        )
+        assert sorted([progress.result().status_code, replan.result().status_code]) == [200, 422]
+    result = client.get(path).json()
+    metric = result["metrics"][0]
+    assert metric["current_value"] <= metric["target_value"]
+    assert (
+        sum(log["metric_updates"][0]["value"] for log in result["progress_logs"])
+        == metric["current_value"]
+    )
+
+
+def test_same_replan_is_applied_once_under_concurrency(client, create_goal):
+    goal = create_goal()
+    path = f"/api/v1/goals/{goal['id']}"
+    proposal = client.post(path + "/replan/preview", json={"reason": "調整"}).json()
+    with ThreadPoolExecutor(max_workers=2) as pool:
+        results = list(
+            pool.map(
+                lambda _: client.post(
+                    path + "/replan/apply", json={"proposal_id": proposal["proposal_id"]}
+                ),
+                range(2),
+            )
+        )
+    assert sorted(result.status_code for result in results) == [200, 409]
+    assert client.get(path).json()["plan_revision"] == 2
+
+
+def test_decimal_progress_and_arbitrary_request_ids_round_trip(client, create_goal):
+    goal = create_goal()
+    for value, request_id in [(0.1, "端末/保存/1"), (0.2, "..")]:
+        for _ in range(2):
+            assert save(client, goal, value=value, request_id=request_id).status_code == 200
+    result = client.get(f"/api/v1/goals/{goal['id']}").json()
+    assert result["metrics"][0]["current_value"] == 0.3
+    assert len(result["progress_logs"]) == 2
+
+
+def test_maintenance_stops_business_requests_but_keeps_health(client, monkeypatch):
+    from life_agent_core.config import get_settings
+
+    monkeypatch.setenv("MAINTENANCE_MODE", "true")
+    get_settings.cache_clear()
+    assert client.get("/health").status_code == 200
+    result = client.post("/api/v1/goals/preview", json={})
+    assert result.status_code == 503
+    assert result.headers["Retry-After"] == "60"

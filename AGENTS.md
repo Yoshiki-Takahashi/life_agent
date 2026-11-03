@@ -50,7 +50,7 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 
 - Backend: `cd backend/services/core-api && uv run ruff check . && uv run pytest`
 - Android: `cd android && ./gradlew testDebugUnitTest assembleDebug`
-- PostgreSQL: `cd backend && docker compose up -d`
+- Firestore Emulator: `gcloud emulators firestore start --host-port=127.0.0.1:8080 --project=demo-lifeagent`（Core APIテストは一時Emulatorを自動起動）
 
 ## コード配置
 

@@ -1,0 +1,106 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "goals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "owner_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "updated_at",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "id",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "goals",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "owner_id",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "created_at",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "id",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "progress_logs",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "recorded_at",
+          "order": "DESCENDING"
+        },
+        {
+          "fieldPath": "id",
+          "order": "DESCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": [
+    {
+      "collectionGroup": "goals",
+      "fieldPath": "description",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "goals",
+      "fieldPath": "title",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "goals",
+      "fieldPath": "metrics",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "goals",
+      "fieldPath": "milestones",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "progress_logs",
+      "fieldPath": "body",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "progress_logs",
+      "fieldPath": "client_request_id",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "progress_logs",
+      "fieldPath": "metric_updates",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "replan_proposals",
+      "fieldPath": "reason",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "replan_proposals",
+      "fieldPath": "proposed_plan",
+      "indexes": []
+    },
+    {
+      "collectionGroup": "replan_proposals",
+      "fieldPath": "diff",
+      "indexes": []
+    }
+  ]
+}

@@ -18,7 +18,7 @@ import org.junit.Test
 import java.time.LocalDate
 import java.util.UUID
 
-/** One user journey through real HTTP and PostgreSQL; no screenshots or internal UI snapshots. */
+/** One user journey through real HTTP and Firestore; no screenshots or internal UI snapshots. */
 class AppFlowTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     @get:Rule val microphone = GrantPermissionRule.grant(Manifest.permission.RECORD_AUDIO)

@@ -15,7 +15,7 @@ Android App
     ↓ 公開HTTP API
 Core API ──→ Goal Planner Service ──→ OpenAI API
     ↓
-PostgreSQL
+Firestore Standard / Emulator
 ```
 
 - Androidの業務通信はCore APIへ集約する。認証はFirebase Authenticationを使う。
@@ -33,6 +33,13 @@ PostgreSQL
 5. lint、型検査、テストを実行する。
 6. AndroidまたはAPIからデモし、READMEを更新する。
 7. 次回作業がなくてもリポジトリが起動可能な状態で終了する。
+
+## 現在のDB開発手順
+
+Core APIの`uv run pytest`は一時Firestore Emulatorを自動起動します。Java 21とgcloudの
+`cloud-firestore-emulator` componentが必要です。APIを継続起動する場合は[Backend手順](../backend/README.md)に従います。
+過去SprintのPostgreSQL/Alembic導入記録は履歴です。現在の移管作業は[Issue #23](https://github.com/Yoshiki-Takahashi/life_agent/issues/23)で管理し、
+クラウド切替・48時間観察・撤去は[移管手順](../infra/gcp/firestore-migration-runbook.md)に従います。
 
 ## 開発ロードマップ
 

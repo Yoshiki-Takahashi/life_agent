@@ -4,8 +4,7 @@ from functools import lru_cache
 from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException
-from sqlalchemy import select
-from sqlalchemy.orm import selectinload
+from google.cloud.firestore_v1.base_query import FieldFilter
 
 from life_agent_core.ai_service import (
     AIUnavailableError,
@@ -13,7 +12,7 @@ from life_agent_core.ai_service import (
 )
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
-from life_agent_core.database import DatabaseSession
+from life_agent_core.database import Database, decode
 from life_agent_core.models import (
     Goal,
 )
@@ -123,16 +122,18 @@ def get_coach() -> Coach:
 @router.post("/api/v1/coach/messages", response_model=CoachReply)
 def coach_message(
     payload: CoachRequest,
-    db: DatabaseSession,
+    db: Database,
     user_id: CurrentUserId,
     coach: Annotated[Coach, Depends(get_coach)],
 ) -> CoachReply:
-    goals = db.scalars(
-        select(Goal)
-        .where(Goal.owner_id == user_id)
-        .options(selectinload(Goal.metrics))
-        .order_by(Goal.created_at, Goal.id)
-    ).all()
+    snapshots = (
+        db.collection("goals")
+        .where(filter=FieldFilter("owner_id", "==", user_id))
+        .order_by("created_at")
+        .order_by("id")
+        .stream()
+    )
+    goals = [Goal.model_validate(decode(snapshot.to_dict())) for snapshot in snapshots]
     request = CoachAIRequest(
         body=payload.body,
         history=payload.history,
@@ -156,7 +157,6 @@ def coach_message(
             for goal in goals
         ],
     )
-    db.rollback()
     try:
         return validate_reply(CoachReply.model_validate(coach.respond(request)), request)
     except (AIUnavailableError, ValueError, TypeError) as error:

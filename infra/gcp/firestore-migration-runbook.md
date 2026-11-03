@@ -91,11 +91,12 @@ Firestore側で修正し、SQL復帰が必要なら新データを退避し逆�
    旧SQL revisionを削除し、旧migration Job `lifeagent-db-migrate`を削除する。
 2. `lifeagent-dev-db`の対象、48時間経過、最終dumpとチェックサムを再確認する。
    SQLの削除保護を解除し、同インスタンスを削除する。保持されるバックアップ・IPの有無を確認する。
-3. `lifeagent-db-password`、Coreのcloudsql.client、SQL専用GitHub Variable `CLOUD_SQL_CONNECTION_NAME`を
+3. `lifeagent-db-password`、Coreのcloudsql.client、GitHub deployerのcloudsql.admin、SQL専用GitHub Variable `CLOUD_SQL_CONNECTION_NAME`を
    他用途で使わないことを確認して整理する。Firestore・Firebase・OpenAI Secret・内部AI IAMを保持する。
 4. `budget-alerts.json`からSQL専用予算を外し、同じ予算だけを削除する。全体予算と通知を残す。
 5. SQLをlistで再取得し、消えていることを確認する。削除日時、残存依存の確認結果をIssueへ記録する。
 6. 課金反映後、削除後利用日のSQL compute/storage/IPが止まり、Firestore使用量が想定内であることを確認する。
+   SQL管理権限を外した後はstatusスクリプトがSQL一覧を取得できない場合があるため、削除証跡をIssueに残す。
 
 ## 最終記録
 

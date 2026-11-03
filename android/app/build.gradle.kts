@@ -20,7 +20,10 @@ fun apiBaseUrl(environment: String): String {
 
 fun authProperties(environment: String): Properties {
     val configFile = rootProject.file("config/auth-$environment.properties")
-    return Properties().apply { configFile.inputStream().use(::load) }
+    return Properties().apply {
+        configFile.inputStream().use(::load)
+        putIfAbsent("GOOGLE_WEB_CLIENT_ID", "")
+    }
 }
 
 val useCloudFirebaseForDebug =
@@ -82,6 +85,9 @@ dependencies {
     coreLibraryDesugaring("com.android.tools:desugar_jdk_libs:2.1.5")
     implementation(platform(libs.firebase.bom))
     implementation(libs.firebase.auth)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.google.id)
     implementation(platform(libs.androidx.compose.bom))
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.compose.material3)

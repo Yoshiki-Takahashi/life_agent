@@ -14,7 +14,7 @@ flowchart LR
 | 配置先 | 担当 |
 | --- | --- |
 | Android | 画面、入力と確認、セッション内会話、グラフ、端末内の振り返り・通知 |
-| Firebase Authentication | メール・パスワード認証、利用者IDとID Tokenの発行 |
+| Firebase Authentication | メール・パスワード／Google認証、アカウント連携、利用者IDとID Tokenの発行 |
 | Core API | Token検証、所有者認可、業務ルール検証、DB transaction、保存と重複・競合の防止 |
 | AI接続サービス | プロンプト、Structured Output生成、Provider接続、Fake、AI障害の変換 |
 | PostgreSQL | 目標・計画・実績・再計画候補の永続化 |
@@ -68,3 +68,8 @@ Androidの`ui/`は認証・一覧・新規作成・詳細・コーチ・振り�
 音声入力はAndroid → OSの音声認識サービスという別の境界を使います。
 API 31以降で利用可能なら端末内認識を選び、それ以外は説明・本人操作後に既定サービスを使います。
 認識失敗時に端末内から外部サービスへ自動切替はしません。本人が既定サービスへの切替を選び、送信先の説明を確認して再度録音開始を選んだ場合だけ使います。Core API・内部AIサービスへ渡すのは、本文に追加して本人が送信した文字列だけです。
+
+Googleのアカウント選択はAndroid Credential Managerが担当します。Google ID TokenはFirebase SDKで検証・交換し、Core APIの認可はFirebase uidのままです。
+既存アカウントからの連携は`linkWithCredential`を使い、別アカウントの所有権を移しません。
+Firebaseの認証変更は直列化し、取消済みのTaskが完了してもログアウトを後から打ち消さないようにします。
+画面状態はログインごとのセッションで分け、遅い結果や未保存入力を次のログインへ引き継ぎません。

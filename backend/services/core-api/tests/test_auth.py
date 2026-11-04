@@ -69,7 +69,10 @@ def test_other_uids_cannot_use_any_business_api(restricted_api, token):
     ]
     for method, path in operations:
         response = client.request(
-            method, path, headers={"Authorization": f"Bearer {token}"}, json={}
+            method,
+            path,
+            headers={"Authorization": f"Bearer {token}"},
+            **({"json": {}} if method == "POST" else {}),
         )
         assert response.status_code == 403, path
     db.collection.assert_not_called()

@@ -74,10 +74,12 @@ def test_fixed_contracts_through_internal_endpoints(client, title, name, unit, b
 
 def test_shared_provider_uses_structured_private_bounded_calls():
     factory = MagicMock()
+    settings = Settings(openai_api_key="unit-test-secret")
+    assert "unit-test-secret" not in repr(settings)
     expected = Advice(summary="次の一歩", next_actions=["5分読む"])
     factory.return_value.responses.parse.return_value = SimpleNamespace(output_parsed=expected)
     assert (
-        generate(Settings(openai_api_key="test"), factory, Advice, "prompt", {"owned": "context"})
+        generate(settings, factory, Advice, "prompt", {"owned": "context"})
         == expected
     )
     call = factory.return_value.responses.parse.call_args.kwargs

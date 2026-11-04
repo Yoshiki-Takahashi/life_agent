@@ -21,6 +21,8 @@
 | ログ | Python logging、Cloud Logging | ローカル / GCP |
 
 AI APIキーをAndroidへ含めません。AndroidはFirebase ID TokenをFastAPIへ送り、Backendが認証、DB操作、AI呼び出しを担当します。
+個人利用中のCore APIは`ALLOWED_USER_ID`に設定した本人のFirebase uidだけを許可します。
+Cloud Runでは必須です。新規登録停止・回数制限はこの制限とは別で、今回の変更では追加しません。
 
 ## 開発中に使用するクラウドリソース
 

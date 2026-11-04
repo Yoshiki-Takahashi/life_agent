@@ -10,7 +10,7 @@ from life_agent_goal_planner.config import Settings
 from life_agent_goal_planner.planner import OpenAIGoalPlanner
 from life_agent_goal_planner.progress import OpenAIAdvisor, OpenAIProgressParser
 from life_agent_goal_planner.replan import OpenAIReplanner
-from life_agent_goal_planner.schemas import GoalPlanRequest
+from life_agent_goal_planner.schemas import GoalInput, GoalPlanRequest
 
 pytestmark = [
     pytest.mark.live_ai,
@@ -28,8 +28,19 @@ pytestmark = [
 )
 def test_three_domain_regression(title, name, unit, body):
     settings = Settings()
-    plan = OpenAIGoalPlanner(settings).generate(
-        GoalPlanRequest(title=title, target_date=date.today() + timedelta(days=90))
+    planner = OpenAIGoalPlanner(settings)
+    goal_input = GoalInput(title=title, target_date=date.today() + timedelta(days=90))
+    questions = planner.questions(goal_input)
+    assert 3 <= len(questions.questions) <= 8
+    assert all("?" in q or "？" in q or "か" in q for q in questions.questions)
+    plan = planner.generate(
+        GoalPlanRequest(
+            **goal_input.model_dump(),
+            answers=[
+                dict(question=q, answer=index % 2 == 0)
+                for index, q in enumerate(questions.questions)
+            ],
+        )
     )
     assert plan.metrics and plan.milestones
     context = goal(title, "無理なく", [(name, unit, 0, 12)])

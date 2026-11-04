@@ -6,6 +6,9 @@ import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.rule.GrantPermissionRule
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.matcher.ViewMatchers.withId
 import com.yoshiki.lifeagent.data.*
 import com.yoshiki.lifeagent.ui.LifeAgentApp
 import com.yoshiki.lifeagent.ui.LocalSpeechRecognitionFactory
@@ -22,6 +25,76 @@ import java.util.UUID
 class AppFlowTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
     @get:Rule val microphone = GrantPermissionRule.grant(Manifest.permission.RECORD_AUDIO)
+
+    @Test fun goalQuestionsEditingAndDateSelectionSaveOnlyAfterConfirmation() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("networkE2E") == "true")
+        val owner = "creation-e2e-${UUID.randomUUID()}"
+        val api = Network.createGoalRepository("http://127.0.0.1:18007/") { owner }
+        var failSave = true
+        val repository = object : GoalRepository by api {
+            override suspend fun confirmGoal(plan: GoalPlan): Goal {
+                if (failSave) { failSave = false; error("temporary failure") }
+                return api.confirmGoal(plan)
+            }
+        }
+        compose.setContent { LifeAgentTheme { LifeAgentApp(repository, owner, {}) } }
+        compose.onNodeWithText("新規作成").performClick()
+        compose.onNodeWithText("タイトル").performTextReplacement("読書の習慣")
+        compose.onNodeWithText("Goal期限を選ぶ").performScrollTo().performClick()
+        onView(withId(android.R.id.button1)).perform(click())
+        compose.onNodeWithText("質問へ進む").performScrollTo().performClick()
+        waitFor("目標を具体化")
+        compose.onNodeWithText("回答から計画を作る").performScrollTo().assertIsNotEnabled()
+        repeat(3) { index ->
+            compose.onNode(hasText("No") and hasAnyAncestor(hasTestTag("question-$index")))
+                .performScrollTo().performClick()
+        }
+        runBlocking { assertTrue(api.listGoals().isEmpty()) }
+        compose.onNodeWithText("回答から計画を作る").performScrollTo().performClick()
+        waitFor("計画を確認")
+        field("metric-0", "Metric名").performTextReplacement("読了冊数（確認後）")
+        compose.onNodeWithText("戻る").performClick()
+        compose.onNode(hasText("Yes") and hasAnyAncestor(hasTestTag("question-0")))
+            .performScrollTo().performClick()
+        compose.onNodeWithText("回答から計画を作る").performScrollTo().performClick()
+        compose.onNodeWithText("再生成しますか？").assertIsDisplayed()
+        compose.onNodeWithText("戻って確認").performClick()
+        compose.onNode(hasText("No") and hasAnyAncestor(hasTestTag("question-0")))
+            .performScrollTo().performClick()
+        compose.onNodeWithText("回答から計画を作る").performScrollTo().performClick()
+        waitFor("計画を確認")
+        field("metric-0", "Metric名").assertTextContains("読了冊数（確認後）")
+        compose.onNodeWithText("Metricを追加").performScrollTo().performClick()
+        field("metric-1", "Metric名").performScrollTo().performTextReplacement("読んだ時間")
+        field("metric-1", "目標値").performScrollTo().performTextReplacement("60")
+        field("metric-1", "単位").performScrollTo().performTextReplacement("分")
+        field("metric-0", "Metricを削除").performScrollTo().performClick()
+        field("metric-0", "Metric名").assertTextContains("読んだ時間")
+        repeat(2) { field("milestone-0", "Milestoneを削除").performScrollTo().performClick() }
+        field("milestone-0", "Milestoneを削除").assertIsNotEnabled()
+        compose.onNodeWithText("Milestoneを追加").performScrollTo().performClick()
+        field("milestone-1", "Milestone名").performScrollTo().performTextReplacement("読み方を振り返る")
+        // Milestone dates use the same calendar form as the Goal date.
+        compose.onNode(hasClickAction() and hasAnyAncestor(hasTestTag("milestone-1")) and
+            hasText("年", substring=true)).performScrollTo().performClick()
+        onView(withId(android.R.id.button1)).perform(click())
+        runBlocking { assertTrue(api.listGoals().isEmpty()) }
+        compose.onNodeWithText("この計画で保存する").performScrollTo().performClick()
+        waitFor("保存できませんでした。編集内容を確認して再試行してください")
+        field("metric-0", "Metric名").performScrollTo().assertTextContains("読んだ時間")
+        compose.onNodeWithText("この計画で保存する").performScrollTo().performClick()
+        waitFor("概要")
+        runBlocking {
+            val saved = api.getGoal(api.listGoals().single().id)
+            assertEquals(listOf("読んだ時間"), saved.metrics.map { it.name })
+            assertEquals(60.0, saved.metrics.single().targetValue, 0.0)
+            assertEquals(2, saved.milestones.size)
+            assertEquals("読み方を振り返る", saved.milestones.last().title)
+        }
+    }
+
+    private fun field(parent: String, text: String) =
+        compose.onNode(hasText(text) and hasAnyAncestor(hasTestTag(parent)))
 
     @Test fun globalConversationConfirmationRetryNavigationAndTabs() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("networkE2E") == "true")

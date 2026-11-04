@@ -26,8 +26,10 @@ from life_agent_goal_planner.schemas import (
     CoachAIRequest,
     CoachReply,
     GeneratedReplan,
+    GoalInput,
     GoalPlan,
     GoalPlanRequest,
+    GoalQuestions,
     ProgressPreview,
     ProgressPreviewAIRequest,
     ReplanAIRequest,
@@ -79,6 +81,16 @@ ReplannerDependency = Annotated[Replanner, Depends(get_replanner)]
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.post("/internal/v1/goal-questions", response_model=GoalQuestions)
+def create_goal_questions(payload: GoalInput, planner: Planner) -> GoalQuestions:
+    try:
+        return GoalQuestions.model_validate(planner.questions(payload))
+    except (AIUnavailableError, ValueError, TypeError) as error:
+        raise HTTPException(
+            status_code=503, detail="質問を生成できませんでした。再試行してください"
+        ) from error
 
 
 @app.post("/internal/v1/goal-plans", response_model=GoalPlan)

@@ -33,8 +33,38 @@ class GoalInput(BaseModel):
         return value
 
 
+class GoalQuestions(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    questions: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        min_length=3, max_length=8
+    )
+
+    @field_validator("questions")
+    @classmethod
+    def unique_questions(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("質問を重複させないでください")
+        return value
+
+
+class GoalAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=200)
+    answer: bool = Field(strict=True)
+
+
 class GoalPreviewRequest(GoalInput):
-    pass
+    answers: list[GoalAnswer] = Field(default_factory=list, max_length=8)
+
+    @field_validator("answers")
+    @classmethod
+    def unique_answers(cls, value: list[GoalAnswer]) -> list[GoalAnswer]:
+        questions = [item.question for item in value]
+        if len(questions) != len(set(questions)):
+            raise ValueError("同じ質問への回答を重複させないでください")
+        return value
 
 
 class MetricDraft(BaseModel):
@@ -62,8 +92,8 @@ class GoalPlan(BaseModel):
     title: str
     description: str | None
     target_date: date
-    metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
-    milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
+    metrics: list[MetricDraft] = Field(min_length=1, max_length=10)
+    milestones: list[MilestoneDraft] = Field(min_length=1, max_length=10)
 
     @model_validator(mode="after")
     def validate_milestone_dates(self) -> "GoalPlan":
@@ -113,8 +143,8 @@ class ReplanApplyRequest(BaseModel):
 
 
 class GoalConfirmRequest(GoalInput):
-    metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
-    milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
+    metrics: list[MetricDraft] = Field(min_length=1, max_length=10)
+    milestones: list[MilestoneDraft] = Field(min_length=1, max_length=10)
 
     @model_validator(mode="after")
     def validate_milestone_dates(self) -> "GoalConfirmRequest":
@@ -159,7 +189,7 @@ class ProgressMetricUpdateRequest(BaseModel):
 class ProgressLogCreateRequest(BaseModel):
     body: str = Field(min_length=1, max_length=2000)
     client_request_id: str = Field(min_length=1, max_length=64)
-    metric_updates: list[ProgressMetricUpdateRequest] = Field(min_length=1, max_length=3)
+    metric_updates: list[ProgressMetricUpdateRequest] = Field(min_length=1, max_length=10)
 
     @field_validator("body", "client_request_id", mode="before")
     @classmethod
@@ -227,7 +257,7 @@ class ProgressPreviewRequest(BaseModel):
 
 class ProgressPreview(BaseModel):
     model_config = ConfigDict(extra="forbid")
-    metric_updates: list[ProgressMetricUpdateRequest] = Field(max_length=3)
+    metric_updates: list[ProgressMetricUpdateRequest] = Field(max_length=10)
     warnings: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(max_length=3)
 
     @model_validator(mode="after")

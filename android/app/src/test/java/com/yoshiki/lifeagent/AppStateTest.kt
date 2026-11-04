@@ -89,6 +89,9 @@ class AppStateTest {
         val creation = GoalViewModel(repository)
         creation.updateTitle("本を読む")
         creation.updateTargetDate(LocalDate.now().plusDays(90).toString())
+        creation.requestQuestions()
+        advanceUntilIdle()
+        creation.uiState.value.questions.indices.forEach { creation.answerQuestion(it, false) }
         creation.previewGoal()
         advanceUntilIdle()
         assertEquals(0, repository.confirmCalls)
@@ -106,6 +109,117 @@ class AppStateTest {
         advanceUntilIdle()
         assertEquals(1, repository.applyCalls)
         assertEquals(2, detail.uiState.value.goal!!.planRevision)
+    }
+
+    @Test fun questionsAndEditedPlanSurviveBackNavigationAndGenerationFailure() = runTest(dispatcher) {
+        val repository = TestGoals()
+        val creation = GoalViewModel(repository)
+        creation.updateTitle("読書")
+        creation.updateTargetDate(LocalDate.now().plusDays(90).toString())
+        repository.failQuestions = true
+        creation.requestQuestions()
+        advanceUntilIdle()
+        assertNotNull(creation.uiState.value.formError)
+        assertEquals("読書", creation.uiState.value.title)
+        creation.requestQuestions()
+        advanceUntilIdle()
+        creation.previewGoal()
+        assertTrue(repository.previewRequests.isEmpty()) // Unanswered is never No.
+        creation.uiState.value.questions.indices.forEach { creation.answerQuestion(it, false) }
+        creation.previewGoal()
+        advanceUntilIdle()
+        assertTrue(repository.previewRequests.single().answers.all { !it.answer })
+        creation.updateMetricName(0, "編集した項目")
+        val edited = creation.uiState.value.metrics
+        creation.requestQuestions() // Returning through the form reuses the same questions.
+        creation.previewGoal() // Unchanged answers reopen the edited plan without regenerating it.
+        advanceUntilIdle()
+        assertEquals(1, repository.previewRequests.size)
+        assertEquals(2, repository.questionCalls)
+        creation.answerQuestion(0, true)
+        creation.previewGoal()
+        assertEquals(1, repository.previewRequests.size)
+        assertEquals(DraftReplacement.PLAN, creation.uiState.value.replacement)
+        creation.dismissReplacement()
+        assertEquals(edited, creation.uiState.value.metrics)
+        creation.previewGoal()
+        repository.failPreview = true
+        creation.confirmReplacement()
+        advanceUntilIdle()
+        assertNotNull(creation.uiState.value.questionError)
+        assertEquals(edited, creation.uiState.value.metrics)
+        creation.confirmGoal()
+        assertEquals(0, repository.confirmCalls) // A stale plan cannot be saved.
+        creation.previewGoal()
+        creation.confirmReplacement()
+        advanceUntilIdle()
+        assertTrue(repository.previewRequests.last().answers.first().answer)
+        assertNotEquals(edited, creation.uiState.value.metrics)
+        creation.updateTitle("別の目標")
+        creation.requestQuestions()
+        assertEquals(DraftReplacement.QUESTIONS, creation.uiState.value.replacement)
+        assertEquals(2, repository.questionCalls)
+    }
+
+    @Test fun addedAndDeletedItemsKeepTheirIdentityAndSaveInDisplayedOrder() = runTest(dispatcher) {
+        val repository = TestGoals()
+        val creation = GoalViewModel(repository)
+        creation.updateTitle("読書")
+        val date = LocalDate.now().plusDays(90).toString()
+        creation.updateTargetDate(date)
+        creation.requestQuestions()
+        advanceUntilIdle()
+        creation.uiState.value.questions.indices.forEach { creation.answerQuestion(it, true) }
+        creation.previewGoal()
+        advanceUntilIdle()
+        repeat(12) { creation.addMetric(); creation.addMilestone() }
+        assertEquals(10, creation.uiState.value.metrics.size)
+        assertEquals(10, creation.uiState.value.milestones.size)
+        val remainingId = creation.uiState.value.metrics[1].id
+        creation.updateMetricName(1, "残す項目")
+        creation.removeMetric(0)
+        assertEquals(remainingId, creation.uiState.value.metrics[0].id)
+        assertEquals("残す項目", creation.uiState.value.metrics[0].name)
+        creation.confirmGoal()
+        assertEquals(0, repository.confirmCalls) // Added rows require valid content.
+        creation.uiState.value.metrics.indices.forEach {
+            creation.updateMetricName(it, "項目$it")
+            creation.updateMetricUnit(it, "件")
+            creation.updateMetricValue(it, "12")
+        }
+        creation.uiState.value.milestones.indices.forEach {
+            creation.updateMilestoneTitle(it, "到達点$it")
+            creation.updateMilestoneDate(it, date)
+        }
+        repository.failConfirm = true
+        val edited = creation.uiState.value.metrics
+        creation.confirmGoal()
+        advanceUntilIdle()
+        assertNotNull(creation.uiState.value.planError)
+        assertEquals(edited, creation.uiState.value.metrics)
+        creation.confirmGoal()
+        advanceUntilIdle()
+        assertEquals((0..8).toList(), repository.confirmed!!.metrics.map { it.position })
+        assertEquals((0..9).toList(), repository.confirmed!!.milestones.map { it.position })
+        repeat(12) { creation.removeMetric(0); creation.removeMilestone(0) }
+        assertEquals(1, creation.uiState.value.metrics.size)
+        assertEquals(1, creation.uiState.value.milestones.size)
+    }
+
+    @Test fun resetDiscardsDelayedQuestionResults() = runTest(dispatcher) {
+        val pending = CompletableDeferred<GoalQuestions>()
+        val repository = TestGoals().apply { pendingQuestions = pending }
+        val creation = GoalViewModel(repository)
+        creation.updateTitle("読書")
+        creation.updateTargetDate(LocalDate.now().plusDays(90).toString())
+        creation.requestQuestions()
+        runCurrent()
+        creation.resetDraft()
+        pending.complete(GoalQuestions(listOf("古い質問1", "古い質問2", "古い質問3")))
+        advanceUntilIdle()
+        assertEquals("", creation.uiState.value.title)
+        assertTrue(creation.uiState.value.questions.isEmpty())
+        assertFalse(creation.uiState.value.navigateToQuestions)
     }
 
     @Test fun logoutClearsUserAndCredentials() = runTest(dispatcher) {
@@ -150,6 +264,13 @@ private class TestGoals : GoalRepository {
     var failAdvice = false
     var confirmCalls = 0
     var applyCalls = 0
+    var questionCalls = 0
+    var failQuestions = false
+    var failPreview = false
+    var failConfirm = false
+    var pendingQuestions: CompletableDeferred<GoalQuestions>? = null
+    val previewRequests = mutableListOf<GoalPreviewRequest>()
+    var confirmed: GoalPlan? = null
     private fun goal(id: String, metricId: String, unit: String) = Goal(id, id, null, date,
         "active", "2026-01-01T00:00:00Z", listOf(Metric(metricId, 12.0, unit, id=metricId)),
         List(3) { Milestone("中間目標", date) })
@@ -177,9 +298,24 @@ private class TestGoals : GoalRepository {
         if (failAdvice) { failAdvice = false; error("unavailable") }
         return Advice("次の一歩", listOf("無理のない量を選ぶ"))
     }
-    override suspend fun previewGoal(title: String, description: String?, targetDate: String) =
-        getGoal("reading").let { GoalPlan(title, description, targetDate, it.metrics, it.milestones) }
-    override suspend fun confirmGoal(plan: GoalPlan): Goal { confirmCalls++; return getGoal("reading") }
+    override suspend fun goalQuestions(title: String, description: String?, targetDate: String): GoalQuestions {
+        questionCalls++
+        pendingQuestions?.let { return it.await() }
+        if (failQuestions) { failQuestions = false; error("unavailable") }
+        return GoalQuestions(listOf("時間も測りますか？", "段階を増やしますか？", "経験がありますか？"))
+    }
+    override suspend fun previewGoal(title: String, description: String?, targetDate: String,
+        answers: List<GoalAnswer>): GoalPlan {
+        previewRequests += GoalPreviewRequest(title, description, targetDate, answers)
+        if (failPreview) { failPreview = false; error("unavailable") }
+        return getGoal("reading").let { GoalPlan(title, description, targetDate, it.metrics, it.milestones) }
+    }
+    override suspend fun confirmGoal(plan: GoalPlan): Goal {
+        confirmCalls++
+        if (failConfirm) { failConfirm = false; error("unavailable") }
+        confirmed = plan
+        return getGoal("reading")
+    }
     override suspend fun previewReplan(goalId: String, reason: String) = ReplanProposal("proposal", 1, reason,
         previewGoal(goalId, null, date), emptyList(), "2026-01-01T00:00:00Z")
     override suspend fun applyReplan(goalId: String, proposalId: String): Goal {

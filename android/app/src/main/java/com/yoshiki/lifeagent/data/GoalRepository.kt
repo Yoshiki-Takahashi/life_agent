@@ -17,7 +17,9 @@ import retrofit2.http.Path
 interface GoalRepository {
     suspend fun coachMessage(body: String, history: List<CoachMessage>): CoachReply
     suspend fun listGoals(): List<GoalSummary>
-    suspend fun previewGoal(title: String, description: String?, targetDate: String): GoalPlan
+    suspend fun goalQuestions(title: String, description: String?, targetDate: String): GoalQuestions
+    suspend fun previewGoal(title: String, description: String?, targetDate: String,
+        answers: List<GoalAnswer> = emptyList()): GoalPlan
     suspend fun confirmGoal(plan: GoalPlan): Goal
     suspend fun getGoal(goalId: String): Goal
     suspend fun previewProgress(goalId: String, body: String): ProgressPreview
@@ -48,9 +50,13 @@ class HttpGoalRepository(
         title: String,
         description: String?,
         targetDate: String,
+        answers: List<GoalAnswer>,
     ): GoalPlan = api.previewGoal(
-        authorization(), GoalPreviewRequest(title, description, targetDate)
+        authorization(), GoalPreviewRequest(title, description, targetDate, answers)
     ).toGoalPlan()
+
+    override suspend fun goalQuestions(title: String, description: String?, targetDate: String): GoalQuestions =
+        api.goalQuestions(authorization(), GoalQuestionsRequest(title, description, targetDate))
 
     override suspend fun confirmGoal(plan: GoalPlan): Goal = api.confirmGoal(
         authorization(),
@@ -93,6 +99,12 @@ class HttpGoalRepository(
 }
 
 interface GoalApi {
+    @POST("api/v1/goals/questions")
+    suspend fun goalQuestions(
+        @Header("Authorization") authorization: String,
+        @Body request: GoalQuestionsRequest,
+    ): GoalQuestions
+
     @POST("api/v1/coach/messages")
     suspend fun coachMessage(
         @Header("Authorization") authorization: String,
@@ -181,10 +193,24 @@ data class GoalSummaryResponse(
 }
 
 @Serializable
+data class GoalQuestionsRequest(
+    val title: String,
+    val description: String? = null,
+    @SerialName("target_date") val targetDate: String,
+)
+
+@Serializable
+data class GoalQuestions(val questions: List<String>)
+
+@Serializable
+data class GoalAnswer(val question: String, val answer: Boolean)
+
+@Serializable
 data class GoalPreviewRequest(
     val title: String,
     val description: String? = null,
     @SerialName("target_date") val targetDate: String,
+    val answers: List<GoalAnswer> = emptyList(),
 )
 
 @Serializable

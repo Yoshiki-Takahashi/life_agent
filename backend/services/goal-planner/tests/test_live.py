@@ -43,6 +43,13 @@ def test_three_domain_regression(title, name, unit, body):
         )
     )
     assert plan.metrics and plan.milestones
+    # Known incompatible observation/rate metrics cannot be recorded as positive increments.
+    # This catches past failures, rather than replacing a review of generated content.
+    for metric in plan.metrics:
+        assert not any(
+            token in metric.name + metric.unit
+            for token in ("連続", "最大", "最高", "週あたり", "/週")
+        )
     context = goal(title, "無理なく", [(name, unit, 0, 12)])
     assert OpenAIProgressParser(settings).parse(context, body).metric_updates[0].value == 1
     assert OpenAIAdvisor(settings).advise(context).next_actions

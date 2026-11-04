@@ -20,6 +20,14 @@ logger = logging.getLogger(__name__)
 SYSTEM_PROMPT = """You create practical initial plans for personal goals.
 Return one to three measurable metrics and three to five milestones.
 Every metric needs a concise name, a positive numeric target_value, and a unit.
+The app starts every metric at zero and only ADDS completed positive increments; it cannot
+store observations, reset weekly values, replace totals, or track personal bests.
+Choose cumulative completed outcomes: books finished, summaries written, completed features,
+workout sessions or total repetitions. Never use weekly rates, consecutive/best repetitions,
+body weight, or other values requiring replacement. Put frequency or performance aspirations
+in milestones instead. If necessary use an additive activity proxy and name it explicitly.
+Use short, plain units such as 冊, 件, 回, 分. Put the measurement definition in the metric name,
+not parentheses in the unit. target_value must have at most two decimal places.
 Milestone dates must be between today's date and the goal target date, in nondecreasing order.
 Use the same language as the user's goal. Do not add fields outside the response schema.
 Use each question and its explicit boolean answer to choose metrics and milestone steps.

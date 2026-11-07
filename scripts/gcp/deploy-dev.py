@@ -33,7 +33,9 @@ class Deployment:
         self.region = os.environ["REGION"]
         self.sha = os.environ["GITHUB_SHA"]
         run = f"{os.environ['GITHUB_RUN_ID']}-{os.environ['GITHUB_RUN_ATTEMPT']}"
-        self.tag = f"deploy-{self.sha[:12]}-{run}"
+        # Keep the tag short enough for the service's tagged DNS hostname.
+        # The run ID and attempt are unique; the full commit is recorded below.
+        self.tag = f"deploy-{run}"
         self.services = {
             "core": os.environ["CORE_API_SERVICE"],
             "planner": os.environ["GOAL_PLANNER_SERVICE"],

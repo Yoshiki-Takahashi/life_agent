@@ -186,6 +186,26 @@ def test_verified_candidate_pair_uses_pinned_digest_identity_and_audience(cloud)
     )
 
 
+def test_feedback_secret_is_only_bound_to_core_not_planner_or_verification_job(cloud, monkeypatch):
+    monkeypatch.setenv("FEEDBACK_GITHUB_SECRET_NAME", "feedback-key")
+    monkeypatch.setenv("FEEDBACK_GITHUB_REPOSITORY", "owner/feedback")
+    deploy.Deployment().run()
+    core = next(args for args in cloud.calls if args[:3] == ["run", "deploy", "core"])
+    planner = next(args for args in cloud.calls if args[:3] == ["run", "deploy", "planner"])
+    assert "--update-secrets=FEEDBACK_GITHUB_TOKEN=feedback-key:latest" in core
+    assert "FEEDBACK_GITHUB_REPOSITORY=owner/feedback" in cloud.environment["core"]
+    assert all("feedback-key" not in arg for arg in planner)
+    assert "FEEDBACK_GITHUB_TOKEN" not in cloud.job_environment
+    assert "feedback-key" not in Path("deployment-result.json").read_text()
+
+
+def test_unconfigured_feedback_keeps_deployment_working(cloud, monkeypatch):
+    monkeypatch.delenv("FEEDBACK_GITHUB_SECRET_NAME", raising=False)
+    deploy.Deployment().run()
+    core = next(args for args in cloud.calls if args[:3] == ["run", "deploy", "core"])
+    assert "--remove-secrets=FEEDBACK_GITHUB_TOKEN,OPENAI_API_KEY,DB_PASSWORD" in core
+
+
 @pytest.mark.parametrize("failure", ["job", "http", "planner-public"])
 def test_failed_candidate_checks_keep_existing_traffic(cloud, failure):
     cloud.fail_job = failure == "job"

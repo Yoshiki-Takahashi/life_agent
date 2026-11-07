@@ -41,6 +41,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yoshiki.lifeagent.data.AuthRepository
 import com.yoshiki.lifeagent.data.AuthUser
 import com.yoshiki.lifeagent.data.GoalRepository
+import com.yoshiki.lifeagent.data.FeedbackRepository
 import com.yoshiki.lifeagent.R
 import com.yoshiki.lifeagent.data.AuthFailure
 import com.yoshiki.lifeagent.data.GoogleSignIn
@@ -223,7 +224,8 @@ fun AuthScreen(
 }
 
 @Composable
-fun LifeAgentSession(repository: GoalRepository, auth: AuthViewModel, google: GoogleSignIn? = null,
+fun LifeAgentSession(repository: GoalRepository, auth: AuthViewModel, feedbackRepository: FeedbackRepository,
+    google: GoogleSignIn? = null,
     onSignOut: () -> Unit = { auth.signOut { if (google?.configured == true) google.clear() } }) {
     val state by auth.uiState.collectAsState()
     val user = state.user
@@ -232,7 +234,7 @@ fun LifeAgentSession(repository: GoalRepository, auth: AuthViewModel, google: Go
             googleAvailable = google?.configured == true, onGoogleSignIn = { google?.let { auth.googleSignIn(it) } })
     } else {
         key(user.uid, state.sessionId) {
-            LifeAgentApp(repository, user.uid, onSignOut, sessionKey = "${user.uid}-${state.sessionId}",
+            LifeAgentApp(repository, user.uid, onSignOut, feedbackRepository, sessionKey = "${user.uid}-${state.sessionId}",
                 accountAction = {
                     TextButton(onClick = auth::requestGoogleLink,
                         enabled = google?.configured == true && !user.googleLinked && !state.isLoading) {

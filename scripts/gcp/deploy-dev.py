@@ -252,6 +252,14 @@ class Deployment:
                 ADVISOR_BACKEND="http",
                 REPLANNER_BACKEND="http",
                 COACH_BACKEND="http",
+                FEEDBACK_GITHUB_REPOSITORY=os.getenv("FEEDBACK_GITHUB_REPOSITORY")
+                or "Yoshiki-Takahashi/life_agent",
+            )
+            feedback_secret = os.getenv("FEEDBACK_GITHUB_SECRET_NAME")
+            feedback_secret_option = (
+                f"--update-secrets=FEEDBACK_GITHUB_TOKEN={feedback_secret}:latest"
+                if feedback_secret
+                else "--remove-secrets=FEEDBACK_GITHUB_TOKEN,OPENAI_API_KEY,DB_PASSWORD"
             )
             self.stage(
                 "core",
@@ -259,7 +267,8 @@ class Deployment:
                 "--allow-unauthenticated",
                 "--port=8000",
                 "--clear-cloudsql-instances",
-                "--remove-secrets=OPENAI_API_KEY,DB_PASSWORD",
+                feedback_secret_option,
+                *(["--remove-secrets=OPENAI_API_KEY,DB_PASSWORD"] if feedback_secret else []),
             )
             self.check_pair(core_env)
             if not self.current():

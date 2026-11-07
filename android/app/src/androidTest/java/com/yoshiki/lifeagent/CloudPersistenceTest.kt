@@ -56,7 +56,8 @@ class CloudPersistenceTest {
             assertEquals(applied, api.getGoal(goal.id))
             applied
         }
-        compose.setContent { LifeAgentTheme { LifeAgentApp(api, uid, {}) } }
+        compose.setContent { LifeAgentTheme { LifeAgentApp(api, uid, {},
+            Network.createFeedbackRepository(BuildConfig.CORE_API_BASE_URL) { error("not used") }) } }
         compose.waitUntil(35000) {
             compose.onAllNodesWithText(saved.title).fetchSemanticsNodes().isNotEmpty()
         }

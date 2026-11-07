@@ -83,6 +83,11 @@ main更新後、GitHub ActionsでBackend検査と結合テストを実行し、�
 
 ## コスト管理ルール
 
+改善メモはGitHub Issuesを正本とし、専用クラウドサービスは追加しません。
+既存CoreからGitHub APIへ送信し、Firestoreに本文なしの送信控えを保存します。
+GitHub Tokenは既存Secret Managerに置き、Coreだけに読取りを許可します。
+設定・無効化は[GitHub連携の手順](../backend/README.md#改善メモのgithub連携)を参照します。
+
 - GCPの予算アラートを低額で設定する。予算アラートは自動的な利用停止ではない点に注意する。
 - Cloud Runの最小・最大インスタンス数を明示する。
 - 実AIテストは手動または専用CIに分離する。

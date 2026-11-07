@@ -112,6 +112,12 @@ Firebase新規登録自体は変更しません。メールを変更しても同
 OpenAIキーは内部サービスだけが参照します。自動・手動デプロイとも実OpenAIを使い、Coreは内部サービスへHTTPで接続します。
 通常のPR検査はFakeです。AI品質評価は明示実行し、候補版のデプロイ確認では実AIを使います。キー登録には`register-openai-secret.sh`を使います。
 
+改善メモの送信を有効にする場合は[GitHub連携の設定](../../backend/README.md#改善メモのgithub連携)に従い、
+`scripts/gcp/register-feedback-secret.sh`で対象リポジトリ限定・Issues書込み用Tokenを登録します。
+`development`環境の`FEEDBACK_GITHUB_REPOSITORY`と`FEEDBACK_GITHUB_SECRET_NAME`を使い、
+デプロイ時にCoreだけへSecretを割り当てます。Plannerと検証Jobには渡しません。
+未設定でもデプロイと既存機能は利用でき、改善メモの送信だけが設定エラーを返します。
+
 ## 課金
 
 `budget-alerts.json`と`apply-budget-alerts.sh`はalerts-only予算を扱います。通知は自動停止ではありません。

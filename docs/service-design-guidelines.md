@@ -22,6 +22,8 @@ AI接続の境界は[ADR 0002](decisions/0002-ai-connection-boundary.md)に従�
 - 再送と競合はCoreで制御し、使わなくなったMetricも履歴から参照できるように残す。
 - FirestoreでもDBの所有者はCoreだけとする。現在値と履歴は原子的に保存し、再試行されるtransaction内でAIや外部処理を呼ばない。[ADR 0003](decisions/0003-firestore-standard.md)に従い、固定の保存モデルを維持する。
 - 表示・入力・状態処理は機能単位でまとめ、通信とOS処理の境界は維持する。
+- 改善メモのGitHub連携はCoreの`feedback.py`へ配置する。本文の正本はGitHub Issuesとし、
+  Firestoreには本文を含まない送信控えだけを保存する。GitHub TokenはCoreだけが保持し、AI接続サービスを経由しない。
 - 共通化は実際の重複に限る。将来の汎用フレームワークや不要な階層を追加しない。
 
 ## 新しいサービスへ分離する条件

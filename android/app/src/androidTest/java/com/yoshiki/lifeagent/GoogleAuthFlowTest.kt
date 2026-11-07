@@ -34,7 +34,8 @@ class GoogleAuthFlowTest {
                 LocalDate.now().plusDays(30).toString())) }
             val google = PickerStub(firstToken)
             val vm = AuthViewModel(auth)
-            compose.setContent { LifeAgentTheme { LifeAgentSession(goals, vm, google) } }
+            compose.setContent { LifeAgentTheme { LifeAgentSession(goals, vm,
+                Network.createFeedbackRepository("http://127.0.0.1:18007/", auth::idToken), google) } }
             waitFor("本を読む")
             compose.onNodeWithText("Googleを連携").performClick()
             assertEquals(0, google.requests)

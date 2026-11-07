@@ -423,16 +423,26 @@ data class CoachReply(
 )
 
 object Network {
+    fun createFeedbackRepository(
+        baseUrl: String,
+        tokenProvider: suspend () -> String,
+    ): FeedbackRepository = HttpFeedbackRepository(
+        retrofit(baseUrl).create(FeedbackApi::class.java), tokenProvider,
+    )
+
     fun createGoalRepository(
         baseUrl: String,
         tokenProvider: suspend () -> String,
     ): GoalRepository {
+        return HttpGoalRepository(retrofit(baseUrl).create(GoalApi::class.java), tokenProvider)
+    }
+
+    private fun retrofit(baseUrl: String): Retrofit {
         val json = Json { ignoreUnknownKeys = true }
-        val retrofit = Retrofit.Builder()
+        return Retrofit.Builder()
             .baseUrl(baseUrl)
             .client(OkHttpClient.Builder().readTimeout(35, TimeUnit.SECONDS).build())
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
-        return HttpGoalRepository(retrofit.create(GoalApi::class.java), tokenProvider)
     }
 }

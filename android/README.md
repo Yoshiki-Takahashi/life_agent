@@ -43,6 +43,11 @@ debugビルドだけローカルHTTPを許可します。Android 17以降では�
 
 現在の動作は[画面と操作](../docs/ui.md)を参照してください。
 
+下部メニューの「コーチ」の右隣に「フィードバック」を配置します。メモは認証付きCore APIから
+GitHub Issuesへ送ります。GitHub TokenはAndroidへ設定せず、[Backend側](../backend/README.md#改善メモのgithub連携)に設定します。
+未設定時も本文を保持し、接続設定後に再試行できます。タブ移動でメモを保持し、ログアウトで消去します。
+`FeedbackFlowTest`はHTTP通信なしで入力保持・結果不明後の同じ送信IDによる再確認・成功後の次のメモを検証します。
+
 Firestore EmulatorとFake APIを通すEmulator検証:
 ~~~bash
 ANDROID_HOME="$HOME/Library/Android/sdk" W7_ANDROID_TEST_CLASS=com.yoshiki.lifeagent.AppFlowTest ./scripts/test-weekend-7.sh --android

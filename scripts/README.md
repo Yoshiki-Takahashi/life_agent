@@ -11,6 +11,7 @@ GitHub Actionsでは、`.github/workflows/deploy-dev.yml`で開発環境へdeplo
 - `gcp/stop-dev.sh`: Cloud Runをmanual 0へ変更する（Firestoreデータは保持）
 - `gcp/setup-dev-deploy.sh`: Weekend 6のWorkload Identity Federation、deploy用service account、GitHub Variablesを設定
 - `gcp/register-openai-secret.sh`: `.secrets/openai-api-key.txt`の改行を除去してSecret Managerへ登録し、権限を更新
+- `gcp/register-feedback-secret.sh`: `.secrets/feedback-github-token.txt`をCore専用Secretへ登録し、改善メモ用ラベル・デプロイ変数を準備
 - `gcp/destroy-dev.sh`: 削除対象を表示。`--execute`と二重の対話確認がある場合だけ完全削除
 - `gcp/apply-budget-alerts.sh`: `infra/gcp/budget-alerts.json`に定義した未作成のalerts-only予算を作成
 

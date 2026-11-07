@@ -37,7 +37,8 @@ class AppFlowTest {
                 return api.confirmGoal(plan)
             }
         }
-        compose.setContent { LifeAgentTheme { LifeAgentApp(repository, owner, {}) } }
+        compose.setContent { LifeAgentTheme { LifeAgentApp(repository, owner, {},
+            Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
         compose.onNodeWithText("新規作成").performClick()
         compose.onNodeWithText("タイトル").performTextReplacement("読書の習慣")
         compose.onNodeWithText("Goal期限を選ぶ").performScrollTo().performClick()
@@ -122,7 +123,8 @@ class AppFlowTest {
         compose.setContent {
             CompositionLocalProvider(LocalSpeechRecognitionFactory provides { _, _ ->
                 FakeSpeechRecognition().also { speech = it }
-            }) { LifeAgentTheme { LifeAgentApp(repository, owner, {}) } }
+            }) { LifeAgentTheme { LifeAgentApp(repository, owner, {},
+                Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
         }
         waitFor("本を読む")
         compose.onNodeWithText("コーチ").performClick()

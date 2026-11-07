@@ -22,11 +22,35 @@
 | 再計画案を作る | POST /api/v1/goals/{id}/replan/preview | 未適用の候補 |
 | 再計画を適用する | POST /api/v1/goals/{id}/replan/apply | 承認した変更 |
 | 全目標を相談する | POST /api/v1/coach/messages | なし |
+| 改善メモを送信する | POST /api/v1/feedback | GitHub Issueと本文を含まない送信控え |
 
 `GET /health`は認証不要の稼働確認です。
 メンテナンス中は`/api/`以下に503と`Retry-After: 60`を返します。保存結果が不明な実績は、再開後も同じ保存IDで再送します。
 内部AI APIは`/internal/v1/goal-questions`、`goal-plans`、`progress-preview`、`advice`、`replan`、`coach`です。
 Androidから直接呼びません。
+
+## 改善メモ
+
+`POST /api/v1/feedback`は既存のFirebase認証・許可UID制限を適用します。
+`client_request_id`（UUID）、`body`（前後空白除去後1〜2,000文字）、
+`app_version`（改行なし1〜100文字）、`screen`（定義済み画面名）を受け取ります。
+送信先リポジトリ・ラベルはサーバーが決め、利用者からは指定できません。
+GitHubへ本文・サーバーの初回送信日時・アプリ版・画面名を渡し、
+`feedback`と`needs-triage`を付けたIssueを作ります。AIは使いません。
+成功時は200で`issue_number`と`issue_url`を返します。再送時も同じ結果です。
+
+Firestoreの`feedback_receipts`には送信IDと所有者から作ったハッシュをキーに、
+固定モデルで本文を含まない送信控え（payloadのSHA-256、リポジトリ、状態、初回日時、Issue番号）だけを保持します。
+同じ所有者・送信IDの内容変更は409です。別の所有者とは控えを共有しません。
+transactionで作成権を予約し、GitHub呼出しはtransaction外で一度だけ行います。
+GitHubの作成が成功して控えの更新に失敗した場合も、再送でIssueを照会して復旧します。
+
+GitHub認証未設定・明確な作成拒否は503で`detail.result_unknown=false`です。
+切断・timeout・5xxなどの結果不明は同じIDで照会し、未確認なら503で
+`detail.result_unknown=true`と`detail.message`を返します。GitHubの生エラーやTokenは返しません。
+照会は初回日時の1秒前以降の全状態（closedを含む）をList APIで最大500件まで走査し、本文末尾の送信マーカーで照合します。
+検索インデックスに依存せず、見つからないことを理由に作成を再実行しません。
+作成前にサーバーが停止した場合も結果不明として残ります。手動で未作成を確認するまで自動再作成しません。
 
 ## 計画
 

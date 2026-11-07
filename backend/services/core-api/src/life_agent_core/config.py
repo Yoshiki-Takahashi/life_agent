@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -23,6 +23,10 @@ class Settings(BaseSettings):
     auth_backend: Literal["firebase", "fake"] = "firebase"
     allowed_user_id: str | None = Field(default=None, min_length=1)
     k_service: str | None = None
+    feedback_github_repository: str = Field(
+        default="Yoshiki-Takahashi/life_agent", pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
+    )
+    feedback_github_token: SecretStr | None = None
 
     @model_validator(mode="after")
     def require_cloud_access_policy(self):

@@ -18,8 +18,8 @@ startはCloud Runをauto/min 0/max 1へ戻し、stopはmanual 0へ変更しま�
 Firestoreは停止せずデータを保持します。無料枠超過の保存・操作は課金対象です。
 旧Cloud SQLは撤去済みで、これらのコマンドでは再作成・再起動しません。
 `manage-dev.yml`も同じスクリプトを使います。
-移管PRが未mergeの間は、mainに残る旧SQL版workflowの誤実行を防ぐためdeploy/manageを一時無効化しています。
-PR merge後にFirestore版の内容を確認して再有効化します。Backend Qualityは継続しています。
+`deploy-dev.yml`はmain更新後に自動実行します。手動再実行もmainを選びます。
+通常のBackend QualityはPRとpushで動き、デプロイ処理とは別に継続します。
 
 `destroy-dev.sh`は既定で候補表示だけを行います。実削除には`--execute`と端末での二重確認が必要です。
 対象にFirestoreの全データを含みます。project、Firebase利用者、予算は削除しません。
@@ -51,12 +51,39 @@ CORE_API_IMAGE=<Artifact Registryの検証対象image@sha256:digest> ./scripts/g
 
 ## デプロイ
 
-`deploy-dev.yml`はテスト、image build/push、内部AIサービスの配置、Firestoreの準備確認を行います。
-Coreは`--no-traffic`で候補revisionを作成します。サービスURLのhealthだけでは候補を検証したことになりません。
-合意済みの切替枠で、検証済みrevision名を指定してトラフィックを変更します。
-旧migration Jobは実行しません。
+`deploy-dev.yml`はmainへのpush（PRマージを含む）と手動実行を受け付け、mainだけを対象にします。
+Backend lint・単体／結合・競合テストの成功後、同じコミットから両サービスのimageをbuild/pushし、digestで配置します。
+手動実行でも両サービスを実OpenAI設定で更新します。従来の片方だけの配置・Fake切替入力は使用しません。
+Androidアプリの配布と操作確認は[共通手順](../../docs/development-workflow.md)の別段階です。
 
-WIF・権限・GitHub Variablesは`./scripts/gcp/setup-dev-deploy.sh`で準備します。
+1. `scripts/gcp/check-firestore.sh`でDB・索引を確認する。
+2. `scripts/gcp/deploy-dev.py`が元の配信先を保存し、PlannerとCoreを`--no-traffic`の候補版として準備する。
+3. Coreは同じ実行で作ったPlannerのタグURLへ固定する。IAM TokenのaudienceはPlannerのサービスURLを使う。
+4. 候補Coreのhealth・未認証／不正Tokenの401を確認し、非公開Job `lifeagent-deploy-check`を実行する。
+5. 検証成功後、Core→Plannerの順にrevision名を指定して100%へ切り替え、サービスURLでも確認する。
+
+非公開Jobは候補Coreのimageと実行アカウントで`scripts/check-deployment.py`を実行します。
+Job内だけで一時的な検証用認証に置き換え、固有の検証UIDを使います。公開CoreのFirebase認証・許可UIDは変更しません。
+実HTTPで候補Plannerを呼び、実OpenAIによる質問・計画生成、実Firestoreへの保存・再送を検証します。
+終了時はそのUIDの検証データだけを削除します。実利用者によるFirebaseログインの成功確認は、リリース確認で別途行います。
+Jobは非公開の実行単位で、アプリの接続先ではありません。追加のOpenAI呼出しは通常1デプロイにつき2回です。
+
+同時デプロイは直列化し、開始時と切替直前にmainの先頭コミットと一致するか確認します。
+古いコミットの実行は`skipped-outdated`として切替を省略します。
+通常の検証・切替失敗では保存した配信先へ復旧します。DBの内容は巻き戻しません。
+復旧にも失敗した場合は`rollback-failed`として失敗終了し、元のrevisionと配信率をActionsに残します。
+
+結果はActionsのSummaryと`deployment-result.json`のartifactへ、コミット・image digest・候補revision・元の配信先・検証Jobを記録します。
+`deployed`はサーバー反映成功、`failed-before-cutover`は切替前の失敗、`rolled-back`は切替失敗からの復旧成功です。
+runner喪失・強制終了時は自動復旧が完了しない場合があるため、Cloud Runの実際の配信先も確認します。
+
+手動で元の配信先へ戻す場合は、記録された**両サービス**のrevision名と配信率を使います。
+Coreは対応Plannerのタグを参照するため、成功したPlannerの`deploy-*`タグは復旧対象Coreが不要になるまで削除しません。
+Coreの確認用タグと、失敗・旧コミットによる未採用タグは自動で片付けます。
+旧SQL migration Jobは実行しません。
+
+WIF・権限・共通のGitHub Variablesは`./scripts/gcp/setup-dev-deploy.sh`で準備します。
+`CORE_API_ALLOWED_USER_ID`は、本人の既存uidを確認してenvironmentへ別途登録します。
 environment `development`の変数:
 
 ```text
@@ -80,8 +107,8 @@ Cloud Run自身も、許可uid未設定・空文字・Fake認証では起動を�
 本人のuidはToken検証後に照合し、他のアカウントによる業務APIを403とします。healthは公開のままです。
 Firebase新規登録自体は変更しません。メールを変更しても同一uidの許可は継続します。
 削除後に同じメールで再作成しても別uidなので拒否され、管理者による設定更新が必要です。
-OpenAIキーは内部サービスだけが参照します。provider入力でopenaiを選ぶと、対応するCore backendはhttpになります。
-通常CIはFakeで、実AIは明示実行します。キー登録には`register-openai-secret.sh`を使います。
+OpenAIキーは内部サービスだけが参照します。自動・手動デプロイとも実OpenAIを使い、Coreは内部サービスへHTTPで接続します。
+通常のPR検査はFakeです。AI品質評価は明示実行し、候補版のデプロイ確認では実AIを使います。キー登録には`register-openai-secret.sh`を使います。
 
 ## 課金
 

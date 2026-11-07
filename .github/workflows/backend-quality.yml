@@ -41,8 +41,8 @@ jobs:
       - name: Check Core API
         working-directory: backend/services/core-api
         run: |
-          uv run --frozen ruff check .
-          uv run --frozen pytest
+          uv run --frozen ruff check --config pyproject.toml . ../../../scripts/gcp/deploy-dev.py ../../../scripts/check-deployment.py ../../../tests/deployment
+          uv run --frozen pytest tests ../../../tests/deployment
 
       - name: Check Goal Planner
         working-directory: backend/services/goal-planner

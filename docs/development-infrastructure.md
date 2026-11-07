@@ -73,6 +73,14 @@ Cloud Runの停止ではFirestoreを削除しません。`stop-dev.sh`はサー�
 
 AndroidのCore API接続先は、`android/config/api-debug.properties`と`api-release.properties`でビルド種別ごとに管理します。debugはEmulatorからローカルFastAPIへ、releaseはCloud Runへ接続します。Cloud Run作成後にrelease設定を発行済みHTTPS URLへ更新します。APIキーやDB接続情報はAndroidへ含めません。
 
+## マージ後の自動デプロイ
+
+main更新後、GitHub ActionsでBackend検査と結合テストを実行し、成功したコミットのCore API・Goal Plannerを候補版として配置します。
+候補版の疎通・認証拒否・実AI連携・Firestore保存を確認してから切り替え、失敗時は元の配信先へ戻します。
+通常のPR検査はFakeを使い、実AIによるAI品質評価は明示実行です。自動デプロイでは質問・計画生成の2回を疎通確認に使います。
+認証の許可UID、内部Plannerの非公開設定、CoreだけがDBを扱う境界を維持します。
+実行結果はActionsに記録します。手動再実行・復旧は[GCP運用](../infra/gcp/README.md#デプロイ)を参照してください。
+
 ## コスト管理ルール
 
 - GCPの予算アラートを低額で設定する。予算アラートは自動的な利用停止ではない点に注意する。

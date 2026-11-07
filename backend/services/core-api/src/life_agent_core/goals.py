@@ -1,5 +1,5 @@
 import uuid
-from datetime import date, timedelta
+from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
 from typing import Annotated, Protocol
 
@@ -10,8 +10,8 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from life_agent_core.ai_service import AIUnavailableError, InternalAIClient
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import Settings, get_settings
-from life_agent_core.database import Database, decode, document
-from life_agent_core.models import Goal, Metric, Milestone, ProgressLog
+from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.models import Goal, GoalStatus, Metric, Milestone, ProgressLog
 from life_agent_core.schemas import (
     GoalConfirmRequest,
     GoalInput,
@@ -160,7 +160,9 @@ def confirm_goal(payload: GoalConfirmRequest, db: Database, user_id: CurrentUser
 
 
 @router.get("/api/v1/goals", response_model=list[GoalSummary])
-def list_goals(db: Database, user_id: CurrentUserId) -> list[GoalSummary]:
+def list_goals(
+    db: Database, user_id: CurrentUserId, status: GoalStatus | None = None
+) -> list[GoalSummary]:
     snapshots = (
         db.collection("goals")
         .where(filter=FieldFilter("owner_id", "==", user_id))
@@ -181,7 +183,31 @@ def list_goals(db: Database, user_id: CurrentUserId) -> list[GoalSummary]:
             updated_at=goal.updated_at,
         )
         for goal in goals
+        if status is None or goal.status == status
     ]
+
+
+@router.post("/api/v1/goals/{goal_id}/complete", response_model=GoalResponse)
+def complete_goal(goal_id: uuid.UUID, db: Database, user_id: CurrentUserId) -> GoalResponse:
+    def persist(transaction):
+        goal = load_goal(goal_id, db, user_id, transaction)
+        if goal.status == GoalStatus.COMPLETED:
+            return
+        transaction.update(
+            db.collection("goals").document(str(goal_id)),
+            {
+                "status": GoalStatus.COMPLETED.value,
+                "updated_at": datetime.now(UTC),
+            },
+        )
+
+    run_transaction(db, persist)
+    return goal_response(load_goal_with_details(goal_id, db, user_id))
+
+
+def require_active(goal: Goal):
+    if goal.status != GoalStatus.ACTIVE:
+        raise HTTPException(status_code=409, detail="完了済みの目標は変更できません")
 
 
 @router.get("/api/v1/goals/{goal_id}", response_model=GoalResponse)

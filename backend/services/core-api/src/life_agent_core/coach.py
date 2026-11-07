@@ -134,6 +134,7 @@ def coach_message(
         .stream()
     )
     goals = [Goal.model_validate(decode(snapshot.to_dict())) for snapshot in snapshots]
+    goals = [goal for goal in goals if goal.status == "active"]
     request = CoachAIRequest(
         body=payload.body,
         history=payload.history,

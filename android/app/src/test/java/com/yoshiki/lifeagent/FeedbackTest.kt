@@ -74,6 +74,26 @@ class FeedbackTest {
         assertEquals(41, vm.uiState.value.result?.issueNumber)
     }
 
+    @Test fun missingConfigurationExplainsFailureAndRetriesSameMemoAfterSetup() = runTest(dispatcher) {
+        val requests = mutableListOf<FeedbackRequest>()
+        val vm = FeedbackViewModel(FeedbackRepository {
+            requests += it
+            if (requests.size == 1) throw HttpException(Response.error<Unit>(503,
+                """{"detail":{"message":"フィードバックの送信先が未設定です","result_unknown":false}}""".toResponseBody()))
+            FeedbackResult(43, "https://github.com/example/app/issues/43")
+        })
+        vm.updateBody("送信したいメモ")
+        vm.send()
+        advanceUntilIdle()
+        assertEquals("フィードバックの送信先が未設定です", vm.uiState.value.error)
+        assertEquals("送信したいメモ", vm.uiState.value.body)
+        assertFalse(vm.uiState.value.resultUnknown)
+        vm.send()
+        advanceUntilIdle()
+        assertEquals(requests[0], requests[1])
+        assertEquals(43, vm.uiState.value.result?.issueNumber)
+    }
+
     @Test fun logoutClearsDraftAndLateResultCannotRestorePreviousSession() = runTest(dispatcher) {
         val deferred = CompletableDeferred<FeedbackResult>()
         val saved = SavedStateHandle()
@@ -98,7 +118,7 @@ class FeedbackTest {
             when (requests.size) {
                 1 -> throw IOException("response lost")
                 2 -> throw HttpException(Response.error<Unit>(503,
-                    """{"detail":{"result_unknown":false}}""".toResponseBody()))
+                    """{"detail":{"message":"フィードバックの送信先が未設定です","result_unknown":false}}""".toResponseBody()))
                 else -> FeedbackResult(44, "https://github.com/example/app/issues/44")
             }
         })
@@ -107,6 +127,8 @@ class FeedbackTest {
         advanceUntilIdle()
         vm.send()
         advanceUntilIdle()
+        assertTrue(vm.uiState.value.resultUnknown)
+        assertEquals("送信結果を確認できません。同じ内容で再確認してください。", vm.uiState.value.error)
         vm.updateBody("別の内容")
         vm.send()
         advanceUntilIdle()

@@ -5,6 +5,11 @@
 
 ## 進め方
 
+開発開始時に[未整理の改善メモ](https://github.com/Yoshiki-Takahashi/life_agent/issues?q=is%3Aissue%20is%3Aopen%20label%3Afeedback%20label%3Aneeds-triage)を確認します。
+アプリから届くIssueは自由文のメモです。重複は既存Issueへ集約し、着手するものに
+ユーザーストーリー・受け入れ条件・完了条件を補って`needs-triage`を外します。
+送信だけで実装開始・優先順位確定とはしません。実装したPRから`Closes #番号`で紐づけます。
+
 Issue → 開発 → PR・自動テスト → マージ前の動作確認 → 承認・マージ → GCP反映 → リリース確認
 
 | 段階 | 実施すること・環境 | 完了の目安 |

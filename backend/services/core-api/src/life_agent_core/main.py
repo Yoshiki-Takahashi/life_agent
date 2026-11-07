@@ -5,7 +5,7 @@ from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 from google.api_core.exceptions import GoogleAPICallError, RetryError
 
-from life_agent_core import coach, goals, progress, replan
+from life_agent_core import coach, feedback, goals, progress, replan
 from life_agent_core.config import get_settings
 
 
@@ -16,7 +16,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title="LifeAgent Core API", version="0.1.0", lifespan=lifespan)
-for feature in (goals, progress, replan, coach):
+for feature in (goals, progress, replan, coach, feedback):
     app.include_router(feature.router)
 
 

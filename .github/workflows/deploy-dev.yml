@@ -33,6 +33,8 @@ jobs:
       OPENAI_SECRET_NAME: ${{ vars.OPENAI_SECRET_NAME }}
       # Keep deployment policy out of the application settings used by tests.
       CORE_API_ALLOWED_USER_ID: ${{ vars.CORE_API_ALLOWED_USER_ID }}
+      FEEDBACK_GITHUB_REPOSITORY: ${{ vars.FEEDBACK_GITHUB_REPOSITORY }}
+      FEEDBACK_GITHUB_SECRET_NAME: ${{ vars.FEEDBACK_GITHUB_SECRET_NAME }}
 
     steps:
       - name: Check out the tested commit

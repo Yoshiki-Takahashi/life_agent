@@ -8,6 +8,7 @@ flowchart LR
     App -->|ID Token付きAPI| Core[Core API]
     Core -->|ADC・IAM / 読取り・transaction| DB[(Firestore Standard)]
     Core -->|認証付き内部HTTP| AI[Goal Planner / AI接続サービス]
+    Core -->|サーバー専用Token・改善メモ| GitHub[GitHub Issues]
     AI -->|Structured Output| Provider[OpenAI]
 ```
 
@@ -18,6 +19,7 @@ flowchart LR
 | Core API | Token検証、所有者認可、業務ルール検証、DB transaction、保存と重複・競合の防止 |
 | AI接続サービス | プロンプト、Structured Output生成、Provider接続、Fake、AI障害の変換 |
 | Firestore Standard | 目標・計画・実績・再計画候補の永続化 |
+| GitHub Issues | 改善メモ本文・整理・開発状況の正本 |
 
 AndroidはDBやOpenAIへ直接接続しません。Core APIはOpenAI SDK・キー・プロンプトを持ちません。
 AI接続サービスはステートレスで、アプリのDBや利用者の認可を扱いません。
@@ -46,6 +48,11 @@ Coreの候補版は、同じ実行で配置したPlannerのタグURLへ固定し
 
 Metricは正の数値を加算する形式です。AIが独自のテーブル、Metric型、可視化形式を生成する仕組みはありません。
 会話履歴と通知設定はこのDBに保存しません。会話はセッション内、通知設定は利用者別の端末内保存です。
+
+改善メモはCoreからGitHub Issuesへ送ります。Firestoreの`feedback_receipts`は本文を持たず、
+重複送信防止に必要なハッシュ・送信先・状態・日時・Issue番号だけを保持します。
+GitHub TokenはCoreだけがSecret Managerから取得します。Android・AI接続サービスには渡しません。
+外部送信の境界と結果不明時の方針は[ADR 0005](decisions/0005-feedback-github-issues.md)を参照します。
 
 ## 保存と競合
 

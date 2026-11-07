@@ -40,11 +40,15 @@ class MainActivity : ComponentActivity() {
                         authRepository::idToken,
                     )
                 }
+                val feedbackRepository = remember {
+                    Network.createFeedbackRepository(BuildConfig.CORE_API_BASE_URL, authRepository::idToken)
+                }
                 androidx.compose.runtime.LaunchedEffect(authState.user?.uid) {
                     com.yoshiki.lifeagent.reminders.ReviewReminder(this@MainActivity).setUser(authState.user?.uid)
                 }
                 LifeAgentSession(
                     repository = repository,
+                    feedbackRepository = feedbackRepository,
                     auth = authViewModel,
                     google = google,
                     onSignOut = {

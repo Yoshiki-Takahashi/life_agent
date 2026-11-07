@@ -9,6 +9,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalContext
+import android.app.Activity
 import com.yoshiki.lifeagent.R
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
@@ -31,9 +33,11 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.yoshiki.lifeagent.data.GoalRepository
+import com.yoshiki.lifeagent.data.FeedbackRepository
 
 @Composable
 fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Unit,
+    feedbackRepository: FeedbackRepository,
     sessionKey: String = userId, accountAction: @Composable () -> Unit = {}) {
     val navController = rememberNavController()
     val planViewModel: GoalViewModel = viewModel(
@@ -51,9 +55,17 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
     val coachViewModel: CoachViewModel = viewModel(
         key = "coach-$sessionKey", factory = CoachViewModel.factory(repository),
     )
+    val feedbackViewModel: FeedbackViewModel = viewModel(
+        key = "feedback-$sessionKey", factory = FeedbackViewModel.factory(feedbackRepository),
+    )
+    val activity = LocalContext.current as? Activity
     DisposableEffect(sessionKey) {
-        onDispose { coachViewModel.reset(); planViewModel.resetDraft() }
+        onDispose {
+            coachViewModel.reset(); planViewModel.resetDraft()
+            if (activity?.isChangingConfigurations != true) feedbackViewModel.reset()
+        }
     }
+    val feedbackState by feedbackViewModel.uiState.collectAsState()
     val coachState by coachViewModel.uiState.collectAsState()
     val planState by planViewModel.uiState.collectAsState()
     val listState by listViewModel.uiState.collectAsState()
@@ -83,6 +95,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
     val group = when (route) {
         "create", "questions", "preview" -> "create"
         "coach", "coach-confirm" -> "coach"
+        "feedback" -> "feedback"
         else -> "home"
     }
     val detailBusy = detailState.isSavingProgress || detailState.isParsing ||
@@ -90,12 +103,14 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
     val menuEnabled = when (group) {
         "coach" -> coachState.canLeave
         "create" -> !planState.isBusy
+        "feedback" -> !feedbackState.isSending
         else -> !detailBusy
     }
     val hasDraft = when (group) {
         "coach" -> coachState.hasDraft
         "create" -> planState.title.isNotBlank() || planState.description.isNotBlank() ||
             planState.targetDate.isNotBlank() || planState.metrics.isNotEmpty()
+        "feedback" -> false // Keep the memo and its delivery ID when switching tabs.
         else -> route in setOf("goals/{goalId}", "review") && (detailState.progressBody.isNotBlank() ||
             detailState.metricProgress.any { it.value.isNotBlank() } ||
             detailState.replanReason.isNotBlank() || detailState.replanProposal != null)
@@ -103,14 +118,17 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
     var pendingDestination by remember { mutableStateOf<String?>(null) }
     GoalReplacementDialog(planState, planViewModel::confirmReplacement, planViewModel::dismissReplacement)
     fun navigate(destination: String) {
+        if (destination == "feedback") feedbackViewModel.openedFrom(
+            if (route == "goals/{goalId}") "goal-detail" else route.ifBlank { "home" }
+        )
         navController.navigate(destination) {
-            if (destination != "review") popUpTo("home")
+            if (destination != "review" && destination != "feedback") popUpTo("home")
             launchSingleTop = true
         }
     }
     fun requestNavigation(destination: String) {
         if (!menuEnabled || route == destination) return
-        if (hasDraft) pendingDestination = destination else navigate(destination)
+        if (hasDraft && destination != "feedback") pendingDestination = destination else navigate(destination)
     }
     if (pendingDestination != null) AlertDialog(
         onDismissRequest = { pendingDestination = null },
@@ -133,7 +151,8 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
         bottomBar = {
             NavigationBar {
                 listOf(Triple("home", "目標一覧", R.drawable.nav_goals), Triple("create", "新規作成", R.drawable.nav_create),
-                    Triple("coach", "コーチ", R.drawable.nav_coach)).forEach { (destination, label, icon) ->
+                    Triple("coach", "コーチ", R.drawable.nav_coach),
+                    Triple("feedback", "フィードバック", R.drawable.nav_feedback)).forEach { (destination, label, icon) ->
                     NavigationBarItem(
                         selected = group == destination, enabled = menuEnabled,
                         onClick = { requestNavigation(destination) },
@@ -176,6 +195,10 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onCancel = coachViewModel::cancelCandidate,
                     onAdviceRetry = coachViewModel::loadAdvice,
                 )
+            }
+            composable("feedback") {
+                FeedbackScreen(feedbackState, feedbackViewModel::updateBody, feedbackViewModel::send,
+                    onBack = { navController.navigateUp() })
             }
             composable("coach-confirm") {
                 LaunchedEffect(coachState.phase) {

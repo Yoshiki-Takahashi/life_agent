@@ -57,13 +57,20 @@ def get_current_user_id(
             headers={"WWW-Authenticate": "Bearer"},
         )
     try:
-        return verifier.verify(credentials.credentials)
+        user_id = verifier.verify(credentials.credentials)
     except Exception as error:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="認証情報が無効です。もう一度ログインしてください",
             headers={"WWW-Authenticate": "Bearer"},
         ) from error
+    allowed_user_id = get_settings().allowed_user_id
+    if allowed_user_id is not None and user_id != allowed_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="このアカウントには利用が許可されていません",
+        )
+    return user_id
 
 
 CurrentUserId = Annotated[str, Depends(get_current_user_id)]

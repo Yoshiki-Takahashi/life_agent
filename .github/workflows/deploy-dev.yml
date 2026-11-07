@@ -69,6 +69,7 @@ jobs:
       GOAL_PLANNER_SERVICE: ${{ vars.GOAL_PLANNER_SERVICE }}
       GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT }}
       OPENAI_SECRET_NAME: ${{ vars.OPENAI_SECRET_NAME }}
+      ALLOWED_USER_ID: ${{ vars.CORE_API_ALLOWED_USER_ID }}
 
     steps:
       - name: Check out repository
@@ -114,6 +115,7 @@ jobs:
           : "${CORE_API_RUNTIME_SERVICE_ACCOUNT:?CORE_API_RUNTIME_SERVICE_ACCOUNT variable is required}"
           : "${GOAL_PLANNER_SERVICE:?GOAL_PLANNER_SERVICE variable is required}"
           : "${GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT:?GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT variable is required}"
+          : "${ALLOWED_USER_ID:?CORE_API_ALLOWED_USER_ID variable is required}"
 
       - name: Authenticate to Google Cloud
         uses: google-github-actions/auth@v2
@@ -217,7 +219,7 @@ jobs:
             --max-instances=1 \
             --no-traffic \
             --clear-cloudsql-instances \
-            --set-env-vars=AUTH_BACKEND=firebase,FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,PROGRESS_PARSER_BACKEND="${progress_parser_backend}",ADVISOR_BACKEND="${advisor_backend}",REPLANNER_BACKEND="${replanner_backend}",COACH_BACKEND="${coach_backend}",FIRESTORE_PROJECT_ID="${PROJECT_ID}",FIRESTORE_DATABASE_ID="(default)",MAINTENANCE_MODE=false \
+            --set-env-vars=AUTH_BACKEND=firebase,ALLOWED_USER_ID="${ALLOWED_USER_ID}",FIREBASE_PROJECT_ID="${PROJECT_ID}",GOAL_PLANNER_BACKEND=http,GOAL_PLANNER_URL="${GOAL_PLANNER_URL}",GOAL_PLANNER_ID_TOKEN_AUDIENCE="${GOAL_PLANNER_URL}",GOAL_PLANNER_TIMEOUT_SECONDS=25,PROGRESS_PARSER_BACKEND="${progress_parser_backend}",ADVISOR_BACKEND="${advisor_backend}",REPLANNER_BACKEND="${replanner_backend}",COACH_BACKEND="${coach_backend}",FIRESTORE_PROJECT_ID="${PROJECT_ID}",FIRESTORE_DATABASE_ID="(default)",MAINTENANCE_MODE=false \
             --remove-secrets=OPENAI_API_KEY,DB_PASSWORD
 
       - name: Verify services (Core health still checks the currently serving revision)

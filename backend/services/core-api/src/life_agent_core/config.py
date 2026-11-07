@@ -1,6 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
+from pydantic import Field, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -20,6 +21,14 @@ class Settings(BaseSettings):
     replanner_backend: Literal["fake", "http", "openai"] = "fake"
     coach_backend: Literal["fake", "http"] = "fake"
     auth_backend: Literal["firebase", "fake"] = "firebase"
+    allowed_user_id: str | None = Field(default=None, min_length=1)
+    k_service: str | None = None
+
+    @model_validator(mode="after")
+    def require_cloud_access_policy(self):
+        if self.k_service and (self.auth_backend != "firebase" or not self.allowed_user_id):
+            raise ValueError("Cloud Run requires Firebase authentication and ALLOWED_USER_ID")
+        return self
 
     model_config = SettingsConfigDict(
         env_file=("../../.env", ".env"),

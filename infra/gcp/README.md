@@ -42,6 +42,8 @@ Android向けRulesは全拒否で、サーバーSDKの利用者認可はCore内�
 
 非公開のCloud Run検証Jobで実IAM・索引・同時保存を確認できます。Job内だけでFake AIと検証UIDを使います。
 公開サービスのFirebase検証を置き換える処理は含みません。
+`check-android-cloud.py`は使い捨てアカウントで書込みを行うため、本人uidに限定した稼働サービスでは403になります。
+本人の制限を解除して実行せず、検証用サービスを分けて使用してください。
 
 ```bash
 CORE_API_IMAGE=<Artifact Registryの検証対象image@sha256:digest> ./scripts/gcp/check-firestore-api.sh
@@ -65,12 +67,19 @@ GCP_WORKLOAD_IDENTITY_PROVIDER=<projects/.../providers/...>
 GCP_DEPLOYER_SERVICE_ACCOUNT=<deployer email>
 CORE_API_SERVICE=lifeagent-core-api
 CORE_API_RUNTIME_SERVICE_ACCOUNT=lifeagent-core-api@lifeagent-505614.iam.gserviceaccount.com
+CORE_API_ALLOWED_USER_ID=<Firebase管理APIで本人のメールから照合した既存uid>
 GOAL_PLANNER_SERVICE=lifeagent-goal-planner
 GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT=<planner runtime email>
 OPENAI_SECRET_NAME=lifeagent-openai-api-key
 ```
 
 CoreにFirestoreの接続先とFirebase設定を渡し、DBパスワード・Cloud SQL attachmentは外します。
+`CORE_API_ALLOWED_USER_ID`はCoreの`ALLOWED_USER_ID`へ渡します。未設定ならworkflowはデプロイを中止します。
+Cloud Run自身も、許可uid未設定・空文字・Fake認証では起動を拒否します。
+ローカルの`.env`は、複数利用者の回帰テスト時には`ALLOWED_USER_ID`を定義しません（空文字の代入も不可）。
+本人のuidはToken検証後に照合し、他のアカウントによる業務APIを403とします。healthは公開のままです。
+Firebase新規登録自体は変更しません。メールを変更しても同一uidの許可は継続します。
+削除後に同じメールで再作成しても別uidなので拒否され、管理者による設定更新が必要です。
 OpenAIキーは内部サービスだけが参照します。provider入力でopenaiを選ぶと、対応するCore backendはhttpになります。
 通常CIはFakeで、実AIは明示実行します。キー登録には`register-openai-secret.sh`を使います。
 

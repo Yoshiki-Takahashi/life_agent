@@ -26,6 +26,13 @@ AI接続サービスはステートレスで、アプリのDBや利用者の認�
 2026-11-03 23:39（日本時間）にFirestore版へ切替済みです。旧Cloud SQLはユーザーの即時削除指示に基づき同日23:48に削除済みです。
 採用判断は[ADR 0003](decisions/0003-firestore-standard.md)、段階と完了条件は[移管計画](plans/firestore-standard-migration.md)を参照してください。
 
+## デプロイ時の検証
+
+mainの検査成功後、CoreとPlannerの候補版を準備し、確認後に配信を切り替えます。
+Coreの候補版は、同じ実行で配置したPlannerのタグURLへ固定します。
+非公開の検証JobはCoreと同じimage・実行アカウントを使い、Job内だけで検証用UIDの認証へ置き換えます。
+公開サービスの認証・許可UIDは維持し、検証用データだけを削除します。手順と復旧は[GCP運用](../infra/gcp/README.md#デプロイ)を参照します。
+
 ## 保存するデータ
 
 | データ | 意味 |

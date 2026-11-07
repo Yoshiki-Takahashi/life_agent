@@ -84,3 +84,10 @@ start-auth-emulator.shはローカルアカウントを.secrets/firebase-auth-em
 一時Firestore EmulatorとCore APIを使い、Firebase SDKのGoogle連携・再ログイン・所有者分離を検証します。
 Googleのアカウント選択だけを差し替え、実Firebaseや個人のGoogleアカウントは使用しません。
 実装と外部設定の受け入れ状況は[Issue #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)で管理します。
+
+## main更新後のBackend反映
+
+`.github/workflows/deploy-dev.yml`がBackend検査・image build後に`gcp/deploy-dev.py`を実行します。
+同じmainコミットの候補版を確認して切り替え、通常の失敗時は元の配信先へ復旧します。
+`check-deployment.py`は非公開のCloud Run Job専用で、候補の実AI連携と検証データの保存・片付けを確認します。
+必要な設定と結果の見方は[GCP運用](../infra/gcp/README.md#デプロイ)を参照してください。

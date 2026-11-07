@@ -82,7 +82,8 @@ Coreは対応Plannerのタグを参照するため、成功したPlannerの`depl
 Coreの確認用タグと、失敗・旧コミットによる未採用タグは自動で片付けます。
 旧SQL migration Jobは実行しません。
 
-WIF・権限・GitHub Variablesは`./scripts/gcp/setup-dev-deploy.sh`で準備します。
+WIF・権限・共通のGitHub Variablesは`./scripts/gcp/setup-dev-deploy.sh`で準備します。
+`CORE_API_ALLOWED_USER_ID`は、本人の既存uidを確認してenvironmentへ別途登録します。
 environment `development`の変数:
 
 ```text
@@ -106,7 +107,7 @@ Cloud Run自身も、許可uid未設定・空文字・Fake認証では起動を�
 本人のuidはToken検証後に照合し、他のアカウントによる業務APIを403とします。healthは公開のままです。
 Firebase新規登録自体は変更しません。メールを変更しても同一uidの許可は継続します。
 削除後に同じメールで再作成しても別uidなので拒否され、管理者による設定更新が必要です。
-OpenAIキーは内部サービスだけが参照します。provider入力でopenaiを選ぶと、対応するCore backendはhttpになります。
+OpenAIキーは内部サービスだけが参照します。自動・手動デプロイとも実OpenAIを使い、Coreは内部サービスへHTTPで接続します。
 通常のPR検査はFakeです。AI品質評価は明示実行し、候補版のデプロイ確認では実AIを使います。キー登録には`register-openai-secret.sh`を使います。
 
 ## 課金

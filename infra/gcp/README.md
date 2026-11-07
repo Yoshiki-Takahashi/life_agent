@@ -102,6 +102,8 @@ OPENAI_SECRET_NAME=lifeagent-openai-api-key
 
 CoreにFirestoreの接続先とFirebase設定を渡し、DBパスワード・Cloud SQL attachmentは外します。
 `CORE_API_ALLOWED_USER_ID`はCoreの`ALLOWED_USER_ID`へ渡します。未設定ならworkflowはデプロイを中止します。
+workflow内ではデプロイ用の変数名で保持し、候補検証・切替ステップだけに`ALLOWED_USER_ID`を渡します。
+事前のテストには利用者制限を引き継がず、複数のテスト用ユーザーによる認可・所有者分離を確認します。
 Cloud Run自身も、許可uid未設定・空文字・Fake認証では起動を拒否します。
 ローカルの`.env`は、複数利用者の回帰テスト時には`ALLOWED_USER_ID`を定義しません（空文字の代入も不可）。
 本人のuidはToken検証後に照合し、他のアカウントによる業務APIを403とします。healthは公開のままです。

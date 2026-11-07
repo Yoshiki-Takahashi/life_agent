@@ -98,7 +98,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
         "feedback" -> "feedback"
         else -> "home"
     }
-    val detailBusy = detailState.isSavingProgress || detailState.isParsing ||
+    val detailBusy = detailState.isCompleting || detailState.isSavingProgress || detailState.isParsing ||
         detailState.isApplyingReplan || detailState.isLoadingReplan
     val menuEnabled = when (group) {
         "coach" -> coachState.canLeave
@@ -119,7 +119,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
     GoalReplacementDialog(planState, planViewModel::confirmReplacement, planViewModel::dismissReplacement)
     fun navigate(destination: String) {
         if (destination == "feedback") feedbackViewModel.openedFrom(
-            if (route == "goals/{goalId}") "goal-detail" else route.ifBlank { "home" }
+            if (route == "goals/{goalId}") "goal-detail" else if (route == "completed") "home" else route.ifBlank { "home" }
         )
         navController.navigate(destination) {
             if (destination != "review" && destination != "feedback") popUpTo("home")
@@ -173,12 +173,22 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
             composable("home") {
                 LaunchedEffect(Unit) { listViewModel.loadGoals() }
                 GoalHomeScreen(
-                    state = listState,
+                    state = listState.copy(goals = listState.goals.filter { it.status == "active" }),
                     onCreateGoal = { requestNavigation("create") },
                     onGoalClick = { detailViewModel.loadGoal(it); navController.navigate("goals/$it") },
                     onRetry = listViewModel::loadGoals,
                     onSignOut = onSignOut,
                     accountAction = accountAction,
+                    onCompletedGoals = { navController.navigate("completed") },
+                )
+            }
+            composable("completed") {
+                LaunchedEffect(Unit) { listViewModel.loadGoals() }
+                GoalHomeScreen(
+                    state = listState.copy(goals = listState.goals.filter { it.status == "completed" }),
+                    onCreateGoal = {}, onGoalClick = { detailViewModel.loadGoal(it); navController.navigate("goals/$it") },
+                    onRetry = listViewModel::loadGoals, onSignOut = onSignOut,
+                    completed = true, onBack = { navController.navigateUp() },
                 )
             }
             composable("coach") {
@@ -267,6 +277,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onPreviewReplan = detailViewModel::previewReplan,
                     onCancelReplan = detailViewModel::cancelReplan,
                     onApplyReplan = detailViewModel::applyReplan,
+                    onComplete = detailViewModel::completeGoal,
                 )
             }
         }

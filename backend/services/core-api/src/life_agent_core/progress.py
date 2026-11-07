@@ -15,7 +15,7 @@ from life_agent_core.ai_service import (
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
 from life_agent_core.database import Database, document, request_key, run_transaction
-from life_agent_core.goals import goal_response, load_goal, load_goal_with_details
+from life_agent_core.goals import goal_response, load_goal, load_goal_with_details, require_active
 from life_agent_core.models import (
     ProgressLog,
     ProgressMetricUpdate,
@@ -134,6 +134,7 @@ def record_progress(
         goal = load_goal(goal_id, db, user_id, transaction)
         if log_ref.get(transaction=transaction).exists:
             return
+        require_active(goal)
         metrics = {m.id: m for m in goal.metrics if m.archived_at is None}
         for update in log.metric_updates:
             metric = metrics.get(update.metric_id)

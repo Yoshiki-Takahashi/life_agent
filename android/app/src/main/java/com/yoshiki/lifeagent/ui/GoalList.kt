@@ -76,11 +76,15 @@ fun GoalHomeScreen(
     onRetry: () -> Unit,
     onSignOut: () -> Unit,
     accountAction: @Composable () -> Unit = {},
+    completed: Boolean = false,
+    onCompletedGoals: () -> Unit = {},
+    onBack: () -> Unit = {},
 ) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("LifeAgent") },
+                title = { Text(if (completed) "完了済みの目標" else "LifeAgent") },
+                navigationIcon = { if (completed) TextButton(onClick = onBack) { Text("戻る") } },
                 actions = { accountAction(); TextButton(onClick = onSignOut) { Text("ログアウト") } },
             )
         },
@@ -94,9 +98,11 @@ fun GoalHomeScreen(
                 Button(onClick = onRetry) { Text("再読み込み") }
             }
             state.goals.isEmpty() -> CenteredContent(padding = padding) {
-                Text("最初のGoalを作りましょう", style = MaterialTheme.typography.headlineSmall)
-                Text("曖昧な目標から、MetricとMilestoneを含む計画を作成します。")
-                Button(onClick = onCreateGoal) { Text("Goalを作る") }
+                Text(if (completed) "完了済みの目標はありません" else "最初のGoalを作りましょう", style = MaterialTheme.typography.headlineSmall)
+                if (!completed) {
+                    Button(onClick = onCreateGoal) { Text("Goalを作る") }
+                    TextButton(onClick = onCompletedGoals) { Text("完了済みの目標") }
+                }
             }
             else -> LazyColumn(
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -110,10 +116,10 @@ fun GoalHomeScreen(
                         verticalAlignment = Alignment.CenterVertically,
                     ) {
                         Column {
-                            Text("あなたのGoal", style = MaterialTheme.typography.headlineSmall)
-                            Text("${state.goals.size}件の進行中Goal")
+                            Text(if (completed) "完了済みの目標" else "あなたのGoal", style = MaterialTheme.typography.headlineSmall)
+                            Text("${state.goals.size}件の目標")
                         }
-                        Button(onClick = onCreateGoal) { Text("＋ 新規") }
+                        if (!completed) Button(onClick = onCreateGoal) { Text("＋ 新規") }
                     }
                 }
                 state.error?.let { message ->
@@ -125,6 +131,7 @@ fun GoalHomeScreen(
                 items(state.goals, key = GoalSummary::id) { goal ->
                     GoalSummaryCard(goal = goal, onClick = { onGoalClick(goal.id) })
                 }
+                if (!completed) item { TextButton(onClick = onCompletedGoals) { Text("完了済みの目標") } }
             }
         }
     }
@@ -162,4 +169,4 @@ private fun GoalSummaryCard(goal: GoalSummary, onClick: () -> Unit) {
     }
 }
 
-private fun statusLabel(status: String) = if (status == "active") "進行中" else status
+private fun statusLabel(status: String) = if (status == "active") "進行中" else if (status == "completed") "完了済み" else status

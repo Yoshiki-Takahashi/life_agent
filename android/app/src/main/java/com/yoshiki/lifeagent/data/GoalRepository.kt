@@ -21,6 +21,7 @@ interface GoalRepository {
     suspend fun previewGoal(title: String, description: String?, targetDate: String,
         answers: List<GoalAnswer> = emptyList()): GoalPlan
     suspend fun confirmGoal(plan: GoalPlan): Goal
+    suspend fun completeGoal(goalId: String): Goal = error("Completion is not supported")
     suspend fun getGoal(goalId: String): Goal
     suspend fun previewProgress(goalId: String, body: String): ProgressPreview
     suspend fun getAdvice(goalId: String): Advice
@@ -42,6 +43,9 @@ class HttpGoalRepository(
         api.coachMessage(authorization(), CoachMessageRequest(body, history))
 
     private suspend fun authorization() = "Bearer ${tokenProvider()}"
+
+    override suspend fun completeGoal(goalId: String): Goal =
+        api.completeGoal(authorization(), goalId).toGoal()
 
     override suspend fun listGoals(): List<GoalSummary> =
         api.listGoals(authorization()).map(GoalSummaryResponse::toGoalSummary)
@@ -99,6 +103,9 @@ class HttpGoalRepository(
 }
 
 interface GoalApi {
+    @POST("api/v1/goals/{goalId}/complete")
+    suspend fun completeGoal(@Header("Authorization") authorization: String, @Path("goalId") goalId: String): GoalResponse
+
     @POST("api/v1/goals/questions")
     suspend fun goalQuestions(
         @Header("Authorization") authorization: String,

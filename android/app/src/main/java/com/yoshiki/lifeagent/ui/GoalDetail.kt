@@ -55,6 +55,8 @@ data class GoalDetailUiState(
     val goal: Goal? = null,
     val isLoading: Boolean = false,
     val isSavingProgress: Boolean = false,
+    val isCompleting: Boolean = false,
+    val completionError: String? = null,
     val progressBody: String = "",
     val metricProgress: List<MetricProgressEdit> = emptyList(),
     val error: String? = null,
@@ -100,6 +102,22 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                         it.copy(isLoading = false, error = "Goalを読み込めませんでした")
                     }
                 }
+        }
+    }
+
+    fun completeGoal() {
+        val state = _uiState.value
+        val goal = state.goal ?: return
+        if (state.isLoading || state.isCompleting || state.isSavingProgress || state.isParsing ||
+            state.isApplyingReplan || state.isLoadingReplan || goal.status != "active") return
+        inputRevision++
+        adviceRevision++
+        _uiState.update { it.copy(isCompleting = true, completionError = null) }
+        viewModelScope.launch {
+            runCatching { repository.completeGoal(goal.id) }
+                .onSuccess { _uiState.value = stateForGoal(it) }
+                .onFailure { _uiState.update { it.copy(isCompleting = false,
+                    completionError = "完了を保存できませんでした。同じ目標で再試行してください。") } }
         }
     }
 
@@ -349,24 +367,40 @@ fun GoalDetailScreen(
     onPreviewReplan: () -> Unit = {},
     onCancelReplan: () -> Unit = {},
     onApplyReplan: () -> Unit = {},
+    onComplete: () -> Unit = {},
 ) {
+    var confirmCompletion by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
+    if (confirmCompletion) androidx.compose.material3.AlertDialog(
+        onDismissRequest = { confirmCompletion = false },
+        title = { Text("目標を完了しますか？") },
+        text = { Text("完了済みの目標へ移動し、記録と計画は閲覧専用になります。未保存の入力は破棄します。") },
+        confirmButton = { TextButton(onClick = { confirmCompletion = false; onComplete() }) { Text("完了する") } },
+        dismissButton = { TextButton(onClick = { confirmCompletion = false }) { Text("キャンセル") } },
+    )
     var selectedTab by rememberSaveable(state.goal?.id) { mutableIntStateOf(0) }
     val scrollStates = List(4) { rememberScrollState() }
-    BackHandler(onBack = onBack)
+    BackHandler { if (!state.isCompleting) onBack() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("目標詳細") },
-                navigationIcon = { TextButton(onClick = onBack) { Text("戻る") } },
+                navigationIcon = { TextButton(onClick = onBack, enabled = !state.isCompleting) { Text("戻る") } },
+                actions = { if (state.goal?.status == "active") TextButton(
+                    onClick = { confirmCompletion = true },
+                    enabled = !state.isLoading && !state.isCompleting && !state.isSavingProgress && !state.isParsing &&
+                        !state.isApplyingReplan && !state.isLoadingReplan,
+                ) { Text(if (state.isCompleting) "保存中…" else "完了") } },
             )
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
+            state.completionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (state.goal != null) TabRow(selectedTabIndex = selectedTab) {
                 listOf("概要", "進捗", "記録", "計画").forEachIndexed { index, label ->
                     Tab(selected = selectedTab == index,
+                        enabled = !state.isCompleting,
                         onClick = { focusManager.clearFocus(); keyboard?.hide(); selectedTab = index },
                         text = { Text(label) })
                 }
@@ -421,8 +455,14 @@ private fun GoalDetail(
     val goal = requireNotNull(state.goal)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
         Text(goal.title, style = MaterialTheme.typography.headlineMedium, modifier = Modifier.weight(1f))
-        Text(if (goal.status == "active") "進行中" else goal.status, color = MaterialTheme.colorScheme.primary)
+        Text(if (goal.status == "active") "進行中" else if (goal.status == "completed") "完了済み" else goal.status, color = MaterialTheme.colorScheme.primary)
     }
+    if (goal.status == "completed" && selectedTab >= 2) {
+        Text("完了済みの目標です。記録と計画の変更はできません。")
+        if (selectedTab == 3) goal.milestones.forEach { Text("${it.title}  ${it.targetDate}") }
+        return
+    }
+    if (state.isCompleting) { CircularProgressIndicator(); return }
     if (selectedTab == 0) {
         Text(goal.description ?: "説明はありません")
         Card(Modifier.fillMaxWidth()) {

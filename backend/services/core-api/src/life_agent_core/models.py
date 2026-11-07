@@ -13,6 +13,7 @@ def now() -> datetime:
 
 class GoalStatus(StrEnum):
     ACTIVE = "active"
+    COMPLETED = "completed"
 
 
 class ReplanProposalStatus(StrEnum):

@@ -6,6 +6,7 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 
 作業前に以下を確認してください。
 
+- `docs/development-workflow.md`: 開発からリリースまでの共通手順、検証環境、完了の判断
 - `docs/product-overview.md`: 現在の機能と対象外
 - `docs/ui.md`: 現在の画面と操作
 - `docs/api.md`: APIと保存の規則

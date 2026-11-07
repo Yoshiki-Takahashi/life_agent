@@ -31,7 +31,8 @@ jobs:
       GOAL_PLANNER_SERVICE: ${{ vars.GOAL_PLANNER_SERVICE }}
       GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT: ${{ vars.GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT }}
       OPENAI_SECRET_NAME: ${{ vars.OPENAI_SECRET_NAME }}
-      ALLOWED_USER_ID: ${{ vars.CORE_API_ALLOWED_USER_ID }}
+      # Keep deployment policy out of the application settings used by tests.
+      CORE_API_ALLOWED_USER_ID: ${{ vars.CORE_API_ALLOWED_USER_ID }}
 
     steps:
       - name: Check out the tested commit
@@ -75,7 +76,7 @@ jobs:
 
       - name: Validate deployment settings
         run: |
-          for setting in PROJECT_ID REGION REPOSITORY WIF_PROVIDER DEPLOYER_SERVICE_ACCOUNT CORE_API_SERVICE CORE_API_RUNTIME_SERVICE_ACCOUNT GOAL_PLANNER_SERVICE GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT OPENAI_SECRET_NAME ALLOWED_USER_ID; do
+          for setting in PROJECT_ID REGION REPOSITORY WIF_PROVIDER DEPLOYER_SERVICE_ACCOUNT CORE_API_SERVICE CORE_API_RUNTIME_SERVICE_ACCOUNT GOAL_PLANNER_SERVICE GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT OPENAI_SECRET_NAME CORE_API_ALLOWED_USER_ID; do
             test -n "${!setting}" || { echo "Missing setting: $setting"; exit 1; }
           done
 
@@ -104,6 +105,8 @@ jobs:
         run: ./scripts/gcp/check-firestore.sh
 
       - name: Verify candidates and switch traffic
+        env:
+          ALLOWED_USER_ID: ${{ env.CORE_API_ALLOWED_USER_ID }}
         run: uv run --project backend/services/core-api python scripts/gcp/deploy-dev.py
 
       - name: Save deployment results

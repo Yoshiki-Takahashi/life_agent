@@ -33,7 +33,7 @@ jobs:
       OPENAI_SECRET_NAME: ${{ vars.OPENAI_SECRET_NAME }}
       # Keep deployment policy out of the application settings used by tests.
       CORE_API_ALLOWED_USER_ID: ${{ vars.CORE_API_ALLOWED_USER_ID }}
-      FEEDBACK_GITHUB_REPOSITORY: ${{ vars.FEEDBACK_GITHUB_REPOSITORY || 'Yoshiki-Takahashi/life_agent' }}
+      CORE_API_FEEDBACK_GITHUB_REPOSITORY: ${{ vars.FEEDBACK_GITHUB_REPOSITORY }}
       FEEDBACK_GITHUB_SECRET_NAME: ${{ vars.FEEDBACK_GITHUB_SECRET_NAME }}
 
     steps:
@@ -109,6 +109,7 @@ jobs:
       - name: Verify candidates and switch traffic
         env:
           ALLOWED_USER_ID: ${{ env.CORE_API_ALLOWED_USER_ID }}
+          FEEDBACK_GITHUB_REPOSITORY: ${{ env.CORE_API_FEEDBACK_GITHUB_REPOSITORY }}
         run: uv run --project backend/services/core-api python scripts/gcp/deploy-dev.py
 
       - name: Save deployment results

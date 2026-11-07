@@ -116,6 +116,7 @@ OpenAIキーは内部サービスだけが参照します。自動・手動デ�
 `scripts/gcp/register-feedback-secret.sh`で対象リポジトリ限定・Issues書込み用Tokenを登録します。
 `development`環境の`FEEDBACK_GITHUB_REPOSITORY`と`FEEDBACK_GITHUB_SECRET_NAME`を使い、
 デプロイ時にCoreだけへSecretを割り当てます。Plannerと検証Jobには渡しません。
+送信先リポジトリが未登録・空の場合は`Yoshiki-Takahashi/life_agent`を使い、事前検査にも空文字を渡しません。
 未設定でもデプロイと既存機能は利用でき、改善メモの送信だけが設定エラーを返します。
 
 ## 課金

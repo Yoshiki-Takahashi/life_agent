@@ -51,8 +51,8 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
     val coachViewModel: CoachViewModel = viewModel(
         key = "coach-$sessionKey", factory = CoachViewModel.factory(repository),
     )
-    DisposableEffect(userId) {
-        onDispose { coachViewModel.reset() }
+    DisposableEffect(sessionKey) {
+        onDispose { coachViewModel.reset(); planViewModel.resetDraft() }
     }
     val coachState by coachViewModel.uiState.collectAsState()
     val planState by planViewModel.uiState.collectAsState()
@@ -67,15 +67,21 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
     }
     LaunchedEffect(planState.navigateToPreview) {
         if (planState.navigateToPreview) {
-            navController.navigate("preview")
+            navController.navigate("preview") { launchSingleTop = true }
             planViewModel.consumePreviewNavigation()
+        }
+    }
+    LaunchedEffect(planState.navigateToQuestions) {
+        if (planState.navigateToQuestions) {
+            navController.navigate("questions") { launchSingleTop = true }
+            planViewModel.consumeQuestionsNavigation()
         }
     }
 
     val entry by navController.currentBackStackEntryAsState()
     val route = entry?.destination?.route.orEmpty()
     val group = when (route) {
-        "create", "preview" -> "create"
+        "create", "questions", "preview" -> "create"
         "coach", "coach-confirm" -> "coach"
         else -> "home"
     }
@@ -83,7 +89,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
         detailState.isApplyingReplan || detailState.isLoadingReplan
     val menuEnabled = when (group) {
         "coach" -> coachState.canLeave
-        "create" -> !planState.isPreviewing && !planState.isConfirming
+        "create" -> !planState.isBusy
         else -> !detailBusy
     }
     val hasDraft = when (group) {
@@ -95,6 +101,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
             detailState.replanReason.isNotBlank() || detailState.replanProposal != null)
     }
     var pendingDestination by remember { mutableStateOf<String?>(null) }
+    GoalReplacementDialog(planState, planViewModel::confirmReplacement, planViewModel::dismissReplacement)
     fun navigate(destination: String) {
         navController.navigate(destination) {
             if (destination != "review") popUpTo("home")
@@ -187,8 +194,14 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onTitleChange = planViewModel::updateTitle,
                     onDescriptionChange = planViewModel::updateDescription,
                     onTargetDateChange = planViewModel::updateTargetDate,
-                    onPreview = planViewModel::previewGoal,
+                    onPreview = planViewModel::requestQuestions,
                     onBack = { requestNavigation("home") },
+                )
+            }
+            composable("questions") {
+                GoalQuestionsScreen(
+                    planState, planViewModel::answerQuestion, planViewModel::previewGoal,
+                    onBack = { if (menuEnabled) navController.navigateUp() },
                 )
             }
             composable("preview") {
@@ -200,6 +213,10 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onMetricUnitChange = planViewModel::updateMetricUnit,
                     onMilestoneTitleChange = planViewModel::updateMilestoneTitle,
                     onMilestoneDateChange = planViewModel::updateMilestoneDate,
+                    onAddMetric = planViewModel::addMetric,
+                    onRemoveMetric = planViewModel::removeMetric,
+                    onAddMilestone = planViewModel::addMilestone,
+                    onRemoveMilestone = planViewModel::removeMilestone,
                     onConfirm = planViewModel::confirmGoal,
                 )
             }

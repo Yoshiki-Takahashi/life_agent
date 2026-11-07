@@ -5,7 +5,7 @@
 責務:
 
 - OpenAI APIの呼び出し
-- Goal計画、Progress Parser、AdvisorのStructured Output生成
+- GoalのYes / No質問、回答に基づく初期計画、Progress Parser、AdvisorのStructured Output生成
 - プロンプトとSchemaのバージョン管理
 - 読書、アプリ開発、筋トレの回帰評価
 
@@ -19,7 +19,7 @@ uv sync --frozen
 OPENAI_API_KEY=... uv run uvicorn life_agent_goal_planner.main:app --port 8001 --reload
 ```
 
-APIは`http://127.0.0.1:8001`です。`GET /health`はAPIキーなしでも利用できます。内部APIは`POST /internal/v1/goal-plans`、`POST /internal/v1/progress-preview`、`POST /internal/v1/advice`です。キー未設定またはOpenAI障害時は再試行可能な`503`を返します。
+APIは`http://127.0.0.1:8001`です。`GET /health`はAPIキーなしでも利用できます。内部APIは`POST /internal/v1/goal-questions`、`POST /internal/v1/goal-plans`、`POST /internal/v1/progress-preview`、`POST /internal/v1/advice`です。キー未設定またはOpenAI障害時は再試行可能な`503`を返します。
 
 Cloud Runでは非公開serviceとしてdeployし、Core APIのruntime service accountだけにInvoker権限を付与します。AndroidはGoal Plannerを直接呼びません。
 
@@ -46,12 +46,12 @@ uv run pytest -m "not live_ai"
 APIキー取得後、読書・アプリ開発・筋トレの実AI評価を明示的に実行します。Progress Parser / Advisorの品質評価もこのサービスで実行します。
 
 ```bash
-OPENAI_API_KEY=... uv run pytest -m live_ai
+RUN_LIVE_AI=1 OPENAI_API_KEY=... uv run pytest -m live_ai
 OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --repeat 2 --output /tmp/progress-quality.json
 OPENAI_API_KEY=... uv run python -m evaluations.progress_quality --suite holdout --repeat 2 --output /tmp/progress-quality-holdout.json
 ```
 
-再計画を含む全実AI回帰は`RUN_LIVE_AI=1 uv run pytest -m live_ai`で明示実行します。
+質問生成・回答付き計画生成・再計画を含む全実AI回帰は`RUN_LIVE_AI=1 uv run pytest -m live_ai`で明示実行します。
 キーはSecret Managerから取得してこのプロセスだけに渡せます。`REPLAN_EVALUATION_OUTPUT_DIR`
 を指定すると合成ケースの再計画候補を保存でき、キーは出力しません。痛みがある運動目標では、
 追加の運動回数や再開日を指定せず、休止と状態確認を優先することを内容レビューします。

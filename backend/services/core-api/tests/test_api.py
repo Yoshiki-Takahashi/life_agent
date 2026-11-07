@@ -368,3 +368,113 @@ def test_maintenance_stops_business_requests_but_keeps_health(client, monkeypatc
     result = client.post("/api/v1/goals/preview", json={})
     assert result.status_code == 503
     assert result.headers["Retry-After"] == "60"
+
+
+def test_questions_refine_the_plan_without_saving(client, unauthenticated_client):
+    from datetime import date, timedelta
+
+    payload = dict(title="読書", target_date=str(date.today() + timedelta(days=90)))
+    assert unauthenticated_client.post("/api/v1/goals/questions", json=payload).status_code == 401
+    result = client.post("/api/v1/goals/questions", json=payload)
+    assert result.status_code == 200
+    questions = result.json()["questions"]
+    plans = []
+    for answer in (False, True):
+        response = client.post(
+            "/api/v1/goals/preview",
+            json={**payload, "answers": [dict(question=q, answer=answer) for q in questions]},
+        )
+        assert response.status_code == 200
+        plans.append(response.json())
+    assert len(plans[0]["metrics"]) < len(plans[1]["metrics"])
+    assert len(plans[0]["milestones"]) < len(plans[1]["milestones"])
+    assert client.get("/api/v1/goals").json() == []
+    for answers in (
+        [dict(question=questions[0], answer=None)],
+        [dict(question=questions[0], answer="No")],
+        [dict(question=questions[0], answer=False)] * 2,
+    ):
+        assert (
+            client.post("/api/v1/goals/preview", json={**payload, "answers": answers}).status_code
+            == 422
+        )
+
+
+@pytest.mark.parametrize("count", [0, 1, 10, 11])
+def test_edited_plan_counts_and_all_metrics_remain_recordable(client, count):
+    from datetime import date, timedelta
+
+    date_string = str(date.today() + timedelta(days=90))
+    plan = dict(
+        title="計画を調整する",
+        target_date=date_string,
+        metrics=[dict(name=f"測定項目{i}", target_value=12, unit="件") for i in range(count)],
+        milestones=[dict(title=f"到達点{i}", target_date=date_string) for i in range(count)],
+    )
+    response = client.post("/api/v1/goals/confirm", json=plan)
+    if count not in (1, 10):
+        assert response.status_code == 422
+        assert client.get("/api/v1/goals").json() == []
+        return
+    assert response.status_code == 201
+    goal = response.json()
+    path = f"/api/v1/goals/{goal['id']}"
+    assert client.get(path).json() == goal
+    assert [item["name"] for item in goal["metrics"]] == [item["name"] for item in plan["metrics"]]
+    assert [item["position"] for item in goal["milestones"]] == list(range(count))
+    updates = [dict(metric_id=m["id"], value=1) for m in goal["metrics"]]
+    for _ in range(2):
+        assert (
+            client.post(
+                path + "/progress",
+                json=dict(body="全項目の実績", client_request_id="all", metric_updates=updates),
+            ).status_code
+            == 200
+        )
+    saved = client.get(path).json()
+    assert all(m["current_value"] == 1 for m in saved["metrics"])
+    assert len(saved["progress_logs"]) == 1
+    # A ten-item plan must also pass the existing replan boundary unchanged.
+    from life_agent_core.replan import get_replanner
+    from life_agent_core.schemas import ReplanCandidate
+
+    app.dependency_overrides[get_replanner] = lambda: Mock(
+        propose=lambda *_: ReplanCandidate(
+            proposed_plan={**plan, "description": None},
+            diff=[
+                dict(
+                    change_type="update",
+                    target_type="goal",
+                    target_label="計画確認",
+                    rationale="現状維持",
+                )
+            ],
+        )
+    )
+    proposal = client.post(path + "/replan/preview", json=dict(reason="確認したい"))
+    assert proposal.status_code == 200
+    applied = client.post(
+        path + "/replan/apply", json=dict(proposal_id=proposal.json()["proposal_id"])
+    )
+    assert applied.status_code == 200
+    assert len(applied.json()["metrics"]) == count
+    assert applied.json()["progress_logs"] == saved["progress_logs"]
+
+
+def test_invalid_generated_questions_are_retryable_and_never_saved(client):
+    from datetime import date
+
+    from life_agent_core.goals import get_goal_planner
+
+    payload = dict(title="読書", target_date=str(date.today()))
+    for output in (dict(questions=[]), dict(questions=["同じ質問"] * 3)):
+        app.dependency_overrides[get_goal_planner] = lambda output=output: Mock(
+            questions=Mock(return_value=output)
+        )
+        assert client.post("/api/v1/goals/questions", json=payload).status_code == 503
+    app.dependency_overrides[get_goal_planner] = lambda: Mock(
+        questions=Mock(side_effect=AIUnavailableError("private detail"))
+    )
+    response = client.post("/api/v1/goals/questions", json=payload)
+    assert response.status_code == 503 and "private detail" not in response.text
+    assert client.get("/api/v1/goals").json() == []

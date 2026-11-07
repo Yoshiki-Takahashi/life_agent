@@ -10,7 +10,8 @@
 | [APIの約束](api.md) | 通信の入口、入力・保存・競合の規則 |
 | [AIの動作](progress-ai-quality.md) | 生成範囲、送信する情報、不確実な結果の扱い |
 
-開発手順は[Backend](../backend/README.md)、[Android](../android/README.md)、
+開発を始めるときは、[開発からリリースまで](development-workflow.md)で全体の流れと検証環境を確認してください。
+個別の実行手順は[Backend](../backend/README.md)、[Android](../android/README.md)、
 [インフラ](development-infrastructure.md)、[開発ガイド](development-guide.md)にあります。
 これらは利用仕様とは分けて管理します。
 [設計原則](service-design-guidelines.md)と[ADR](decisions/README.md)は開発者向けの判断記録です。

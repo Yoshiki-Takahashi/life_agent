@@ -14,8 +14,10 @@ from life_agent_core.database import Database, decode, document
 from life_agent_core.models import Goal, Metric, Milestone, ProgressLog
 from life_agent_core.schemas import (
     GoalConfirmRequest,
+    GoalInput,
     GoalPlan,
     GoalPreviewRequest,
+    GoalQuestions,
     GoalResponse,
     GoalSummary,
     MetricDraft,
@@ -31,10 +33,21 @@ router = APIRouter()
 class GoalPlanner(Protocol):
     def generate(self, payload: GoalPreviewRequest) -> GoalPlan: ...
 
+    def questions(self, payload: GoalInput) -> GoalQuestions: ...
+
 
 class FakeGoalPlanner:
     def generate(self, payload: GoalPreviewRequest) -> GoalPlan:
         return create_fake_plan(payload)
+
+    def questions(self, payload: GoalInput) -> GoalQuestions:
+        return GoalQuestions(
+            questions=[
+                f"「{payload.title}」で取り組んだ時間も記録したいですか？",
+                "途中で成果を確認する節目を多めに設けたいですか？",
+                "すでに取り組みを始めていますか？",
+            ]
+        )
 
 
 def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None) -> GoalPlan:
@@ -56,12 +69,15 @@ def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None
         metric = MetricDraft(name="達成率", target_value=100, unit="%")
         titles = ("実行内容を決める", "中間目標を達成する", "Goalを達成する")
 
+    metrics = [metric]
+    if any(item.answer and "時間も記録" in item.question for item in payload.answers):
+        metrics.append(MetricDraft(name="取り組んだ時間", target_value=60, unit="分"))
+    if any(item.answer and "節目を多め" in item.question for item in payload.answers):
+        titles = (titles[0], "最初の成果を確認する", titles[1], "仕上げの準備をする", titles[2])
+    if any(item.answer and "始めていますか" in item.question for item in payload.answers):
+        titles = ("これまでの取り組みを確認する", *titles[1:])
     days = max((payload.target_date - start).days, 0)
-    dates = (
-        start + timedelta(days=days // 3),
-        start + timedelta(days=(days * 2) // 3),
-        payload.target_date,
-    )
+    dates = [start + timedelta(days=days * (i + 1) // len(titles)) for i in range(len(titles))]
     milestones = [
         MilestoneDraft(title=title, target_date=target_date)
         for title, target_date in zip(titles, dates, strict=True)
@@ -70,7 +86,7 @@ def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None
         title=payload.title,
         description=payload.description,
         target_date=payload.target_date,
-        metrics=[metric],
+        metrics=metrics,
         milestones=milestones,
     )
 
@@ -82,6 +98,11 @@ class HttpGoalPlanner:
     def generate(self, payload: GoalPreviewRequest) -> GoalPlan:
         return self.client.generate("goal-plans", payload.model_dump(mode="json"), GoalPlan)
 
+    def questions(self, payload: GoalInput) -> GoalQuestions:
+        return self.client.generate(
+            "goal-questions", payload.model_dump(mode="json"), GoalQuestions
+        )
+
 
 @lru_cache
 def get_goal_planner() -> GoalPlanner:
@@ -92,6 +113,17 @@ def get_goal_planner() -> GoalPlanner:
 
 
 Planner = Annotated[GoalPlanner, Depends(get_goal_planner)]
+
+
+@router.post("/api/v1/goals/questions", response_model=GoalQuestions)
+def goal_questions(payload: GoalInput, planner: Planner, user_id: CurrentUserId) -> GoalQuestions:
+    try:
+        return GoalQuestions.model_validate(planner.questions(payload))
+    except (AIUnavailableError, ValueError, TypeError) as error:
+        raise HTTPException(
+            status_code=503,
+            detail="質問を生成できませんでした。入力内容を保持して再試行してください",
+        ) from error
 
 
 @router.post("/api/v1/goals/preview", response_model=GoalPlan)

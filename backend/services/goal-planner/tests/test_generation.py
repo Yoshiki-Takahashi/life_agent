@@ -74,10 +74,12 @@ def test_fixed_contracts_through_internal_endpoints(client, title, name, unit, b
 
 def test_shared_provider_uses_structured_private_bounded_calls():
     factory = MagicMock()
+    settings = Settings(openai_api_key="unit-test-secret")
+    assert "unit-test-secret" not in repr(settings)
     expected = Advice(summary="次の一歩", next_actions=["5分読む"])
     factory.return_value.responses.parse.return_value = SimpleNamespace(output_parsed=expected)
     assert (
-        generate(Settings(openai_api_key="test"), factory, Advice, "prompt", {"owned": "context"})
+        generate(settings, factory, Advice, "prompt", {"owned": "context"})
         == expected
     )
     call = factory.return_value.responses.parse.call_args.kwargs
@@ -139,3 +141,58 @@ def test_global_coach_sends_all_goals_and_preserves_user_history():
         factory.return_value.responses.parse.call_args.kwargs["input"][1]["content"]
     )
     assert len(payload["goals"]) == 3 and payload["history"][0]["content"] == "時間が少ない"
+
+
+@pytest.mark.parametrize("title", ["読書", "アプリ開発", "筋トレ"])
+def test_questions_and_explicit_answers_cross_the_provider_boundary(client, title):
+    import json
+
+    from life_agent_goal_planner.planner import OpenAIGoalPlanner
+    from life_agent_goal_planner.schemas import GeneratedPlan, GoalQuestions
+
+    questions = GoalQuestions(
+        questions=[
+            f"{title}の時間も記録したいですか？",
+            "成果を段階的に確認したいですか？",
+            "経験がありますか？",
+        ]
+    )
+    generated = GeneratedPlan(
+        metrics=[dict(name="取り組んだ時間", target_value=60, unit="分")],
+        milestones=[dict(title=f"段階{i}", target_date=date.today()) for i in range(3)],
+    )
+    factory = MagicMock()
+    factory.return_value.responses.parse.side_effect = [
+        SimpleNamespace(output_parsed=questions),
+        SimpleNamespace(output_parsed=generated),
+    ]
+    provider = OpenAIGoalPlanner(Settings(openai_api_key="test"), factory)
+    app.dependency_overrides[get_planner] = lambda: provider
+    payload = dict(title=title, target_date=str(date.today()))
+    response = client.post("/internal/v1/goal-questions", json=payload)
+    assert response.status_code == 200
+    answers = [dict(question=q, answer=i == 0) for i, q in enumerate(response.json()["questions"])]
+    plan = client.post("/internal/v1/goal-plans", json={**payload, "answers": answers})
+    assert plan.status_code == 200 and plan.json()["metrics"][0]["unit"] == "分"
+    assert "answers" not in plan.json()  # Answers are generation context, not stored plan fields.
+    calls = factory.return_value.responses.parse.call_args_list
+    assert calls[0].kwargs["text_format"] is GoalQuestions
+    actual = json.loads(calls[1].kwargs["input"][1]["content"])
+    assert actual["answers"] == answers and actual["title"] == title
+
+
+@pytest.mark.parametrize("questions", [[], ["duplicate"] * 3, ["x" * 201, "q2", "q3"]])
+def test_bad_generated_questions_fail_closed(client, questions):
+    from life_agent_goal_planner.planner import OpenAIGoalPlanner
+
+    factory = MagicMock()
+    factory.return_value.responses.parse.return_value = SimpleNamespace(
+        output_parsed=dict(questions=questions)
+    )
+    app.dependency_overrides[get_planner] = lambda: OpenAIGoalPlanner(
+        Settings(openai_api_key="test"), factory
+    )
+    response = client.post(
+        "/internal/v1/goal-questions", json=dict(title="読書", target_date=str(date.today()))
+    )
+    assert response.status_code == 503

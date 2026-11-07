@@ -1,4 +1,4 @@
-"""Cross-process HTTP/schema coverage; SQLite unit tests cannot replace this boundary."""
+"""Cross-process HTTP/schema coverage with an isolated Firestore emulator."""
 import os
 from datetime import date, timedelta
 from uuid import uuid4
@@ -12,8 +12,14 @@ def test_core_ai_and_database_boundary():
     if not url:
         pytest.skip("Run scripts/test-weekend-3.sh for isolated integration")
     with httpx.Client(base_url=url, headers={"Authorization": f"Bearer {uuid4()}"}) as client:
-        plan = client.post("/api/v1/goals/preview", json={"title": "本を読む",
-            "target_date": str(date.today() + timedelta(days=90))}).json()
+        goal_input = {"title": "本を読む", "target_date": str(date.today() + timedelta(days=90))}
+        questions = client.post("/api/v1/goals/questions", json=goal_input)
+        assert questions.status_code == 200
+        assert client.get("/api/v1/goals").json() == []
+        answers = [dict(question=q, answer=True) for q in questions.json()["questions"]]
+        plan = client.post("/api/v1/goals/preview", json={**goal_input, "answers": answers}).json()
+        assert any(metric["unit"] == "分" for metric in plan["metrics"])
+        assert len(plan["milestones"]) > 3
         plan["metrics"] = [dict(name="読了冊数", target_value=12, unit="冊")]
         goal = client.post("/api/v1/goals/confirm", json=plan).json()
         path = f"/api/v1/goals/{goal['id']}"

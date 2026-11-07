@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
-class GoalPlanRequest(BaseModel):
+class GoalInput(BaseModel):
     title: str = Field(min_length=1, max_length=120)
     description: str | None = Field(default=None, max_length=2000)
     target_date: date
@@ -27,6 +27,40 @@ class GoalPlanRequest(BaseModel):
     def target_date_must_not_be_in_the_past(cls, value: date) -> date:
         if value < date.today():
             raise ValueError("Goal期限は今日以降にしてください")
+        return value
+
+
+class GoalQuestions(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    questions: list[Annotated[str, Field(min_length=1, max_length=200)]] = Field(
+        min_length=3, max_length=8
+    )
+
+    @field_validator("questions")
+    @classmethod
+    def unique_questions(cls, value: list[str]) -> list[str]:
+        if len(value) != len(set(value)):
+            raise ValueError("Duplicate questions")
+        return value
+
+
+class GoalAnswer(BaseModel):
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
+
+    question: str = Field(min_length=1, max_length=200)
+    answer: bool = Field(strict=True)
+
+
+class GoalPlanRequest(GoalInput):
+    answers: list[GoalAnswer] = Field(default_factory=list, max_length=8)
+
+    @field_validator("answers")
+    @classmethod
+    def unique_answers(cls, value: list[GoalAnswer]) -> list[GoalAnswer]:
+        questions = [item.question for item in value]
+        if len(questions) != len(set(questions)):
+            raise ValueError("Duplicate answers")
         return value
 
 
@@ -62,9 +96,9 @@ class GeneratedPlan(BaseModel):
     milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
 
 
-class GoalPlan(GoalPlanRequest):
-    metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
-    milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
+class GoalPlan(GoalInput):
+    metrics: list[MetricDraft] = Field(min_length=1, max_length=10)
+    milestones: list[MilestoneDraft] = Field(min_length=1, max_length=10)
 
     @model_validator(mode="after")
     def validate_milestone_dates(self) -> "GoalPlan":
@@ -106,7 +140,7 @@ class ProgressMetricUpdateRequest(BaseModel):
 class ProgressPreview(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    metric_updates: list[ProgressMetricUpdateRequest] = Field(max_length=3)
+    metric_updates: list[ProgressMetricUpdateRequest] = Field(max_length=10)
     warnings: list[Annotated[str, Field(min_length=1, max_length=300)]] = Field(max_length=3)
 
     @model_validator(mode="after")

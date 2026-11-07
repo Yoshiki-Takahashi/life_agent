@@ -1,5 +1,8 @@
 # 週末開発手順書
 
+日々の開発・検証・PR・リリースの共通手順は[開発からリリースまで](development-workflow.md)を参照してください。
+この文書は開発段階とSprintの経緯を説明します。
+
 ## 開発方針
 
 最初にローカルで動く最小製品を完成させ、その後に実AI、認証、GCP、進捗管理を順に追加します。各週末は単独でデモ可能な状態で終了し、未完成の大きな機能を持ち越しません。
@@ -46,6 +49,7 @@ Core APIの`uv run pytest`は一時Firestore Emulatorを自動起動します。
 2026-11-01に今後の計画を改訂しました。目標作成、進捗解析・助言、再計画、可視化、全目標コーチは実装済みです。
 Weekend 10の音声入力はPR #21でマージ済みです。Weekend 11のGoogle認証は[Issue #20](https://github.com/Yoshiki-Takahashi/life_agent/issues/20)で管理します。
 開発範囲・受け入れ条件・検証結果・進捗は[GitHub Issues](https://github.com/Yoshiki-Takahashi/life_agent/issues)で管理します。
+Goal作成の質問生成・回答・項目の増減・日付選択の改善は[Issue #26](https://github.com/Yoshiki-Takahashi/life_agent/issues/26)で管理します。
 旧Sprint資料は履歴であり、未更新の状態表記を今後の計画として扱いません。Weekend番号は日程の確約ではありません。
 
 ### Weekend 0: 開発基盤

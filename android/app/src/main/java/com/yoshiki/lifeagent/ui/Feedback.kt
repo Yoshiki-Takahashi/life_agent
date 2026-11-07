@@ -37,7 +37,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.booleanOrNull
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import retrofit2.HttpException
@@ -113,9 +115,12 @@ class FeedbackViewModel(
                 // uncertain submission was not created. Keep its original ID frozen.
                 val unknown = state.resultUnknown || (detail?.get("result_unknown")?.jsonPrimitive?.booleanOrNull
                     ?: ((error as? HttpException)?.code() !in listOf(401, 403, 422)))
+                val message = if ((error as? HttpException)?.code() == 503)
+                    (detail?.get("message") as? JsonPrimitive)?.contentOrNull?.takeIf { it.isNotBlank() }
+                    else null
                 _uiState.value = _uiState.value.copy(isSending = false, resultUnknown = unknown,
                     error = if (unknown) "送信結果を確認できません。同じ内容で再確認してください。"
-                        else "送信できませんでした。接続やサーバー設定を確認して再試行してください。")
+                        else message ?: "送信できませんでした。接続やサーバー設定を確認して再試行してください。")
             }
         }
     }

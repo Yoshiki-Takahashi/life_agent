@@ -12,7 +12,13 @@ from pydantic import BaseModel, ConfigDict, Field, StringConstraints
 
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
-from life_agent_core.database import Database, document, request_key, run_transaction
+from life_agent_core.database import (
+    Database,
+    document,
+    read_in_transaction,
+    request_key,
+    run_transaction,
+)
 from life_agent_core.models import StoredModel
 
 router = APIRouter(prefix="/api/v1/feedback", tags=["feedback"])
@@ -123,7 +129,7 @@ def send_feedback(payload: FeedbackCreate, user_id: CurrentUserId, db: Database,
         ).hexdigest()
 
         def reserve(transaction):
-            snapshot = ref.get(transaction=transaction)
+            snapshot = read_in_transaction(ref, transaction)
             if snapshot.exists:
                 receipt = FeedbackReceipt.model_validate(snapshot.to_dict())
                 if receipt.payload_hash != fingerprint:

@@ -1,5 +1,6 @@
 import hashlib
 import json
+import logging
 import os
 from datetime import date, datetime
 from decimal import Decimal
@@ -8,7 +9,12 @@ from typing import Annotated
 from uuid import UUID
 
 from fastapi import Depends, HTTPException
-from google.api_core.exceptions import Aborted
+from google.api_core.exceptions import (
+    Aborted,
+    DeadlineExceeded,
+    InternalServerError,
+    ServiceUnavailable,
+)
 from google.api_core.retry import Retry, if_exception_type
 from google.cloud import firestore
 
@@ -79,9 +85,21 @@ def request_key(client_request_id: str) -> str:
     return hashlib.sha256(client_request_id.encode()).hexdigest()
 
 
+def read_in_transaction(reference: firestore.DocumentReference, transaction: firestore.Transaction):
+    # Retrying a read inside the same failed transaction can hold its locks for
+    # the SDK's 300s batch-get budget. Let the outer retry start a fresh snapshot.
+    try:
+        return reference.get(transaction=transaction, retry=None, timeout=10)
+    except (DeadlineExceeded, InternalServerError, ServiceUnavailable) as error:
+        logging.getLogger(__name__).warning(
+            "Restarting Firestore transaction after read %s", type(error).__name__
+        )
+        raise Aborted("Transient transaction read failure") from error
+
+
 def run_transaction(db: firestore.Client, operation):
     # The SDK retries commit conflicts, but a pessimistic transaction can also
-    # abort while reading. Retry that whole transaction with a fresh snapshot.
+    # abort or time out while reading. Retry that whole transaction with a fresh snapshot.
     # Emulator contention can keep locks for 30s per attempt. Its verification
     # budget is longer; Cloud Run retains the 45s production retry budget.
     timeout = 180 if get_settings().firestore_emulator_host else 45

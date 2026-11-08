@@ -6,6 +6,7 @@
 - `test_services.py`: Core → 内部AIサービス → Firestore Emulator。固定入出力と確認後の保存。
   リポジトリルートで`./scripts/test-weekend-3.sh`。
 - `test_progress_concurrency.py`: Firestore transactionと保存IDによる同時実行・重複防止。
+  別IDの6件同時保存では目標値を超えても現在値・全履歴が揃うことを確認する。
   `./scripts/test-weekend-7.sh`。
 - Androidの`AppFlowTest`: 一つのユーザー経路で全目標対話・確認・再送・ナビゲーションを検証。
   起動済みEmulatorで`ANDROID_HOME=... ./scripts/test-weekend-7.sh --android`。

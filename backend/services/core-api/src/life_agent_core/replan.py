@@ -12,7 +12,13 @@ from life_agent_core.ai_service import (
 )
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
-from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.database import (
+    Database,
+    decode,
+    document,
+    read_in_transaction,
+    run_transaction,
+)
 from life_agent_core.goals import goal_response, load_goal, load_goal_with_details, require_active
 from life_agent_core.models import Goal, Metric, Milestone, ReplanProposalStatus
 from life_agent_core.models import ReplanProposal as ReplanProposalModel
@@ -170,7 +176,7 @@ def apply_replan(
     def persist(transaction):
         goal = load_goal(goal_id, db, user_id, transaction)
         require_active(goal)
-        snapshot = proposal_ref.get(transaction=transaction)
+        snapshot = read_in_transaction(proposal_ref, transaction)
         if not snapshot.exists:
             raise HTTPException(status_code=404, detail="再計画候補が見つかりません")
         proposal = ReplanProposalModel.model_validate(decode(snapshot.to_dict()))

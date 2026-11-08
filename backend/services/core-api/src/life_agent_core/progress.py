@@ -14,7 +14,13 @@ from life_agent_core.ai_service import (
 )
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
-from life_agent_core.database import Database, document, request_key, run_transaction
+from life_agent_core.database import (
+    Database,
+    document,
+    read_in_transaction,
+    request_key,
+    run_transaction,
+)
 from life_agent_core.goals import goal_response, load_goal, load_goal_with_details, require_active
 from life_agent_core.models import (
     ActivityDay,
@@ -172,7 +178,7 @@ def record_progress(
 
     def persist(transaction):
         goal = load_goal(goal_id, db, user_id, transaction)
-        if log_ref.get(transaction=transaction).exists:
+        if read_in_transaction(log_ref, transaction).exists:
             return
         require_active(goal)
         metrics = {m.id: m for m in goal.metrics if m.archived_at is None}
@@ -200,7 +206,7 @@ def record_progress(
                 ref = goal_ref.collection("activity_days").document(
                     f"{metric.id}_{update.activity_date.isoformat()}"
                 )
-                if ref.get(transaction=transaction).exists:
+                if read_in_transaction(ref, transaction).exists:
                     raise HTTPException(status_code=409, detail="この日の実行は記録済みです")
                 occurrence_refs.append(ref)
         log = ProgressLog(

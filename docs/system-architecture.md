@@ -61,6 +61,10 @@ GitHub TokenはCoreだけがSecret Managerから取得します。Android・AI�
 新規計画は確認後にGoal・Metric・Milestoneをまとめて保存します。
 実績はGoal文書と保存IDをtransactionで読み、種別に応じた現在値の更新と履歴保存を一つのtransactionで行います。
 同じGoalの同じ保存IDは再反映せず、現在のGoalを返します。
+transaction内の文書読取りはRPC単体の再試行を無効にし、1回10秒に制限します。
+読取りのAborted・期限切れ・一時的なサーバー／接続障害ではrollbackし、外側の再試行で新しいtransactionを開始します。
+SDKのcommit競合再試行は維持します。結果が不明な書込みのtimeoutを、読取り失敗として再実行しません。
+外側の再試行予算はEmulatorで180秒、実クラウドで45秒です。読取りだけがSDK既定の300秒を待つ構成は使いません。
 
 再計画は候補だけを先に保持します。適用transactionでGoalと候補を読み、基準の計画版が一致する場合だけ更新します。
 使わなくなったMetricは削除せず非表示化し、過去の実績との参照を残します。

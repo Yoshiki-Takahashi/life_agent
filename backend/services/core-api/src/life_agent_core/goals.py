@@ -10,7 +10,13 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from life_agent_core.ai_service import AIUnavailableError, InternalAIClient
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import Settings, get_settings
-from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.database import (
+    Database,
+    decode,
+    document,
+    read_in_transaction,
+    run_transaction,
+)
 from life_agent_core.models import Goal, GoalStatus, Metric, Milestone, ProgressLog
 from life_agent_core.schemas import (
     GoalConfirmRequest,
@@ -247,7 +253,10 @@ def get_goal(goal_id: uuid.UUID, db: Database, user_id: CurrentUserId) -> GoalRe
 
 
 def load_goal(goal_id: uuid.UUID, db: firestore.Client, user_id: str, transaction=None) -> Goal:
-    snapshot = db.collection("goals").document(str(goal_id)).get(transaction=transaction)
+    reference = db.collection("goals").document(str(goal_id))
+    snapshot = (
+        reference.get() if transaction is None else read_in_transaction(reference, transaction)
+    )
     return owned_goal(snapshot, user_id)
 
 

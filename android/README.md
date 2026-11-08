@@ -143,3 +143,21 @@ Googleのアカウント選択だけを差し替え、署名なしの合成Googl
 Firestore Emulator・Core APIで実際のFirebase ID Tokenを検証し、既存Goalへのアクセスと他利用者の404を確認します。
 既存の開発DB・デフォルトFirebaseセッションは使いません。テスト用の名前付きFirebase Appとアカウントだけを使用し、作成ユーザーと専用DBを終了時に削除します。
 実Googleの署名検証・OAuthアカウント選択を検証した扱いにはしません。
+
+## 専用アカウントによるGCP検証（Issue #50）
+
+[`scripts/gcp/check-account-android.py`](../scripts/gcp/check-account-android.py)から、
+Secret Managerの専用アカウントで `GcpAccountCheckTest` を実行します。
+本人の端末とは別の専用AVDを使い、クラウド向けdebug APKとテストAPKをインストールしてください。
+APKの接続先がrunnerで確認した現行GCPサービスURLと一致しない場合、書込み前に失敗します。
+
+テストは名前付きFirebase Appで通常のメール・パスワードSDKログインを行い、実AIの計画提案を取得し、
+確認用の固定Metricに編集して保存します。目標超過と0の混在・全て0の実績を画面から保存し、
+API再取得と一覧からの再表示で検証します。デフォルトFirebaseセッションへログインしません。
+認証情報はapp-privateファイルを読んだ直後に削除し、終了時にログアウトします。
+runnerは実行IDと完全一致するタイトルの確認用Goalだけを削除し、専用AVDのアプリデータも消去します。
+本人が普段使うAVDを指定しないでください。資格情報の入力ファイル・userdata・snapshot・画面画像を保存しません。
+
+この検証はPR版Androidから**デプロイ済みBackend**への接続確認です。
+未マージBackendの検証はBackend/Fake検査と別途の候補環境確認として扱い、現行GCPを切り替えません。
+実行手順、Secret・権限、失敗後の復旧は [GCP運用手順](../infra/gcp/README.md)を参照してください。

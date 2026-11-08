@@ -64,8 +64,8 @@ def get_current_user_id(
             detail="認証情報が無効です。もう一度ログインしてください",
             headers={"WWW-Authenticate": "Bearer"},
         ) from error
-    allowed_user_id = get_settings().allowed_user_id
-    if allowed_user_id is not None and user_id != allowed_user_id:
+    allowed_uids = get_settings().allowed_uids
+    if allowed_uids and user_id not in allowed_uids:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="このアカウントには利用が許可されていません",

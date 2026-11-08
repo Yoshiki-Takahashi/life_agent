@@ -300,3 +300,17 @@ def test_rollback_preserves_an_existing_split_instead_of_using_latest(cloud):
     with pytest.raises(deploy.DeploymentError):
         deploy.Deployment().run()
     assert deploy.serving_traffic(cloud.services["core"]) == {"core-old": 70, "core-older": 30}
+
+
+def test_deployment_preserves_owner_and_adds_explicit_check_uid(cloud, monkeypatch):
+    monkeypatch.setenv("ALLOWED_USER_IDS", "check-user")
+    deploy.Deployment().run()
+    assert "ALLOWED_USER_ID=allowed-user" in cloud.environment["core"]
+    assert "ALLOWED_USER_IDS=check-user" in cloud.environment["core"]
+
+
+@pytest.mark.parametrize("uids", ["check,", " check", "check|AUTH_BACKEND=fake"])
+def test_deployment_rejects_malformed_extra_uids(cloud, monkeypatch, uids):
+    monkeypatch.setenv("ALLOWED_USER_IDS", uids)
+    with pytest.raises(deploy.DeploymentError):
+        deploy.Deployment()

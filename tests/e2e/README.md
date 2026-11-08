@@ -33,3 +33,6 @@ Tokenは引数・ログへ出さず、テスト終了後に検証用Goal/実績/
 Google連携の`./scripts/test-google-auth.sh`もFirestore Emulatorを自動起動します。
 Auth Emulatorを別途起動し、同じFirebase uidのGoal保持・Google連携・再ログイン・他所有者404を確認します。
 ローカル検証用Gradleは`-Plifeagent.useCloudFirebase=false`を明示し、端末確認用の既定値に依存しません。
+
+専用アカウントによるPR版Android→現行GCPの検査は[Android GCP検証手順](../../docs/android-gcp-check.md)を参照。
+未設定時のcloud jobはskipで、実GCP確認済みとは扱わない。

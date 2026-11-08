@@ -51,3 +51,6 @@ Fakeは、AIの返答を決めた内容に置き換えるものです。実AIの
 エミュレーターはMac上の仮想スマホで、APIの接続先はMacとGCPから選びます。ビルド時に接続先を確認してください。
 
 実行方法は[Backend](../backend/README.md)・[Android](../android/README.md)・[結合テスト](../tests/e2e/README.md)・[GCP運用](../infra/gcp/README.md)を参照します。
+
+専用アカウントによるPR版Android→現行GCPの検査は[Android GCP検証手順](android-gcp-check.md)を参照。
+未設定時のcloud jobはskipで、実GCP確認済みとは扱わない。

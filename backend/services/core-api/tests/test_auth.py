@@ -110,3 +110,31 @@ def test_cloud_run_cannot_start_without_a_private_firebase_policy(monkeypatch, a
 
 def test_cloud_run_accepts_an_explicit_firebase_uid():
     assert Settings(k_service="core-api", allowed_user_id="owner").allowed_user_id == "owner"
+
+
+def test_additional_uid_is_admitted_without_changing_goal_owner_filter(restricted_api, monkeypatch):
+    client, db, _ = restricted_api
+    monkeypatch.setenv("ALLOWED_USER_IDS", "other-uid")
+    get_settings.cache_clear()
+    query = db.collection.return_value.where.return_value
+    query.order_by.return_value.order_by.return_value.stream.return_value = []
+    for token, uid in (("allowed-token", "allowed-uid"), ("other-token", "other-uid")):
+        db.reset_mock()
+        response = client.get("/api/v1/goals", headers={"Authorization": f"Bearer {token}"})
+        assert response.status_code == 200
+        owner_filter = db.collection.return_value.where.call_args.kwargs["filter"]
+        assert owner_filter.field_path == "owner_id" and owner_filter.value == uid
+
+
+@pytest.mark.parametrize("uids", ["", " ", "owner,", ",owner", "owner, test", "owner,test\n"])
+def test_invalid_additional_uid_configuration_is_rejected(uids):
+    with pytest.raises(ValidationError):
+        Settings(allowed_user_ids=uids)
+
+
+def test_explicit_uid_list_can_start_cloud_run_and_deduplicates():
+    settings = Settings(
+        k_service="core-api", allowed_user_id="owner", allowed_user_ids="check,owner"
+    )
+    assert settings.allowed_uids == {"owner", "check"}
+    assert Settings(k_service="core-api", allowed_user_ids="check").allowed_uids == {"check"}

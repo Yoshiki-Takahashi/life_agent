@@ -89,7 +89,16 @@ def test_plan_progress_advice_and_approved_replan(client, create_goal, title, bo
         )
 
 
-def test_authentication_and_owner_isolation(client, unauthenticated_client, create_goal):
+@pytest.mark.parametrize("explicit_allowlist", [False, True])
+def test_authentication_and_owner_isolation(
+    client, unauthenticated_client, create_goal, monkeypatch, explicit_allowlist
+):
+    if explicit_allowlist:
+        from life_agent_core.config import get_settings
+
+        monkeypatch.setenv("ALLOWED_USER_ID", "user-a")
+        monkeypatch.setenv("ALLOWED_USER_IDS", "other")
+        get_settings.cache_clear()
     own = create_goal()
     foreign = create_goal("他人の筋トレ", owner="other")
     assert unauthenticated_client.get("/api/v1/goals").status_code == 401

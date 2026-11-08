@@ -1,7 +1,7 @@
-# ADR 0004: 個人利用中のCore APIを一つのFirebase UIDに限定する
+# ADR 0004: 個人利用中のCore APIを明示したFirebase UIDに限定する
 
 - 日付: 2026-11-05
-- 状態: accepted
+- 状態: accepted（2026-11-08: 検証専用アカウントの明示許可へ拡張）
 
 ## 背景
 
@@ -11,12 +11,15 @@
 ## 決定
 
 管理APIで指定メールアドレスの既存アカウントを照合し、対応するuidを環境設定へ固定する。
-Coreの共通認証依存関係でFirebase ID Tokenを検証した後、`ALLOWED_USER_ID`との一致を要求する。
+Coreの共通認証依存関係でFirebase ID Tokenを検証した後、本人の`ALLOWED_USER_ID`と追加の`ALLOWED_USER_IDS`の和集合に含まれることを要求する。
+`ALLOWED_USER_IDS`はカンマ区切りのUIDで、空要素・空白は拒否し、重複は一つとして扱う。
+既存の単一UID設定はそのまま使える。検証専用アカウントも通常のFirebaseログインと所有者認可を通す。
 クライアントのメールアドレス・uid申告は信用しない。他のuidはDB操作・AI呼出し前に403とする。
 未認証・不正Tokenの401、Goalの所有者確認、公開healthは維持する。
 
 Cloud Runの`K_SERVICE`がある環境では、許可uid未設定・空文字・Fake認証の構成を起動時に拒否する。
-デプロイworkflowもGitHub environmentの`CORE_API_ALLOWED_USER_ID`を必須にする。
+デプロイworkflowは本人の`CORE_API_ALLOWED_USER_ID`を引き続き必須とし、
+任意の`CORE_API_ALLOWED_USER_IDS`で検証用UIDを追加する。追加UIDは実行結果へ記録しない。
 ローカル・CIでは設定を省略し、既存の複数利用者分離テストを維持できる。
 
 ## 影響

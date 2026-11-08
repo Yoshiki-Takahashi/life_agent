@@ -48,3 +48,6 @@ __pycache__/
 .env.*
 !.env.example
 .secrets/
+
+# Public local cloud Firebase SDK configuration
+android/config/auth-cloud-debug.properties

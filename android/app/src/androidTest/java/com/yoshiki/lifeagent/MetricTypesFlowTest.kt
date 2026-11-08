@@ -55,7 +55,8 @@ class MetricTypesFlowTest {
         screenshot("issue47-measurement-checklist.png")
         compose.onNodeWithText("コーチ").performClick()
         compose.onNodeWithText("コーチに話す").performTextReplacement("種別テスト 体脂肪率20%を記録したい")
-        compose.onNodeWithText("送信").performClick()
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.onNodeWithText("送信").performScrollTo().assertIsDisplayed().performClick()
         waitFor("確認して保存へ")
         compose.onNodeWithText("確認して保存へ").performScrollTo().performClick()
         waitFor("今回値を確認")
@@ -117,6 +118,10 @@ class MetricTypesFlowTest {
     }
 
     private fun waitFor(text: String) {
-        compose.waitUntil(45000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+        try {
+            compose.waitUntil(45000) { compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty() }
+        } catch (error: ComposeTimeoutException) {
+            throw AssertionError("Waiting for '$text':\n${compose.onRoot().printToString()}", error)
+        }
     }
 }

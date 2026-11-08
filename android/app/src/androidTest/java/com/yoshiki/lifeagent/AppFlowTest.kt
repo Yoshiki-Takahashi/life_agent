@@ -245,10 +245,15 @@ class AppFlowTest {
 
     private fun send(body: String) {
         compose.onNodeWithText("コーチに話す").performTextReplacement(body)
-        compose.onNodeWithText("送信").performClick()
+        androidx.test.espresso.Espresso.closeSoftKeyboard()
+        compose.onNodeWithText("送信").performScrollTo().assertIsDisplayed().performClick()
     }
     private fun waitFor(text: String, substring: Boolean = false, timeoutMs: Long = 10000) {
-        compose.waitUntil(timeoutMs) { compose.onAllNodesWithText(text, substring=substring).fetchSemanticsNodes().isNotEmpty() }
+        try {
+            compose.waitUntil(timeoutMs) { compose.onAllNodesWithText(text, substring=substring).fetchSemanticsNodes().isNotEmpty() }
+        } catch (error: ComposeTimeoutException) {
+            throw AssertionError("Waiting for '$text':\n${compose.onRoot().printToString()}", error)
+        }
     }
     private fun conversation(text: String, substring: Boolean = false): SemanticsNodeInteraction {
         waitFor(text, substring)

@@ -42,6 +42,9 @@ data class Metric(
     val position: Int = 0,
     val id: String = "",
     val currentValue: Double = 0.0,
+    val kind: String = "cumulative",
+    val checklistItems: List<String> = emptyList(),
+    val completedItems: List<String> = emptyList(),
 )
 
 data class Milestone(
@@ -63,11 +66,18 @@ data class ProgressMetricUpdate(
     val metricName: String,
     val value: Double,
     val unit: String,
+    val kind: String = "cumulative",
+    val completedItems: List<String> = emptyList(),
+    val activityDate: String? = null,
 )
 
 data class MetricProgressInput(
     val metricId: String,
     val value: Double,
+    val completedItems: List<String>? = null,
+    val activityDate: String? = null,
+    val expectedCompletedItems: List<String>? = null,
+    val kind: String? = null,
 )
 
 data class ReplanProposal(
@@ -92,4 +102,46 @@ fun validProgressValue(text: String): Boolean {
     val value = text.toBigDecimalOrNull() ?: return false
     return value >= BigDecimal.ZERO && value <= BigDecimal("1000000000") &&
         value.stripTrailingZeros().scale() <= 2
+}
+
+val metricKinds = linkedMapOf("cumulative" to "累計", "occurrence" to "実行日", "measurement" to "測定値", "checklist" to "チェックリスト")
+
+fun selectedItems(value: String): List<String> = runCatching {
+    kotlinx.serialization.json.Json.decodeFromString<List<String>>(value)
+}.getOrDefault(emptyList())
+
+fun metricInput(metric: Metric, value: String): MetricProgressInput? {
+    if (value.isBlank()) return null
+    if (metric.kind == "checklist") {
+        val items = kotlinx.serialization.json.Json.decodeFromString<List<String>>(value)
+        require(items.distinct().size == items.size && metric.checklistItems.containsAll(items))
+        return MetricProgressInput(metric.id, items.size.toDouble(), items, expectedCompletedItems = metric.completedItems, kind = metric.kind)
+    }
+    val number = value.toBigDecimalOrNull() ?: error("数値を入力してください")
+    require(number >= BigDecimal.ZERO && number <= BigDecimal("1000000000") && number.stripTrailingZeros().scale() <= 2)
+    when (metric.kind) {
+        "cumulative" -> require(validProgressValue(value))
+        "occurrence" -> require(number.compareTo(BigDecimal.ONE) == 0)
+        "measurement" -> Unit
+        else -> error("対応していない種別です")
+    }
+    return MetricProgressInput(metric.id, number.toDouble(),
+        activityDate = if (metric.kind == "occurrence") java.time.LocalDate.now().toString() else null,
+        kind = metric.kind.takeUnless { it == "cumulative" })
+}
+
+fun progressEditValue(metric: Metric, update: ProgressMetricUpdatePayload?): String = when {
+    update == null -> ""
+    metric.kind == "checklist" -> kotlinx.serialization.json.Json.encodeToString(update.completedItems.orEmpty())
+    else -> java.math.BigDecimal.valueOf(update.value).stripTrailingZeros().toPlainString()
+}
+
+fun metricSavedValue(metric: Metric, input: MetricProgressInput): Double =
+    if (metric.kind in setOf("measurement", "checklist")) input.value else metric.currentValue + input.value
+
+fun progressLabel(update: ProgressMetricUpdate): String = when (update.kind) {
+    "checklist" -> "${update.metricName}: 完了 ${update.completedItems.joinToString("、").ifEmpty { "なし" }}"
+    "occurrence" -> "${update.metricName}: ${update.activityDate} 実行済み"
+    "measurement" -> "${update.metricName}: ${update.value} ${update.unit}"
+    else -> "${update.metricName}: +${update.value} ${update.unit}"
 }

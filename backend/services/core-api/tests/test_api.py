@@ -177,8 +177,8 @@ def test_preview_accepts_zero_and_over_target_without_saving(client, create_goal
     path = f"/api/v1/goals/{goal['id']}"
     result = client.post(path + "/progress/preview", json={"body": f"{value}冊読み終えた"})
     assert result.status_code == 200
-    assert result.json()["metric_updates"] == [
-        dict(metric_id=goal["metrics"][0]["id"], value=value)
+    assert [(u["metric_id"], u["value"]) for u in result.json()["metric_updates"]] == [
+        (goal["metrics"][0]["id"], value)
     ]
     assert client.get(path).json() == goal
 

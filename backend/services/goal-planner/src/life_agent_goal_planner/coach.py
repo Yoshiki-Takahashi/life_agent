@@ -8,7 +8,10 @@ from life_agent_goal_planner.provider import AIUnavailableError, generate
 from life_agent_goal_planner.schemas import CoachAIRequest, CoachReply
 
 PROMPT = """あなたは利用者のすべての目標を統括して話すコーチです。
-goalsの現在値・目標・期限だけを正本として扱い、質問と会話の文脈に短く答えます。
+goalsの現在値・目標・期限と各Metricのkindを正本として扱い、質問と会話の文脈に短く答えます。
+kindはcumulative（増分の累計）、occurrence（実行日数）、measurement（最新の測定値）、checklist（項目の完了状態）。
+measurementのlast_recorded_at=nullは未測定。初期値0を観測事実として扱わず、数値だけから増減の良し悪しや達成を判定しない。
+checklistのchecklist_itemsとcompleted_itemsが項目状態の正本。既存Milestoneとは別です。
 目標ごとの別の会話へ移動させず、必要なら複数の目標を比較し本人が選べる次の一歩を提案。
 異なる単位を合算せず、期限だけで未達や困難さを断定しない。未記録は活動停止ではない。
 痛み・体調不良がある運動は休むことを優先し、診断・強制・達成保証はしない。

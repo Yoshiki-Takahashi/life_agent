@@ -40,7 +40,7 @@ def test_core_ai_and_database_boundary():
             candidate = client.post(path + "/progress/preview", json={"body": body})
             assert candidate.status_code == 200
             updates = candidate.json()["metric_updates"]
-            assert updates == [dict(metric_id=goal["metrics"][0]["id"], value=value)]
+            assert [(u["metric_id"], u["value"]) for u in updates] == [(goal["metrics"][0]["id"], value)]
             payload = dict(body=body, client_request_id=f"boundary-{value}", metric_updates=updates)
             for _ in range(2):
                 assert client.post(path + "/progress", json=payload).status_code == 200
@@ -48,3 +48,60 @@ def test_core_ai_and_database_boundary():
         assert result["metrics"][0]["current_value"] == 14
         assert len(result["progress_logs"]) == 3
         assert result["progress_logs"][0]["metric_updates"][0]["value"] == 0
+
+
+@pytest.mark.parametrize(
+    ("title", "body", "kind"),
+    [
+        ("体脂肪率を測る", "体脂肪率25%だった", "measurement"),
+        ("ジムの習慣", "ジムに行った", "occurrence"),
+        ("旅行の準備", "宿を決めるを完了した", "checklist"),
+    ],
+)
+def test_typed_plan_parser_advice_replan_boundary(title, body, kind):
+    url = os.getenv("CORE_API_URL")
+    if not url:
+        pytest.skip("Run scripts/test-weekend-3.sh")
+    with httpx.Client(
+        base_url=url, headers={"Authorization": f"Bearer {uuid4()}"}, timeout=60
+    ) as client:
+        plan = client.post(
+            "/api/v1/goals/preview",
+            json=dict(
+                title=title,
+                target_date=str(date.today() + timedelta(days=90)),
+                metric_types_enabled=True,
+            ),
+        ).json()
+        assert plan["metrics"][0]["kind"] == kind
+        goal = client.post("/api/v1/goals/confirm", json=plan).json()
+        path = f"/api/v1/goals/{goal['id']}"
+        result = client.post(path + "/progress/preview", json=dict(body=body))
+        assert result.status_code == 200, result.text
+        updates = result.json()["metric_updates"]
+        assert len(updates) == 1
+        updates[0]["kind"] = kind
+        if kind == "occurrence":
+            updates[0]["activity_date"] = str(date.today())
+        if kind == "checklist":
+            updates[0]["expected_completed_items"] = []
+        saved = client.post(
+            path + "/progress",
+            json=dict(body=body, client_request_id="one", metric_updates=updates),
+        )
+        assert saved.status_code == 200, saved.text
+        assert saved.json()["progress_logs"][0]["metric_updates"][0]["kind"] == kind
+        advice = client.post(path + "/advice")
+        assert advice.status_code == 200, advice.text
+        proposal = client.post(path + "/replan/preview", json=dict(reason="期限を延ばしたい"))
+        assert proposal.status_code == 200, proposal.text
+        assert proposal.json()["proposed_plan"]["metrics"][0]["kind"] == kind
+        applied = client.post(
+            path + "/replan/apply",
+            json=dict(proposal_id=proposal.json()["proposal_id"]),
+        )
+        assert applied.status_code == 200, applied.text
+        assert (
+            applied.json()["metrics"][0]["current_value"]
+            == saved.json()["metrics"][0]["current_value"]
+        )

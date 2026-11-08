@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -31,9 +30,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
+import retrofit2.HttpException
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.initializer
@@ -43,7 +42,10 @@ import com.yoshiki.lifeagent.data.Goal
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.MetricProgressInput
 import com.yoshiki.lifeagent.data.ReplanProposal
-import com.yoshiki.lifeagent.data.validProgressValue
+import com.yoshiki.lifeagent.data.Metric
+import com.yoshiki.lifeagent.data.metricInput
+import com.yoshiki.lifeagent.data.progressEditValue
+import com.yoshiki.lifeagent.data.progressLabel
 import java.util.UUID
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -83,7 +85,13 @@ data class MetricProgressEdit(
     val targetValue: Double,
     val unit: String,
     val value: String = "",
-)
+    val kind: String = "cumulative",
+    val checklistItems: List<String> = emptyList(),
+    val completedItems: List<String> = emptyList(),
+) {
+    fun metric() = Metric(name, targetValue, unit, id = metricId, currentValue = currentValue,
+        kind = kind, checklistItems = checklistItems, completedItems = completedItems)
+}
 
 class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() {
     private val _uiState = MutableStateFlow(GoalDetailUiState())
@@ -121,7 +129,9 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         }
     }
 
+    private var pendingUpdates: List<MetricProgressInput>? = null
     private var requestId: String? = null
+        set(value) { field = value; if (value == null) pendingUpdates = null }
     private var inputRevision = 0
     private var adviceRevision = 0
 
@@ -163,42 +173,39 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         val goal = state.goal ?: return
         if (state.isSavingProgress || state.isParsing) return
         val body = state.progressBody.trim()
-        val updates = state.metricProgress.mapNotNull { item ->
-            val value = item.value.toDoubleOrNull()
-            if (value != null) MetricProgressInput(item.metricId, value) else null
-        }
-        if (body.isBlank()) {
-            _uiState.update { it.copy(progressError = "進捗メモを入力してください") }
+        if (body.isBlank() || body.length > 2000) {
+            _uiState.update { it.copy(progressError = "進捗メモを1〜2,000文字で入力してください") }
             return
         }
-        val invalid = state.metricProgress.any {
-            it.value.isNotBlank() && !validProgressValue(it.value)
-        }
-        if (invalid) {
-            _uiState.update { it.copy(progressError = "今回値は0以上10億以下の数（小数2桁まで）で入力してください") }
-            return
-        }
+        val updates = runCatching { state.metricProgress.mapNotNull { metricInput(it.metric(), it.value) } }
+            .getOrElse {
+                _uiState.update { it.copy(progressError = "種別に合う数値・チェック項目を入力してください。数値は0以上10億以下・小数2桁までです") }
+                return
+            }
         if (updates.isEmpty()) {
-            _uiState.update { it.copy(progressError = "今回値を1つ以上入力してください（0も保存できます）") }
+            _uiState.update { it.copy(progressError = "今回記録するMetricを1つ以上入力してください") }
             return
         }
 
+        val frozenUpdates = pendingUpdates ?: updates.also { pendingUpdates = it }
         val id = requestId ?: UUID.randomUUID().toString().also { requestId = it }
         adviceRevision++
         _uiState.update { it.copy(isSavingProgress = true, progressError = null,
             isLoadingAdvice = false, advice = null, adviceError = null) }
         viewModelScope.launch {
-            runCatching { repository.recordProgress(goal.id, body, updates, id) }
+            runCatching { repository.recordProgress(goal.id, body, frozenUpdates, id) }
                 .onSuccess { updatedGoal ->
                     requestId = null
                     _uiState.value = stateForGoal(updatedGoal).copy(progressSaved = true)
                     loadAdvice()
                 }
-                .onFailure {
+                .onFailure { error ->
                     _uiState.update {
                         it.copy(
                             isSavingProgress = false,
-                            progressError = "進捗を保存できませんでした",
+                            progressError = if (error is HttpException && error.code() == 409)
+                                "同日の実行は記録済みか、チェック状態が更新されています。目標を開き直してください。"
+                                else "進捗を保存できませんでした",
                         )
                     }
                 }
@@ -224,8 +231,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                             hasPreview = true,
                             parserWarnings = preview.warnings,
                             metricProgress = current.metricProgress.map { item ->
-                                item.copy(value = preview.metricUpdates.find { it.metricId == item.metricId }
-                                    ?.value?.let { if (it % 1.0 == 0.0) it.toLong().toString() else it.toString() } ?: "")
+                                item.copy(value = progressEditValue(item.metric(), preview.metricUpdates.find { it.metricId == item.metricId }))
                             },
                         ) }
                     }
@@ -340,6 +346,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                 currentValue = metric.currentValue,
                 targetValue = metric.targetValue,
                 unit = metric.unit,
+                kind = metric.kind, checklistItems = metric.checklistItems, completedItems = metric.completedItems,
             )
         },
     )
@@ -481,7 +488,8 @@ private fun GoalDetail(
                 ) {
                     Text(metric.name, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        "${formatNumber(metric.currentValue)} / ${formatNumber(metric.targetValue)} ${metric.unit}",
+                        if (metric.kind == "measurement" && goal.progressLogs.none { log -> log.metricUpdates.any { it.metricId == metric.id } }) "未測定 / 目標 ${formatNumber(metric.targetValue)} ${metric.unit}"
+                        else "${formatNumber(metric.currentValue)} / ${formatNumber(metric.targetValue)} ${metric.unit}",
                         color = MaterialTheme.colorScheme.primary,
                     )
                 }
@@ -492,7 +500,7 @@ private fun GoalDetail(
     if (selectedTab == 1) {
         TextButton(onClick = onReview) { Text("振り返り・通知設定") }
         Text("進捗の推移", style = MaterialTheme.typography.titleLarge)
-        Text("保存済みの累積記録を表示します。未記録期間の活動は推定しません。")
+        Text("種別に合う保存済みの記録を表示します。未記録期間の活動は推定しません。")
         goal.metrics.sortedBy { it.position }.forEach { metric ->
             MetricTrendCard(metric, goal.progressLogs)
         }
@@ -633,26 +641,15 @@ private fun ProgressEntry(
             }
             if (state.hasPreview) {
                 Text("更新候補を確認", style = MaterialTheme.typography.titleMedium)
-                Text("まだ保存されていません。今回の増加量を確認・修正してください。")
+                Text("まだ保存されていません。種別に合う記録内容を確認・修正してください。")
                 TextButton(onClick = onCancelPreview, enabled = !state.isSavingProgress && !state.isParsing) {
                     Text("候補を取り消して手入力")
                 }
             }
             state.parserWarnings.forEach { Text(it) }
             state.metricProgress.forEachIndexed { index, item ->
-                OutlinedTextField(
-                    value = item.value,
-                    enabled = !state.isSavingProgress && !state.isParsing,
-                    onValueChange = { onMetricProgressChange(index, it) },
-                    label = { Text("${item.name} の今回値") },
-                    supportingText = {
-                        Text(
-                            "現在 ${formatNumber(item.currentValue)} / ${formatNumber(item.targetValue)} ${item.unit}",
-                        )
-                    },
-                    keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                MetricValueField(item.metric(), item.value, !state.isSavingProgress && !state.isParsing,
+                    onChange = { onMetricProgressChange(index, it) })
             }
             state.progressError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onClick = onSaveProgress, enabled = !state.isSavingProgress && !state.isParsing) {
@@ -674,7 +671,7 @@ private fun ProgressHistory(goal: Goal) {
                     Text(log.body, style = MaterialTheme.typography.titleMedium)
                     log.metricUpdates.forEach { update ->
                         Text(
-                            "${update.metricName}: +${formatNumber(update.value)} ${update.unit}",
+                            progressLabel(update),
                             color = MaterialTheme.colorScheme.primary,
                         )
                     }

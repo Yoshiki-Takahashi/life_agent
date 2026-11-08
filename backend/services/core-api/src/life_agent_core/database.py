@@ -13,7 +13,7 @@ from google.api_core.retry import Retry, if_exception_type
 from google.cloud import firestore
 
 from life_agent_core.config import get_settings
-from life_agent_core.models import StoredModel
+from life_agent_core.models import Goal, ProgressLog, StoredModel
 
 
 @lru_cache
@@ -67,6 +67,8 @@ def decode(value, field: str = ""):
 
 def document(model: StoredModel) -> dict:
     data = encode(model.model_dump())
+    if isinstance(model, (Goal, ProgressLog)):
+        data["schema_version"] = 2
     # Leave room for Firestore field/path overhead below its 1 MiB document limit.
     if len(json.dumps(data, ensure_ascii=False, default=str).encode()) > 900_000:
         raise HTTPException(status_code=500, detail="保存できませんでした。再試行してください")

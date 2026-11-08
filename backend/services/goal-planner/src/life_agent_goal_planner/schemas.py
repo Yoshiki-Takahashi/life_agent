@@ -53,6 +53,7 @@ class GoalAnswer(BaseModel):
 
 
 class GoalPlanRequest(GoalInput):
+    metric_types_enabled: bool = Field(default=False, strict=True)
     answers: list[GoalAnswer] = Field(default_factory=list, max_length=8)
 
     @field_validator("answers")
@@ -64,17 +65,31 @@ class GoalPlanRequest(GoalInput):
         return value
 
 
+MetricKind = Literal["cumulative", "occurrence", "measurement", "checklist"]
+ChecklistLabel = Annotated[str, Field(min_length=1, max_length=120)]
+
+
 class MetricDraft(BaseModel):
-    model_config = ConfigDict(extra="forbid")
+    model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     name: str = Field(min_length=1, max_length=100)
-    target_value: float = Field(gt=0, le=1_000_000_000)
+    target_value: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False, multiple_of=0.01)
     unit: str = Field(min_length=1, max_length=30)
+    kind: MetricKind = "cumulative"
+    checklist_items: list[ChecklistLabel] = Field(default_factory=list, max_length=20)
 
-    @field_validator("name", "unit", mode="before")
-    @classmethod
-    def normalize_text(cls, value: object) -> object:
-        return value.strip() if isinstance(value, str) else value
+    @model_validator(mode="after")
+    def validate_kind(self) -> "MetricDraft":
+        if len(self.checklist_items) != len(set(self.checklist_items)):
+            raise ValueError("チェック項目を重複させないでください")
+        if self.kind == "checklist":
+            if not self.checklist_items or self.target_value != len(self.checklist_items):
+                raise ValueError("チェックリストの目標値は項目数にしてください")
+        elif self.checklist_items:
+            raise ValueError("チェック項目はチェックリスト型だけに指定できます")
+        if self.kind == "occurrence" and not self.target_value.is_integer():
+            raise ValueError("実行日数の目標は整数にしてください")
+        return self
 
 
 class MilestoneDraft(BaseModel):
@@ -134,7 +149,11 @@ class ProgressMetricUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     metric_id: UUID
+    kind: MetricKind | None = None
     value: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False, multiple_of=0.01)
+    completed_items: list[ChecklistLabel] | None = Field(default=None, max_length=20)
+    expected_completed_items: list[ChecklistLabel] | None = Field(default=None, max_length=20)
+    activity_date: date | None = None
 
 
 class ProgressPreview(BaseModel):
@@ -161,7 +180,7 @@ class Advice(BaseModel):
     )
 
 
-class MetricResponse(BaseModel):
+class MetricResponse(MetricDraft):
     model_config = ConfigDict(extra="forbid")
 
     id: UUID
@@ -171,6 +190,8 @@ class MetricResponse(BaseModel):
     target_value: float
     position: int
     created_at: datetime
+    completed_items: list[str] = Field(default_factory=list)
+    last_recorded_at: datetime | None = None
 
 
 class MilestoneResponse(BaseModel):
@@ -190,6 +211,10 @@ class ProgressMetricUpdateResponse(BaseModel):
     metric_name: str
     value: float
     unit: str
+    kind: MetricKind = "cumulative"
+    checklist_items: list[str] = Field(default_factory=list)
+    completed_items: list[str] = Field(default_factory=list)
+    activity_date: date | None = None
 
 
 class ProgressLogResponse(BaseModel):
@@ -256,6 +281,10 @@ class CoachMetric(BaseModel):
     current_value: float
     target_value: float
     unit: str
+    kind: MetricKind = "cumulative"
+    checklist_items: list[str] = Field(default_factory=list)
+    completed_items: list[str] = Field(default_factory=list)
+    last_recorded_at: datetime | None = None
 
 
 class CoachGoal(BaseModel):

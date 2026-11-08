@@ -150,6 +150,10 @@ def coach_message(
                         current_value=float(m.current_value),
                         target_value=float(m.target_value),
                         unit=m.unit,
+                        kind=m.kind,
+                        last_recorded_at=m.last_recorded_at,
+                        checklist_items=m.checklist_items,
+                        completed_items=m.completed_items,
                     )
                     for m in goal.metrics
                     if m.archived_at is None

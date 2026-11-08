@@ -23,10 +23,12 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
       - name: Android unit tests, build and lint (no cloud credentials)
         working-directory: android
-        run: ./gradlew testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug
+        run: ./gradlew -Plifeagent.useCloudFirebase=false testDebugUnitTest assembleDebug assembleDebugAndroidTest lintDebug
 
   cloud:
     # Fork PRs cannot enter this job. An environment approval protects the WIF credential boundary.
@@ -48,6 +50,8 @@ jobs:
           distribution: temurin
           java-version: '21'
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
       - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4
         with:

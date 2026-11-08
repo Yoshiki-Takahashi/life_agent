@@ -8,8 +8,10 @@
 - `test_progress_concurrency.py`: Firestore transactionと保存IDによる同時実行・重複防止。
   別IDの6件同時保存では目標値を超えても現在値・全履歴が揃うことを確認する。
   `./scripts/test-weekend-7.sh`。
-- Androidの`AppFlowTest`: 一つのユーザー経路で全目標対話・確認・再送・ナビゲーションを検証。
-  起動済みEmulatorで`ANDROID_HOME=... ./scripts/test-weekend-7.sh --android`。
+- Androidの`AppFlowTest`・`MetricTypesFlowTest`のFake経路・`GoalCompletionFlowTest`:
+  全目標対話・確認・再送・ナビゲーション、種別別記録、完了・再表示を検証。
+  同じcheckoutのCore APIと一時DBを起動し、起動済みEmulatorで`ANDROID_HOME=... ./scripts/test-weekend-7.sh --android`。
+  PRの`Android Quality`も同じコマンドを使い、単体・lint・ビルドと端末結合を実行する。GCP・実AIへ接続しない。
 - `weekend8_cloud.py`: 明示実行専用のクラウド診断。通常CI・ローカル検証では実行しない。
 
 実AIの読書・開発・筋トレ回帰は内部AIサービスの`tests/test_live.py`、詳細な品質評価は
@@ -34,5 +36,5 @@ Google連携の`./scripts/test-google-auth.sh`もFirestore Emulatorを自動起�
 Auth Emulatorを別途起動し、同じFirebase uidのGoal保持・Google連携・再ログイン・他所有者404を確認します。
 ローカル検証用Gradleは`-Plifeagent.useCloudFirebase=false`を明示し、端末確認用の既定値に依存しません。
 
-専用アカウントによるPR版Android→現行GCPの検査は[Android GCP検証手順](../../docs/android-gcp-check.md)を参照。
-未設定時のcloud jobはskipで、実GCP確認済みとは扱わない。
+Android→現行GCPの検査はPR自動検査から除外している。配備後はMacのエミュレーターから
+通常の本人アカウントで[手動確認](../../docs/android-gcp-check.md)する。

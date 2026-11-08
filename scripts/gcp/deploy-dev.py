@@ -49,16 +49,6 @@ class Deployment:
             "planner": os.environ["GOAL_PLANNER_RUNTIME_SERVICE_ACCOUNT"],
         }
         self.allowed_uid = os.environ["ALLOWED_USER_ID"]
-        self.allowed_uids = os.getenv("ALLOWED_USER_IDS", "")
-        if "," in self.allowed_uid:
-            raise DeploymentError("ALLOWED_USER_ID must remain the single owner UID")
-        for uid in (
-            [self.allowed_uid, *self.allowed_uids.split(",")]
-            if self.allowed_uids
-            else [self.allowed_uid]
-        ):
-            if not uid or any(c.isspace() for c in uid) or "|" in uid:
-                raise DeploymentError("Invalid allowed Firebase UID policy")
         if os.environ.get("GITHUB_REF") != "refs/heads/main" or not self.allowed_uid.strip():
             raise DeploymentError("Only main with an explicit Firebase access policy can deploy")
         if not re.fullmatch(r"[a-f0-9]{40}", self.sha) or len(self.tag) > 63:
@@ -265,8 +255,6 @@ class Deployment:
                 FEEDBACK_GITHUB_REPOSITORY=os.getenv("FEEDBACK_GITHUB_REPOSITORY")
                 or "Yoshiki-Takahashi/life_agent",
             )
-            if self.allowed_uids:
-                core_env["ALLOWED_USER_IDS"] = self.allowed_uids
             feedback_secret = os.getenv("FEEDBACK_GITHUB_SECRET_NAME")
             feedback_secret_option = (
                 f"--update-secrets=FEEDBACK_GITHUB_TOKEN={feedback_secret}:latest"

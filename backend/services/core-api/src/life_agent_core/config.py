@@ -1,7 +1,7 @@
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr, field_validator, model_validator
+from pydantic import Field, SecretStr, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -22,47 +22,16 @@ class Settings(BaseSettings):
     coach_backend: Literal["fake", "http"] = "fake"
     auth_backend: Literal["firebase", "fake"] = "firebase"
     allowed_user_id: str | None = Field(default=None, min_length=1)
-    allowed_user_ids: str | None = Field(default=None, min_length=1)
     k_service: str | None = None
     feedback_github_repository: str = Field(
         default="Yoshiki-Takahashi/life_agent", pattern=r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$"
     )
     feedback_github_token: SecretStr | None = None
 
-    @field_validator("allowed_user_id", "allowed_user_ids")
-    @classmethod
-    def validate_allowed_uids(cls, value: str | None) -> str | None:
-        if value is None:
-            return None
-        uids = value.split(",")
-        if any(not uid or uid != uid.strip() or any(c.isspace() for c in uid) for uid in uids):
-            raise ValueError("Allowed Firebase UIDs must be nonempty and contain no whitespace")
-        return value
-
-    @field_validator("allowed_user_id")
-    @classmethod
-    def require_single_legacy_uid(cls, value: str | None) -> str | None:
-        if value is not None and "," in value:
-            raise ValueError(
-                "ALLOWED_USER_ID accepts a single UID; use ALLOWED_USER_IDS for a list"
-            )
-        return value
-
-    @property
-    def allowed_uids(self) -> frozenset[str]:
-        return frozenset(
-            uid
-            for value in (self.allowed_user_id, self.allowed_user_ids)
-            if value is not None
-            for uid in value.split(",")
-        )
-
     @model_validator(mode="after")
     def require_cloud_access_policy(self):
-        if self.k_service and (self.auth_backend != "firebase" or not self.allowed_uids):
-            raise ValueError(
-                "Cloud Run requires Firebase authentication and an explicit allowed UID policy"
-            )
+        if self.k_service and (self.auth_backend != "firebase" or not self.allowed_user_id):
+            raise ValueError("Cloud Run requires Firebase authentication and ALLOWED_USER_ID")
         return self
 
     model_config = SettingsConfigDict(

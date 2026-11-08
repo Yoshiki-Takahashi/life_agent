@@ -51,17 +51,16 @@ if [[ "${1:-}" == "--android" ]]; then
     "${adb}" shell input keyevent KEYCODE_WAKEUP
     "${adb}" shell wm dismiss-keyguard
     cd "${repository_root}/android"
-    ./gradlew -Plifeagent.useCloudFirebase=false testDebugUnitTest assembleDebug assembleDebugAndroidTest
+    ./gradlew -Plifeagent.useCloudFirebase=false testDebugUnitTest lintDebug assembleDebug assembleDebugAndroidTest
     "${adb}" install -r app/build/outputs/apk/debug/app-debug.apk
     "${adb}" install -r app/build/outputs/apk/androidTest/debug/app-debug-androidTest.apk
     mkdir -p "${output_dir}"
-    instrumentation_args=(-e networkE2E true)
-    if [[ -n "${W7_ANDROID_TEST_CLASS:-}" ]]; then
-        instrumentation_args+=(-e class "${W7_ANDROID_TEST_CLASS}")
-    fi
+    # Select only local HTTP journeys, including the typed-metric method without its live-AI test.
+    local_tests="com.yoshiki.lifeagent.AppFlowTest,com.yoshiki.lifeagent.MetricTypesFlowTest#typedEntriesPersistAndCoachRecordsAnObservation,com.yoshiki.lifeagent.GoalCompletionFlowTest"
+    instrumentation_args=(-e networkE2E true -e class "${W7_ANDROID_TEST_CLASS:-${local_tests}}")
     "${adb}" shell am instrument -w "${instrumentation_args[@]}" \
         com.yoshiki.lifeagent.test/androidx.test.runner.AndroidJUnitRunner | tee "${output_dir}/instrumentation.txt"
-    rg -q 'OK \([0-9]+ tests?\)' "${output_dir}/instrumentation.txt"
+    grep -Eq '^OK \([1-9][0-9]* tests?\)' "${output_dir}/instrumentation.txt"
     "${adb}" reverse --remove tcp:18007
     android_reverse=""
 fi

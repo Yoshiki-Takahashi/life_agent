@@ -104,9 +104,7 @@ OPENAI_SECRET_NAME=lifeagent-openai-api-key
 ```
 
 CoreにFirestoreの接続先とFirebase設定を渡し、DBパスワード・Cloud SQL attachmentは外します。
-検証専用アカウントを追加する場合は、任意の`CORE_API_ALLOWED_USER_IDS`へ追加UIDをカンマ区切り（空白なし）で登録します。
-本人の`CORE_API_ALLOWED_USER_ID`は維持し、Coreは両設定の和集合だけを許可します。
-`CORE_API_ALLOWED_USER_ID`はCoreの`ALLOWED_USER_ID`、追加設定は`ALLOWED_USER_IDS`へ渡します。未設定ならworkflowはデプロイを中止します。
+`CORE_API_ALLOWED_USER_ID`はCoreの`ALLOWED_USER_ID`へ渡します。未設定ならworkflowはデプロイを中止します。
 workflow内ではデプロイ用の変数名で保持し、候補検証・切替ステップだけに`ALLOWED_USER_ID`を渡します。
 事前のテストには利用者制限を引き継がず、複数のテスト用ユーザーによる認可・所有者分離を確認します。
 Cloud Run自身も、許可uid未設定・空文字・Fake認証では起動を拒否します。
@@ -132,5 +130,5 @@ Cloud Run Spend Cap `max2000`はPreviewであり、このスクリプトの管�
 無料枠と制限は[Firestore料金](https://firebase.google.com/docs/firestore/pricing)、
 サービス停止は[Cloud Run manual scaling](https://docs.cloud.google.com/run/docs/configuring/services/manual-scaling)を確認してください。
 
-専用アカウントによるPR版Android→現行GCPの検査は[Android GCP検証手順](../../docs/android-gcp-check.md)を参照。
-未設定時のcloud jobはskipで、実GCP確認済みとは扱わない。
+Android→現行GCPの検査はPR自動検査から除外しています。配備後にMacのエミュレーターで
+通常の本人アカウントを使って確認します。[Android GCP手動確認](../../docs/android-gcp-check.md)を参照してください。

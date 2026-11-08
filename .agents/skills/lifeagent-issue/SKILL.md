@@ -1,6 +1,6 @@
 ---
 name: lifeagent-issue
-description: Start development of all open LifeAgent GitHub Issues with subagents, clarify requirements, validate changes, and prepare reviewable results.
+description: Develop all open LifeAgent GitHub Issues with subagents, validate changes, merge pull requests, complete deployment when applicable, and close completed issues.
 ---
 
 # LifeAgentのOpen Issueを開発する
@@ -13,6 +13,9 @@ GitHubからLifeAgentのOpenなIssueを全件取得し、Issue本文・コメン
 - 重要な仕様が曖昧なら、選択肢と推奨案をまとめてこのチャットでユーザーに質問し、回答が必要な変更は待つ。独立して進められるIssueは継続する。小さな実装判断は自分で決める。needs-triageの改善メモも調査対象とし、実装に必要な仕様を整理する。
 - Issueごとに範囲を実装し、AGENTS.mdおよびdocs/development-workflow.mdに従って関連文書と必要なテストを更新する。AI関連では指定された回帰評価を考慮する。
 - `docs/validation.md`に従って関連lint・テスト・ビルドを行う。Mac・Codex Cloud・Actionsの結果を検証実績とし、実行できない項目は理由・次に実行する環境とともにPRへ記録する。AndroidのPR検査は同じコミットの開発版Backend・Firestore Emulator・Fake AIに接続し、現行GCPを使わない。
-- 「実装・Draft PR作成済み」「マージ可能」「Backend反映完了」「リリース確認完了」を区別する。必要な検査が未実施・失敗・skipならマージ可能とせず、実装とDraft PR作成は進められる。AI変更では指定された実AI評価を別途行い、GCP検証はマージ後の配備・リリース段階で行う。
-- このスキルの呼び出しをDraft PR作成の依頼として扱い、権限がある場合はIssue単位で`Closes #番号`を含むDraft PRを作り、変更・検証結果・未確認事項を記載する。作成できない場合は差分とPR本文案を提示する。マージやデプロイは行わない。
-- 最後に、確認時点の全Open Issueについて、実装・質問待ち・既存PR・保留の状況と理由を報告する。IssueやPRへのコメント・更新はユーザーの指示と利用可能な権限に従う。
+- 「実装・PR作成済み」「マージ可能」「Backend反映完了」「リリース確認完了」を区別する。必要な検査が未実施・失敗・skipならマージ可能とせず、実装とPR作成は進められる。実AI・Android端末の追加確認は変更内容と対象Issueに応じて判断し、AI変更では指定された実AI評価を別途行う。GCP検証はマージ後の配備・リリース段階で行う。
+- このスキルの呼び出しを通常のOpen PR作成・マージ・必要なデプロイ・Issueクローズの依頼として扱う。権限がある場合はIssue単位で通常のOpen PRを作り、変更・検証結果・未確認事項を記載する。Issueは最後にクローズするため、PR本文には`Closes #番号`など自動クローズするキーワードを使わず、関連Issueとして参照する。この手順は同じスキル実行におけるAGENTS.mdや開発手順のPR作成・マージ・Issueクローズに関する記載に優先する。
+- PRのGitHub Actionsが完了し、必要なチェックがすべて成功したことを確認してから自動的にマージする。失敗時は原因を調査・修正し、検査を再実行する。チェック失敗や未完了のままマージしない。
+- マージ後、対象変更にデプロイが必要な場合は自動デプロイを確認し、必要に応じて実行して完了まで確認する。デプロイ等でエラーが起きた場合は原因を調査し、修正PRを作成してActionsの成功を確認後にマージし、デプロイ成功まで確認する。権限や環境などの制約で続行できない場合は、原因と未完了の範囲を報告する。
+- 対象Issueの作業、必要なチェックとデプロイが完了した後に、該当Issueを明示的にクローズする。未完了や確認できない項目がある場合はクローズせず、理由を報告する。
+- 最後に、確認時点の全Open Issueについて、完了・質問待ち・既存PR・保留の状況と理由を報告する。IssueやPRへのその他のコメント・更新はユーザーの指示と利用可能な権限に従う。

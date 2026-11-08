@@ -8,7 +8,7 @@
 | 環境 | 役割 |
 | --- | --- |
 | Mac | 実装・ローカルテスト・Androidの操作確認。必要な実AI評価、配備後のアプリ確認 |
-| Codex Cloud | 実装・実行可能なローカルテスト・Draft PR作成・Actions結果の確認。GCP認証・Android SDKの有無を確認し、不足時は検証を引き継ぐ |
+| Codex Cloud | 実装・実行可能なローカルテスト・PR作成・Actions結果の確認。GCP認証・Android SDKの有無を確認し、不足時は検証を引き継ぐ |
 | GitHub Actions | PRのBackend・Android検査。mainマージ後のGCP配備・候補版検証 |
 
 PRのAndroidとBackendは同じcheckoutから起動します。接続先はActions内の開発版Core APIと
@@ -93,4 +93,4 @@ PRへ次を記載し、修正後は影響する検査を再実行します。
 
 例: 「Backendテスト: Cloudで成功。Android端末結合: Actionsで確認待ち（CloudにEmulatorなし）。
 実AI評価: AI変更なしのため対象外。GCP: マージ後の候補版検証で確認」。
-Draft PR作成、マージ可能、Backend反映完了、リリース確認完了を分け、未実施を成功に含めません。
+PR作成、マージ可能、Backend反映完了、リリース確認完了を分け、未実施を成功に含めません。

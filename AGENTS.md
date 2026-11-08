@@ -41,7 +41,7 @@ LifeAgentは、自然言語の目標をAIがMetric、Milestone、スケジュー
 
 ## 品質基準
 
-- 開発はGitHub Issueで管理し、ユーザーストーリー、受け入れ条件、完了条件を記載する。PR本文に`Closes #番号`を記載して対応Issueへ紐づける。
+- 開発はGitHub Issueで管理し、ユーザーストーリー、受け入れ条件、完了条件を記載する。PR本文に`Refs #番号`で対応Issueを参照し、必要なチェック・デプロイの完了後にIssueを閉じる。詳細は利用するスキルと`docs/development-workflow.md`に従う。
 - テストは利用者の振る舞い、認証、保存・競合・再送、外部サービス境界に絞る。内部状態の写し、表示文言ごとのテスト、生成Schemaのスナップショットを増やさない。
 - 公開動作を変更した場合は必要な回帰テストを更新し、関連するlint・型検査・テストを実行する。
 - PRのAndroid検証は、同じコミットの開発版Backend・Firestore Emulator・Fake AIを使う。現行GCPへ接続しない。Actionsの結果を検証実績に含め、未実施・失敗・skipは成功と区別する。

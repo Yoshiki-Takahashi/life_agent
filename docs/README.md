@@ -11,6 +11,7 @@
 | [AIの動作](progress-ai-quality.md) | 生成範囲、送信する情報、不確実な結果の扱い |
 
 開発を始めるときは、[開発からリリースまで](development-workflow.md)で全体の流れと検証環境を確認してください。
+変更別の必須テスト、実行コマンド、検証結果の記録は[検証手順](validation.md)を参照してください。
 個別の実行手順は[Backend](../backend/README.md)、[Android](../android/README.md)、
 [インフラ](development-infrastructure.md)、[開発ガイド](development-guide.md)にあります。
 これらは利用仕様とは分けて管理します。

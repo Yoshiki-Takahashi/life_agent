@@ -2,8 +2,7 @@
 
 業務APIは`Authorization: Bearer <Firebase ID Token>`を要求します。
 メール認証とGoogle認証で同じFirebaseのuidを所有者として扱います。Google ID TokenはAndroidでFirebaseへ交換し、業務APIにはFirebase ID Tokenだけを送ります。
-個人利用のクラウド環境では、検証済みTokenのuidが本人の`ALLOWED_USER_ID`または追加の`ALLOWED_USER_IDS`（カンマ区切り）に含まれる利用者だけを許可します。
-追加許可された検証アカウントも、本人のGoalを参照・更新できません。
+個人利用のクラウド環境では、検証済みTokenのuidが`ALLOWED_USER_ID`と一致する利用者だけを許可します。
 他のuidは、DB操作・AI呼出し前に403で拒否します。クライアントが送るメールアドレスやuidでは判定しません。
 現在の正確なフィールドと型はCore APIの`/openapi.json`、内部通信の型は各サービスのPydanticモデルが正本です。
 この文書では利用者に影響する規則を説明します。生成されたSchemaの写しは手編集しません。

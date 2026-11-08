@@ -57,6 +57,10 @@ ANDROID_HOME="$HOME/Library/Android/sdk" ./scripts/test-weekend-7.sh --android
 
 一時Firestore EmulatorとFake認証・Fake AIのCore API（18007）を起動し、終了時に専用プロセスを終了します。通常の開発DBは使いません。ポート使用中は停止し、既存プロセスを終了しません。Android確認はadb reverseを使います。検証ログとinstrumentation結果は`android/app/build/weekend7/`（`W7_OUTPUT_DIR`で変更可能）へ保存されます。クラウドFirebase・Cloud Runの確認はこのテストに含みません。
 
+`--android`はAndroid単体・lint・アプリ/テストAPKビルドも実行します。端末テストの既定は
+`AppFlowTest`、`MetricTypesFlowTest#typedEntriesPersistAndCoachRecordsAnObservation`、`GoalCompletionFlowTest`です。
+`.github/workflows/android-quality.yml`も同じコマンドでPR版Backendへの接続を検証します。
+
 ## 対話コーチのローカル検証
 test-weekend-7.shのAndroid実行を指定クラスに絞るには、
 W7_ANDROID_TEST_CLASS=com.yoshiki.lifeagent.AppFlowTestを設定します。

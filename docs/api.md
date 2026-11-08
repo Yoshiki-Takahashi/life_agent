@@ -17,7 +17,7 @@
 | 一覧を読む | GET /api/v1/goals | なし |
 | 詳細を読む | GET /api/v1/goals/{id} | なし |
 | 今回値を解析する | POST /api/v1/goals/{id}/progress/preview | なし |
-| 実績を保存する | POST /api/v1/goals/{id}/progress | 増分と記録 |
+| 実績を保存する | POST /api/v1/goals/{id}/progress | 種別に応じた値・完了状態と記録 |
 | 助言を取得する | POST /api/v1/goals/{id}/advice | なし |
 | 再計画案を作る | POST /api/v1/goals/{id}/replan/preview | 未適用の候補 |
 | 再計画を適用する | POST /api/v1/goals/{id}/replan/apply | 承認した変更 |

@@ -59,7 +59,7 @@ GitHub TokenはCoreだけがSecret Managerから取得します。Android・AI�
 ## 保存と競合
 
 新規計画は確認後にGoal・Metric・Milestoneをまとめて保存します。
-実績はGoal文書と保存IDをtransactionで読み、今回値の加算と履歴保存を一つのtransactionで行います。
+実績はGoal文書と保存IDをtransactionで読み、種別に応じた現在値の更新と履歴保存を一つのtransactionで行います。
 同じGoalの同じ保存IDは再反映せず、現在のGoalを返します。
 
 再計画は候補だけを先に保持します。適用transactionでGoalと候補を読み、基準の計画版が一致する場合だけ更新します。

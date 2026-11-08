@@ -95,6 +95,11 @@ class AppStateTest {
         creation.previewGoal()
         advanceUntilIdle()
         assertEquals(0, repository.confirmCalls)
+        creation.updateMetricValue(0, "0")
+        creation.confirmGoal()
+        advanceUntilIdle()
+        assertEquals(0, repository.confirmCalls)
+        creation.updateMetricValue(0, "12")
         creation.confirmGoal()
         advanceUntilIdle()
         assertEquals(1, repository.confirmCalls)
@@ -242,18 +247,54 @@ class AppStateTest {
         assertEquals("", vm.uiState.value.password)
     }
 
-    @Test fun progressValuesRespectPrecisionAndTarget() {
-        for (invalid in listOf("NaN", "Infinity", "-1", "0", "0.001", "9")) {
-            assertFalse(validProgressValue(invalid, 4.0, 12.0))
+    @Test fun progressValuesAllowZeroAndRespectPrecisionAndNumericLimit() {
+        for (invalid in listOf("", "NaN", "Infinity", "-1", "0.001", "1000000000.01")) {
+            assertFalse(validProgressValue(invalid))
         }
-        assertTrue(validProgressValue("0.5", 4.0, 12.0))
+        for (valid in listOf("0", "0.5", "13", "1000000000")) {
+            assertTrue(validProgressValue(valid))
+        }
+    }
+
+    @Test fun detailAndCoachKeepExplicitZerosAndOverTargetValuesButOmitBlanks() = runTest(dispatcher) {
+        for (value in listOf("13.25", "0")) {
+            val repository = TestGoals(extraMetrics = true)
+            val detail = GoalDetailViewModel(repository)
+            detail.loadGoal("reading")
+            advanceUntilIdle()
+            detail.updateProgressBody("今回の実績")
+            detail.saveProgress()
+            advanceUntilIdle()
+            assertTrue(repository.saves.isEmpty())
+            detail.updateMetricProgress(0, value)
+            detail.updateMetricProgress(1, "0")
+            detail.saveProgress()
+            advanceUntilIdle()
+            assertNull(detail.uiState.value.progressError)
+            val expected = listOf(MetricProgressInput("books", value.toDouble()),
+                MetricProgressInput("minutes", 0.0))
+            assertEquals(expected, repository.saves.single().updates)
+
+            val coach = CoachViewModel(repository)
+            coach.updateBody("1冊読み終えた")
+            coach.sendMessage()
+            advanceUntilIdle()
+            coach.confirmCandidate()
+            coach.updateMetric("books", value)
+            coach.updateMetric("minutes", "0")
+            coach.saveProgress()
+            advanceUntilIdle()
+            assertNull(coach.uiState.value.error)
+            assertEquals(expected, repository.saves.last().updates)
+            assertEquals(2, repository.saves.size)
+        }
     }
 }
 
 private data class Saved(val goalId: String, val body: String,
     val updates: List<MetricProgressInput>, val requestId: String)
 
-private class TestGoals : GoalRepository {
+private class TestGoals(private val extraMetrics: Boolean = false) : GoalRepository {
     private val date = LocalDate.now().plusDays(90).toString()
     private val goals = mutableMapOf("reading" to goal("reading", "books", "冊"),
         "training" to goal("training", "sessions", "回"))
@@ -272,7 +313,9 @@ private class TestGoals : GoalRepository {
     val previewRequests = mutableListOf<GoalPreviewRequest>()
     var confirmed: GoalPlan? = null
     private fun goal(id: String, metricId: String, unit: String) = Goal(id, id, null, date,
-        "active", "2026-01-01T00:00:00Z", listOf(Metric(metricId, 12.0, unit, id=metricId)),
+        "active", "2026-01-01T00:00:00Z", listOf(Metric(metricId, 12.0, unit, id=metricId)) +
+            if (extraMetrics) listOf(Metric("読書時間", 60.0, "分", id="minutes"),
+                Metric("読んだページ", 100.0, "ページ", id="pages")) else emptyList(),
         List(3) { Milestone("中間目標", date) })
     override suspend fun coachMessage(body: String, history: List<CoachMessage>): CoachReply {
         this.history = history
@@ -284,13 +327,14 @@ private class TestGoals : GoalRepository {
     override suspend fun listGoals() = goals.values.map {
         GoalSummary(it.id, it.title, date, it.status, 1, 3, it.createdAt, it.updatedAt) }
     override suspend fun previewProgress(goalId: String, body: String) = ProgressPreview(
-        listOf(ProgressMetricUpdatePayload(getGoal(goalId).metrics.single().id, 1.0)), emptyList())
+        listOf(ProgressMetricUpdatePayload(getGoal(goalId).metrics.first().id, 1.0)), emptyList())
     override suspend fun recordProgress(goalId: String, body: String,
         metricUpdates: List<MetricProgressInput>, clientRequestId: String): Goal {
         saves += Saved(goalId, body, metricUpdates, clientRequestId)
         if (loseSave) { loseSave = false; error("response lost") }
         val updated = getGoal(goalId).let { it.copy(metrics=it.metrics.map { metric ->
-            metric.copy(currentValue=metric.currentValue + metricUpdates.single().value) }) }
+            metric.copy(currentValue=metric.currentValue +
+                (metricUpdates.find { it.metricId == metric.id }?.value ?: 0.0)) }) }
         goals[goalId] = updated
         return updated
     }

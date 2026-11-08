@@ -294,7 +294,7 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
             validateGoalInput(state.title.trim(), state.description.trim(), state.targetDate)?.let { return it }
             if (state.metrics.size !in 1..10 || state.milestones.size !in 1..10) return "MetricとMilestoneはそれぞれ1〜10件にしてください"
             if (state.metrics.any { it.name.trim().isEmpty() || it.name.length > 100 }) return "Metric名を100文字以内で入力してください"
-            if (state.metrics.any { !validProgressValue(it.targetValue, 0.0, 1_000_000_000.0) }) return "Metric目標値は正数（小数2桁まで）で入力してください"
+            if (state.metrics.any { !validProgressValue(it.targetValue) || it.targetValue.toDouble() <= 0 }) return "Metric目標値は正数（小数2桁まで）で入力してください"
             if (state.metrics.any { it.unit.trim().isEmpty() || it.unit.length > 30 }) return "Metric単位を30文字以内で入力してください"
             if (state.milestones.any { it.title.trim().isEmpty() || it.title.length > 120 }) return "Milestone名を120文字以内で入力してください"
             val goalDate = requireNotNull(parseDate(state.targetDate))

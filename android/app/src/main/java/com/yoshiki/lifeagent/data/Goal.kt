@@ -88,9 +88,8 @@ data class ReplanDiffItem(
     val rationale: String,
 )
 
-fun validProgressValue(text: String, current: Double, target: Double): Boolean {
+fun validProgressValue(text: String): Boolean {
     val value = text.toBigDecimalOrNull() ?: return false
-    return value > BigDecimal.ZERO && value <= BigDecimal("1000000000") &&
-        value.stripTrailingZeros().scale() <= 2 &&
-        value + BigDecimal.valueOf(current) <= BigDecimal.valueOf(target)
+    return value >= BigDecimal.ZERO && value <= BigDecimal("1000000000") &&
+        value.stripTrailingZeros().scale() <= 2
 }

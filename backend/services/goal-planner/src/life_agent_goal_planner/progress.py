@@ -21,13 +21,14 @@ PARSER_PROMPT = """あなたは進捗の記録を手伝います。既存Metric�
 - 完了した行動の数値・単位・Metricとの対応が明確な場合だけ採用。未来の予定、否定、希望は除外。
 - 累計と現在値から差分を推測しない。曖昧な数量や異なる単位を勝手に換算しない。
 - 同じ単位でもMetricの意味で区別。明示的な訂正は最終値を採用し、別々の完了実績は合算可能。
-- 同一Metricは1候補。正数、小数2桁まで、target_value-current_value以内。超過を丸めたり
-  上限に合わせて実績を減らさない。確定・保存したとは言わない。
+- 同一Metricは1候補。0以上、小数2桁まで、最大10億。目標値を超える実績も採用する。
+  目標値や残量に合わせて実績を減らさない。確定・保存したとは言わない。
+- 本人がMetricと今回値0を明示した場合は0を候補にできる。全て0でも保存可能。
+  単なる未実施・予定・曖昧な報告から0を推測して候補を作らない。
 - 候補がない場合、warningsには理由と次にできることを短く自然に伝える（原則1件）。
   累計なら「今回読み終えたのは何冊ですか」、Metric不明なら実際のMetric名を使った質問を1つ。
   単位が違うならこのMetricに記録できるタイミングを案内。未実施や予定だけなら今回は保存せず、
-  実施した時に記録できると伝える。ゼロや架空の正数を入力させない。
-  超過なら残りの上限と報告値を説明し、数値と目標の確認を促す。実績の過少申告は勧めない。
+  実施した時に記録するか、本人が今回値0を確認して手入力できると伝える。架空の正数を入力させない。
 - 明確な候補に不要な質問を付けない。一部だけ除外した場合はその理由を簡潔に示す。
 ユーザーと同じ言語で返答してください。
 """
@@ -80,7 +81,8 @@ ADVISOR_PROMPT = """あなたはユーザーが無理なく次の一歩を選べ
 - 解決済み・選択済みの作業をやり直させない。褒めるなら記録にある具体的な成果を短く認める。
 - ユーザーが選べる自然な言葉で。非難・強制・誇大な励ましをしない。
 - 計画・期限・Metricを変更しない。変更した、通知を設定した等と主張しない。
-  未実装のアプリ操作（メモだけの保存、通知設定、計画編集ボタンなど）へ誘導しない。
+  文章だけの保存はできない。本人が今回値0を確認した場合はメモと一緒に保存できる。
+  未実装のアプリ操作へ誘導しない。
 ユーザーと同じ言語で返答してください。
 """
 
@@ -152,7 +154,7 @@ class FakeProgressParser:
                 )
                 if len(matches) == 1 and re.search(r"読|完成|作|トレーニング|実施|進", body):
                     value = float(matches[0])
-                    if 0 < value <= metric.target_value - metric.current_value:
+                    if 0 <= value <= 1_000_000_000:
                         updates.append({"metric_id": metric.id, "value": value})
         return ProgressPreview(
             metric_updates=updates,
@@ -191,7 +193,8 @@ def advice_context(context: GoalResponse, as_of: date) -> dict:
         "history_scope": "latest_at_most_10_records_not_complete_activity_history",
         "recording_rule": "Only completed increments in existing metric units can be saved. "
         "Partial activity is useful but is not a completed book/test/session. "
-        "Text-only or zero-increment saving is not supported.",
+        "Explicitly confirmed zero increments can be saved with a note, even if all are zero. "
+        "Increments can exceed the target. Text-only saving is not supported.",
         "goal_title": context.title,
         "goal_description": context.description,
         "target_date": context.target_date.isoformat(),

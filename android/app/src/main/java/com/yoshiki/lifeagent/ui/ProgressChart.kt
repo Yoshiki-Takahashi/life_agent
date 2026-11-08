@@ -34,7 +34,7 @@ fun metricTrend(metric: Metric, logs: List<ProgressLog>): List<TrendPoint> {
         Triple(log, update, instant)
     }.sortedWith(compareBy({ it.third }, { it.first.id }))
     val points = ordered.map { (log, update, instant) ->
-        if (!update.value.isFinite() || update.value <= 0 || update.unit != metric.unit) return emptyList()
+        if (!update.value.isFinite() || update.value < 0 || update.unit != metric.unit) return emptyList()
         total += BigDecimal.valueOf(update.value)
         TrendPoint(log.recordedAt, instant.epochSecond, total.toDouble())
     }

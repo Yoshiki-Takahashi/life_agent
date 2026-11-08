@@ -54,3 +54,21 @@ def test_three_domain_regression(title, name, unit, body):
     assert OpenAIProgressParser(settings).parse(context, body).metric_updates[0].value == 1
     assert OpenAIAdvisor(settings).advise(context).next_actions
     assert OpenAIReplanner(settings).propose(context, "期限を延ばして負担を減らしたい").diff
+
+
+@pytest.mark.parametrize(
+    ("title", "name", "unit", "body"),
+    [
+        ("読書", "読了冊数", "冊", "13冊読み終えた"),
+        ("アプリ開発", "成果物", "件", "成果物を13件完成させた"),
+        ("筋トレ", "実施回数", "回", "13回トレーニングした"),
+    ],
+)
+def test_zero_and_over_target_parser_regression(title, name, unit, body):
+    parser = OpenAIProgressParser(Settings())
+    context = goal(title, "", [(name, unit, 12, 12)])
+    for report, value in [(body, 13), (f"今回の{name}は0{unit}です。0で記録してください。", 0)]:
+        result = parser.parse(context, report)
+        assert [(u.metric_id, u.value) for u in result.metric_updates] == [
+            (context.metrics[0].id, value)
+        ]

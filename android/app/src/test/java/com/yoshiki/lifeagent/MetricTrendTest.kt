@@ -22,6 +22,13 @@ class MetricTrendTest {
         assertTrue(metricTrend(metric, listOf(log("a", "2026-10-25T10:00:00Z", 1.0))).isEmpty())
         assertTrue(metricTrend(metric, listOf(log("a", "invalid", 0.3))).isEmpty())
     }
+    @Test fun zeroRecordsKeepAFlatPointAndValuesAboveTargetArePlotted() {
+        val points = metricTrend(metric.copy(currentValue = 11.0), listOf(
+            log("a", "2026-10-25T09:00:00Z", 1.0),
+            log("b", "2026-10-25T10:00:00Z", 0.0),
+            log("c", "2026-10-25T11:00:00Z", 10.0)))
+        assertEquals(listOf(1.0, 1.0, 11.0), points.map { it.value })
+    }
     @Test fun missingTargetStillAllowsHistory() {
         assertEquals(1, metricTrend(metric.copy(targetValue = 0.0),
             listOf(log("a", "2026-10-25T10:00:00Z", 0.3))).size)

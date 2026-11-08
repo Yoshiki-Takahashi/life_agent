@@ -113,7 +113,9 @@ def test_authentication_and_owner_isolation(client, unauthenticated_client, crea
     assert client.post(COACH, json={"body": "相談"}).status_code == 200
 
 
-@pytest.mark.parametrize("invalid", ["unknown", "excess", "negative", "precision", "duplicate"])
+@pytest.mark.parametrize(
+    "invalid", ["unknown", "excess", "negative", "precision", "duplicate", "empty", "nonfinite"]
+)
 def test_invalid_progress_never_partially_updates(client, create_goal, invalid):
     goal = create_goal()
     updates = [{"metric_id": goal["metrics"][0]["id"], "value": 1}]
@@ -121,8 +123,15 @@ def test_invalid_progress_never_partially_updates(client, create_goal, invalid):
         updates.append({"metric_id": str(uuid4()), "value": 1})
     elif invalid == "duplicate":
         updates *= 2
+    elif invalid == "empty":
+        updates = []
     else:
-        updates[0]["value"] = {"excess": 13, "negative": -1, "precision": 0.001}[invalid]
+        updates[0]["value"] = {
+            "excess": 1_000_000_001,
+            "negative": -1,
+            "precision": 0.001,
+            "nonfinite": "NaN",
+        }[invalid]
     path = f"/api/v1/goals/{goal['id']}"
     result = client.post(
         path + "/progress", json=dict(body="実績", client_request_id="x", metric_updates=updates)
@@ -132,7 +141,45 @@ def test_invalid_progress_never_partially_updates(client, create_goal, invalid):
     app.dependency_overrides[get_progress_parser] = lambda: Mock(
         parse=lambda *_: dict(metric_updates=updates, warnings=[])
     )
-    assert client.post(path + "/progress/preview", json={"body": "実績"}).status_code == 503
+    assert client.post(path + "/progress/preview", json={"body": "実績"}).status_code == (
+        200 if invalid == "empty" else 503
+    )
+    assert client.get(path).json() == goal
+
+
+def test_zero_and_over_target_progress_round_trip_once(client, create_goal):
+    goal = create_goal(extra_metric=True)
+    path = f"/api/v1/goals/{goal['id']}"
+    for request_id, values in [("mixed", [13.25, 0]), ("all-zero", [0, 0]), ("beyond", [1, 4])]:
+        updates = [
+            dict(metric_id=m["id"], value=v) for m, v in zip(goal["metrics"], values, strict=True)
+        ]
+        for _ in range(2):
+            response = client.post(
+                path + "/progress",
+                json=dict(
+                    body="確認した実績", client_request_id=request_id, metric_updates=updates
+                ),
+            )
+            assert response.status_code == 200
+    result = client.get(path).json()
+    assert [m["current_value"] for m in result["metrics"]] == [14.25, 4]
+    assert [[u["value"] for u in log["metric_updates"]] for log in result["progress_logs"]] == [
+        [1, 4],
+        [0, 0],
+        [13.25, 0],
+    ]
+
+
+@pytest.mark.parametrize("value", [0, 13])
+def test_preview_accepts_zero_and_over_target_without_saving(client, create_goal, value):
+    goal = create_goal()
+    path = f"/api/v1/goals/{goal['id']}"
+    result = client.post(path + "/progress/preview", json={"body": f"{value}冊読み終えた"})
+    assert result.status_code == 200
+    assert result.json()["metric_updates"] == [
+        dict(metric_id=goal["metrics"][0]["id"], value=value)
+    ]
     assert client.get(path).json() == goal
 
 
@@ -302,14 +349,14 @@ def test_parallel_progress_preserves_history_and_current_value(client, create_go
         assert data["metrics"][0]["current_value"] == len(data["progress_logs"])
 
 
-def test_parallel_progress_rechecks_target_limit(client, create_goal):
+def test_parallel_progress_can_exceed_target_without_losing_history(client, create_goal):
     goal = create_goal()
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = list(pool.map(lambda i: save(client, goal, value=3, request_id=str(i)), range(6)))
-    assert sorted(result.status_code for result in results) == [200] * 4 + [422] * 2
+    assert all(result.status_code == 200 for result in results)
     result = client.get(f"/api/v1/goals/{goal['id']}").json()
-    assert result["metrics"][0]["current_value"] == 12
-    assert len(result["progress_logs"]) == 4
+    assert result["metrics"][0]["current_value"] == 18
+    assert len(result["progress_logs"]) == 6
 
 
 def test_replan_and_progress_cannot_overwrite_each_other(client, create_goal):
@@ -322,10 +369,11 @@ def test_replan_and_progress_cannot_overwrite_each_other(client, create_goal):
         replan = pool.submit(
             client.post, path + "/replan/apply", json={"proposal_id": proposal["proposal_id"]}
         )
-        assert sorted([progress.result().status_code, replan.result().status_code]) == [200, 422]
+        assert progress.result().status_code == 200
+        assert replan.result().status_code in (200, 422)
     result = client.get(path).json()
     metric = result["metrics"][0]
-    assert metric["current_value"] <= metric["target_value"]
+    assert metric["current_value"] == 10
     assert (
         sum(log["metric_updates"][0]["value"] for log in result["progress_logs"])
         == metric["current_value"]

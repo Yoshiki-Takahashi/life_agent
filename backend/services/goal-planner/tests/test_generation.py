@@ -78,14 +78,25 @@ def test_shared_provider_uses_structured_private_bounded_calls():
     assert "unit-test-secret" not in repr(settings)
     expected = Advice(summary="次の一歩", next_actions=["5分読む"])
     factory.return_value.responses.parse.return_value = SimpleNamespace(output_parsed=expected)
-    assert (
-        generate(settings, factory, Advice, "prompt", {"owned": "context"})
-        == expected
-    )
+    assert generate(settings, factory, Advice, "prompt", {"owned": "context"}) == expected
     call = factory.return_value.responses.parse.call_args.kwargs
     assert call["text_format"] is Advice and call["store"] is False
     assert factory.call_args.kwargs["max_retries"] == 0
     assert factory.call_args.kwargs["timeout"] == 20
+
+
+@pytest.mark.parametrize("value", [0, 13])
+def test_progress_candidates_can_be_zero_or_exceed_an_already_reached_target(client, value):
+    context = goal("読書", "", [("読了冊数", "冊", 12, 12)])
+    app.dependency_overrides[get_progress_parser] = FakeProgressParser
+    result = client.post(
+        "/internal/v1/progress-preview",
+        json={"goal": context.model_dump(mode="json"), "body": f"{value}冊読み終えた"},
+    )
+    assert result.status_code == 200
+    assert result.json()["metric_updates"] == [
+        dict(metric_id=str(context.metrics[0].id), value=value)
+    ]
 
 
 @pytest.mark.parametrize("failure", ["key", "empty", "invalid", "timeout"])

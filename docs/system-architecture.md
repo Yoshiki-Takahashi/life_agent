@@ -46,7 +46,8 @@ Coreの候補版は、同じ実行で配置したPlannerのタグURLへ固定し
 | ProgressMetricUpdate | 実績に紐づくMetricごとの今回の増分 |
 | ReplanProposal | 所有者、対象目標、基準の計画版、見直し理由、候補計画、差分、適用状態 |
 
-Metricは正の数値を加算する形式です。AIが独自のテーブル、Metric型、可視化形式を生成する仕組みはありません。
+Metricは0以上の今回値を加算する形式です。0も履歴に残し、現在値の目標超過を許容します。
+AIが独自のテーブル、Metric型、可視化形式を生成する仕組みはありません。
 会話履歴と通知設定はこのDBに保存しません。会話はセッション内、通知設定は利用者別の端末内保存です。
 
 改善メモはCoreからGitHub Issuesへ送ります。Firestoreの`feedback_receipts`は本文を持たず、

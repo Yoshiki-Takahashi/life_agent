@@ -183,7 +183,7 @@ class ProgressMetricUpdateRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     metric_id: uuid.UUID
-    value: float = Field(gt=0, le=1_000_000_000, allow_inf_nan=False, multiple_of=0.01)
+    value: float = Field(ge=0, le=1_000_000_000, allow_inf_nan=False, multiple_of=0.01)
 
 
 class ProgressLogCreateRequest(BaseModel):

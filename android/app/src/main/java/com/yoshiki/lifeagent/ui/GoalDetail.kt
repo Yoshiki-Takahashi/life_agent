@@ -165,21 +165,21 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         val body = state.progressBody.trim()
         val updates = state.metricProgress.mapNotNull { item ->
             val value = item.value.toDoubleOrNull()
-            if (value != null && value > 0) MetricProgressInput(item.metricId, value) else null
+            if (value != null) MetricProgressInput(item.metricId, value) else null
         }
         if (body.isBlank()) {
             _uiState.update { it.copy(progressError = "進捗メモを入力してください") }
             return
         }
         val invalid = state.metricProgress.any {
-            it.value.isNotBlank() && !validProgressValue(it.value, it.currentValue, it.targetValue)
+            it.value.isNotBlank() && !validProgressValue(it.value)
         }
         if (invalid) {
-            _uiState.update { it.copy(progressError = "今回値は目標以内の正の数（小数2桁まで）で入力してください") }
+            _uiState.update { it.copy(progressError = "今回値は0以上10億以下の数（小数2桁まで）で入力してください") }
             return
         }
         if (updates.isEmpty()) {
-            _uiState.update { it.copy(progressError = "今回進んだMetricを1つ以上入力してください") }
+            _uiState.update { it.copy(progressError = "今回値を1つ以上入力してください（0も保存できます）") }
             return
         }
 

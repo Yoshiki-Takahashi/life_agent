@@ -35,3 +35,16 @@ def test_core_ai_and_database_boundary():
         assert updated["plan_revision"] == 2 and len(updated["progress_logs"]) == 1
         reply = client.post("/api/v1/coach/messages", json={"body": "全目標を相談"})
         assert reply.status_code == 200 and goal["title"] in reply.json()["reply"]
+        # Both services must accept explicit zero and preserve an over-target observation.
+        for value, body in [(13, "13冊読み終えた"), (0, "今回0冊読み終えた")]:
+            candidate = client.post(path + "/progress/preview", json={"body": body})
+            assert candidate.status_code == 200
+            updates = candidate.json()["metric_updates"]
+            assert updates == [dict(metric_id=goal["metrics"][0]["id"], value=value)]
+            payload = dict(body=body, client_request_id=f"boundary-{value}", metric_updates=updates)
+            for _ in range(2):
+                assert client.post(path + "/progress", json=payload).status_code == 200
+        result = client.get(path).json()
+        assert result["metrics"][0]["current_value"] == 14
+        assert len(result["progress_logs"]) == 3
+        assert result["progress_logs"][0]["metric_updates"][0]["value"] == 0

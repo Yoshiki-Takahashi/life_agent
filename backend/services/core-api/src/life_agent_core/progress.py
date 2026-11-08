@@ -41,14 +41,10 @@ class Advisor(Protocol):
 
 
 def validate_candidates(result: ProgressPreview, context: GoalResponse) -> ProgressPreview:
-    metrics = {m.id: m for m in context.metrics}
+    metrics = {m.id for m in context.metrics}
     for item in result.metric_updates:
-        metric = metrics.get(item.metric_id)
-        if metric is None or (
-            Decimal(str(metric.current_value)) + Decimal(str(item.value))
-            > Decimal(str(metric.target_value))
-        ):
-            raise ValueError("Invalid metric or value exceeds target")
+        if item.metric_id not in metrics:
+            raise ValueError("Invalid metric")
     return result
 
 
@@ -66,7 +62,7 @@ class FakeProgressParser:
                 )
                 if len(matches) == 1 and re.search(r"読|完成|作|トレーニング|実施|進", body):
                     value = float(matches[0])
-                    if 0 < value <= metric.target_value - metric.current_value:
+                    if 0 <= value <= 1_000_000_000:
                         updates.append(
                             ProgressMetricUpdateRequest(metric_id=metric.id, value=value)
                         )
@@ -141,10 +137,6 @@ def record_progress(
             if metric is None:
                 raise HTTPException(
                     status_code=422, detail="Goalに含まれないMetricは更新できません"
-                )
-            if metric.current_value + update.value > metric.target_value:
-                raise HTTPException(
-                    status_code=422, detail="Metricの目標値を超える進捗は保存できません"
                 )
             metric.current_value += update.value
         goal.updated_at = datetime.now(UTC)

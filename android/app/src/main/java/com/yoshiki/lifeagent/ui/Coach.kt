@@ -214,12 +214,12 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
         if (!validBody()) return null
         val filled = current.metrics.filter { it.value.isNotBlank() }
         if (filled.isEmpty()) {
-            state.update { it.copy(error = "今回進んだ測定項目を1つ以上入力してください") }
+            state.update { it.copy(error = "今回値を1つ以上入力してください（0も保存できます）") }
             return null
         }
-        val valid = filled.all { validProgressValue(it.value, it.metric.currentValue, it.metric.targetValue) }
+        val valid = filled.all { validProgressValue(it.value) }
         if (!valid) {
-            state.update { it.copy(error = "今回値は目標以内の正の数（小数2桁まで）で入力してください") }
+            state.update { it.copy(error = "今回値は0以上10億以下の数（小数2桁まで）で入力してください") }
             return null
         }
         return CoachSaveRequest(UUID.randomUUID().toString(), goal.id, (current.recordBody ?: current.body).trim(),
@@ -468,7 +468,7 @@ fun CoachConfirmationScreen(
                         enabled = state.phase == CoachPhase.CONFIRMING, modifier = Modifier.fillMaxWidth(),
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true,
                     )
-                    edit.value.toBigDecimalOrNull()?.takeIf { it > java.math.BigDecimal.ZERO }?.let {
+                    edit.value.toBigDecimalOrNull()?.takeIf { it >= java.math.BigDecimal.ZERO }?.let {
                         Text("保存後 ${it.add(java.math.BigDecimal.valueOf(edit.metric.currentValue)).stripTrailingZeros().toPlainString()} ${edit.metric.unit}")
                     }
                 }

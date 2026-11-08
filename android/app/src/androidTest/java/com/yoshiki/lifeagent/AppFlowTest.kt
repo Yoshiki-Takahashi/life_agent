@@ -97,6 +97,53 @@ class AppFlowTest {
     private fun field(parent: String, text: String) =
         compose.onNode(hasText(text) and hasAnyAncestor(hasTestTag(parent)))
 
+    @Test fun zeroAndOverTargetProgressSaveAndRedisplayThroughDetailAndCoach() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("networkE2E") == "true")
+        val owner = "progress-values-e2e-${UUID.randomUUID()}"
+        val api = Network.createGoalRepository("http://127.0.0.1:18007/") { owner }
+        val date = LocalDate.now().plusDays(90).toString()
+        val goal = runBlocking { api.confirmGoal(GoalPlan("読書の実績を残す", null, date,
+            listOf(Metric("読了冊数", 12.0, "冊"), Metric("読書時間", 60.0, "分"),
+                Metric("読んだページ", 100.0, "ページ")), listOf(Milestone("振り返る", date)))) }
+        compose.setContent { LifeAgentTheme { LifeAgentApp(api, owner, {},
+            Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
+        waitFor(goal.title)
+        compose.onNodeWithText(goal.title).performClick()
+        compose.onNodeWithText("記録").performClick()
+        for ((index, value) in listOf("13", "0").withIndex()) {
+            compose.onNodeWithText("進捗メモ").performScrollTo().performTextReplacement("確認した実績${index + 1}")
+            compose.onNodeWithText("読了冊数 の今回値").performScrollTo().performTextReplacement(value)
+            compose.onNodeWithText("読書時間 の今回値").performScrollTo().performTextReplacement("0")
+            compose.onNodeWithText("進捗を保存").performScrollTo().performClick()
+            compose.waitUntil(20000) { runBlocking { api.getGoal(goal.id).progressLogs.size == index + 1 } }
+            waitFor("進捗を保存しました")
+        }
+        compose.onNodeWithText("進捗").performClick()
+        compose.onNodeWithText("履歴と現在値を確認できないため推移を表示できません").assertDoesNotExist()
+        compose.onNodeWithText("コーチ").performClick()
+        send("今回は2冊読み終えた")
+        waitFor("候補を確認する", timeoutMs = 60000)
+        conversation("確認して保存へ").performClick()
+        compose.onNodeWithText("読了冊数 の今回値").performScrollTo().assertTextContains("2")
+        compose.onNodeWithText("読書時間 の今回値").performScrollTo().performTextReplacement("0")
+        compose.onNodeWithText("保存後 0 分").assertExists()
+        compose.onNodeWithText("この内容で保存する").performScrollTo().performClick()
+        waitFor("コーチに話す")
+        runBlocking {
+            val saved = api.getGoal(goal.id)
+            assertEquals(listOf(15.0, 0.0, 0.0), saved.metrics.map { it.currentValue })
+            assertEquals(3, saved.progressLogs.size)
+            assertEquals(listOf(0.0, 0.0), saved.progressLogs[1].metricUpdates.map { it.value })
+            assertTrue(saved.progressLogs.all { it.metricUpdates.size == 2 })
+        }
+        compose.onNodeWithText("目標一覧").performClick()
+        waitFor(goal.title)
+        compose.onNodeWithText(goal.title).performClick()
+        compose.onNodeWithText("進捗").performClick()
+        compose.onNodeWithText("現在 15.0 冊").performScrollTo().assertIsDisplayed()
+        compose.onAllNodesWithText("読書時間: +0 分").onFirst().performScrollTo().assertIsDisplayed()
+    }
+
     @Test fun globalConversationConfirmationRetryNavigationAndTabs() {
         assumeTrue(InstrumentationRegistry.getArguments().getString("networkE2E") == "true")
         val owner = "app-e2e-${UUID.randomUUID()}"
@@ -193,8 +240,8 @@ class AppFlowTest {
         compose.onNodeWithText("コーチに話す").performTextReplacement(body)
         compose.onNodeWithText("送信").performClick()
     }
-    private fun waitFor(text: String, substring: Boolean = false) {
-        compose.waitUntil(10000) { compose.onAllNodesWithText(text, substring=substring).fetchSemanticsNodes().isNotEmpty() }
+    private fun waitFor(text: String, substring: Boolean = false, timeoutMs: Long = 10000) {
+        compose.waitUntil(timeoutMs) { compose.onAllNodesWithText(text, substring=substring).fetchSemanticsNodes().isNotEmpty() }
     }
     private fun conversation(text: String, substring: Boolean = false): SemanticsNodeInteraction {
         waitFor(text, substring)

@@ -5,7 +5,12 @@ from unittest.mock import Mock
 from uuid import uuid4
 
 import pytest
-from google.api_core.exceptions import Aborted, ServiceUnavailable
+from google.api_core.exceptions import (
+    Aborted,
+    DeadlineExceeded,
+    InternalServerError,
+    ServiceUnavailable,
+)
 from google.cloud.firestore_v1.document import DocumentReference
 from google.cloud.firestore_v1.query import Query
 from google.cloud.firestore_v1.transaction import Transaction
@@ -177,8 +182,8 @@ def test_preview_accepts_zero_and_over_target_without_saving(client, create_goal
     path = f"/api/v1/goals/{goal['id']}"
     result = client.post(path + "/progress/preview", json={"body": f"{value}冊読み終えた"})
     assert result.status_code == 200
-    assert result.json()["metric_updates"] == [
-        dict(metric_id=goal["metrics"][0]["id"], value=value)
+    assert [(u["metric_id"], u["value"]) for u in result.json()["metric_updates"]] == [
+        (goal["metrics"][0]["id"], value)
     ]
     assert client.get(path).json() == goal
 
@@ -193,20 +198,32 @@ def test_commit_failure_rolls_back_progress(client, create_goal, monkeypatch):
     assert client.get(f"/api/v1/goals/{goal['id']}").json() == goal
 
 
-def test_read_conflict_retries_without_duplicate_progress(client, create_goal, monkeypatch):
+@pytest.mark.parametrize(
+    "failure", [Aborted, DeadlineExceeded, InternalServerError, ServiceUnavailable]
+)
+def test_read_failure_retries_without_duplicate_progress(client, create_goal, monkeypatch, failure):
     goal = create_goal()
     original_get = DocumentReference.get
     conflicted = False
+    transaction_reads = []
 
     def get_with_conflict(ref, *args, **kwargs):
         nonlocal conflicted
-        if kwargs.get("transaction") is not None and not conflicted:
+        if kwargs.get("transaction") is not None:
+            transaction_reads.append(kwargs)
+        if (
+            kwargs.get("transaction") is not None
+            and ref.parent.id == "progress_logs"
+            and not conflicted
+        ):
             conflicted = True
-            raise Aborted("Transient read contention")
+            raise failure("Transient read contention")
         return original_get(ref, *args, **kwargs)
 
     monkeypatch.setattr(DocumentReference, "get", get_with_conflict)
     assert save(client, goal, request_id="retry-conflict").status_code == 200
+    assert conflicted
+    assert all(read["retry"] is None and 0 < read["timeout"] <= 10 for read in transaction_reads)
     assert save(client, goal, request_id="retry-conflict").status_code == 200
     saved = client.get(f"/api/v1/goals/{goal['id']}").json()
     assert saved["metrics"][0]["current_value"] == 1
@@ -353,7 +370,9 @@ def test_parallel_progress_can_exceed_target_without_losing_history(client, crea
     goal = create_goal()
     with ThreadPoolExecutor(max_workers=6) as pool:
         results = list(pool.map(lambda i: save(client, goal, value=3, request_id=str(i)), range(6)))
-    assert all(result.status_code == 200 for result in results)
+    assert all(result.status_code == 200 for result in results), [
+        (r.status_code, r.text) for r in results
+    ]
     result = client.get(f"/api/v1/goals/{goal['id']}").json()
     assert result["metrics"][0]["current_value"] == 18
     assert len(result["progress_logs"]) == 6

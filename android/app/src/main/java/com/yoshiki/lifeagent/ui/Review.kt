@@ -13,6 +13,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import com.yoshiki.lifeagent.data.Goal
+import com.yoshiki.lifeagent.data.progressLabel
 import com.yoshiki.lifeagent.data.ProgressLog
 import com.yoshiki.lifeagent.reminders.ReviewReminder
 import java.time.Instant
@@ -70,7 +71,7 @@ fun ReviewScreen(goal: Goal?, userId: String, onBack: () -> Unit) {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
                     Text(log.body)
-                    log.metricUpdates.forEach { Text("${it.metricName}: +${it.value} ${it.unit}") }
+                    log.metricUpdates.forEach { Text(progressLabel(it)) }
                     Text(log.recordedAt)
                 }
             }

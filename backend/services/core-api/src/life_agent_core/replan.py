@@ -12,7 +12,13 @@ from life_agent_core.ai_service import (
 )
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
-from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.database import (
+    Database,
+    decode,
+    document,
+    read_in_transaction,
+    run_transaction,
+)
 from life_agent_core.goals import goal_response, load_goal, load_goal_with_details, require_active
 from life_agent_core.models import Goal, Metric, Milestone, ReplanProposalStatus
 from life_agent_core.models import ReplanProposal as ReplanProposalModel
@@ -37,8 +43,16 @@ def validate_replan(result: ReplanCandidate, context: GoalResponse) -> ReplanCan
     current_by_position = {metric.position: metric for metric in context.metrics}
     for index, item in enumerate(result.proposed_plan.metrics):
         current = current_by_position.get(index)
-        if current is not None and Decimal(str(item.target_value)) < Decimal(
-            str(current.current_value)
+        if current is not None and (
+            item.kind != current.kind
+            or item.checklist_items != current.checklist_items
+            or item.unit != current.unit
+        ):
+            raise ValueError("既存Metricの種別・単位・チェック項目は変更できません")
+        if (
+            current is not None
+            and current.kind == "cumulative"
+            and Decimal(str(item.target_value)) < Decimal(str(current.current_value))
         ):
             raise ValueError("Proposed metric target is below saved progress")
     return result
@@ -54,6 +68,10 @@ class FakeReplanner:
         proposed_target = max(current, (current_target * Decimal("0.75")).quantize(Decimal("0.01")))
         if proposed_target == current_target:
             proposed_target = current_target + Decimal("1.00")
+        if metric.kind == "checklist":
+            proposed_target = current_target
+        if metric.kind == "occurrence":
+            proposed_target = max(Decimal("1"), proposed_target.to_integral_value())
         days = max((target_date - today).days, 0)
         return ReplanCandidate(
             proposed_plan={
@@ -65,6 +83,8 @@ class FakeReplanner:
                         "name": metric.name,
                         "target_value": float(proposed_target),
                         "unit": metric.unit,
+                        "kind": metric.kind,
+                        "checklist_items": metric.checklist_items,
                     }
                 ],
                 "milestones": [
@@ -156,7 +176,7 @@ def apply_replan(
     def persist(transaction):
         goal = load_goal(goal_id, db, user_id, transaction)
         require_active(goal)
-        snapshot = proposal_ref.get(transaction=transaction)
+        snapshot = read_in_transaction(proposal_ref, transaction)
         if not snapshot.exists:
             raise HTTPException(status_code=404, detail="再計画候補が見つかりません")
         proposal = ReplanProposalModel.model_validate(decode(snapshot.to_dict()))
@@ -197,7 +217,19 @@ def validate_metric_targets(proposed_plan: GoalPlan, goal: Goal) -> None:
     metrics_by_position = {metric.position: metric for metric in goal.metrics}
     for index, item in enumerate(proposed_plan.metrics):
         metric = metrics_by_position.get(index)
-        if metric is not None and Decimal(str(item.target_value)) < metric.current_value:
+        if metric is not None and (
+            item.kind != metric.kind
+            or item.checklist_items != metric.checklist_items
+            or item.unit != metric.unit
+        ):
+            raise HTTPException(
+                status_code=422, detail="既存Metricの種別・単位・チェック項目は変更できません"
+            )
+        if (
+            metric is not None
+            and metric.kind == "cumulative"
+            and Decimal(str(item.target_value)) < metric.current_value
+        ):
             raise HTTPException(
                 status_code=422,
                 detail="現在値を下回るMetric目標には変更できません",
@@ -216,9 +248,7 @@ def apply_plan(goal: Goal, proposed_plan: GoalPlan) -> None:
         if metric is None:
             goal.metrics.append(
                 Metric(
-                    name=item.name,
-                    target_value=item.target_value,
-                    unit=item.unit,
+                    **item.model_dump(),
                     position=index,
                 )
             )

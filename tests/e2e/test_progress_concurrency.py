@@ -27,13 +27,16 @@ def test_parallel_progress_is_atomic(same_id):
         goal = client.post("/api/v1/goals/confirm", json=plan).json()
         path = f"/api/v1/goals/{goal['id']}"
 
+        # Distinct saves also cross the target while contending on one Goal.
+        value = 1 if same_id else 3
+
         def save(index):
             return client.post(
                 path + "/progress",
                 json={
-                    "body": "1冊読んだ",
+                    "body": f"{value}冊読んだ",
                     "client_request_id": "same" if same_id else str(index),
-                    "metric_updates": [{"metric_id": goal["metrics"][0]["id"], "value": 1}],
+                    "metric_updates": [{"metric_id": goal["metrics"][0]["id"], "value": value}],
                 },
             )
 
@@ -41,5 +44,5 @@ def test_parallel_progress_is_atomic(same_id):
             responses = list(pool.map(save, range(6)))
         assert all(r.status_code == 200 for r in responses), [r.status_code for r in responses]
         saved = client.get(path).json()
-        assert saved["metrics"][0]["current_value"] == (1 if same_id else 6)
+        assert saved["metrics"][0]["current_value"] == (1 if same_id else 18)
         assert len(saved["progress_logs"]) == (1 if same_id else 6)

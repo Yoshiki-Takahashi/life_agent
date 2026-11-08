@@ -19,7 +19,9 @@ REPLAN_PROMPT = """あなたは保存済みGoalの再計画候補を作ります
 
 守ること:
 - 提案だけを返す。保存済みGoalを変更した、進捗を保存したとは言わない。
-- 既存Metricのcurrent_valueは正本。target_valueはcurrent_value以上にする。
+- 既存Metricのcurrent_valueは正本。cumulativeのtarget_valueはcurrent_value以上にする。
+- 既存Metricは同じ配列位置を維持し、kind・unit・checklist_itemsを一切変えない。
+  measurementの目標は現在値を下回ってもよい。チェックリストの目標値は項目数。
 - ProgressLogの履歴を失わせる削除を前提にしない。Metric削除が必要ならdiffで理由を説明する。
 - MetricとMilestoneはそれぞれ1〜10件。件数制限を理由に利用者が追加した項目を削らず、
   見直し理由に応じた変更に絞る。Milestoneの日付は今日からGoal期限まで、表示順にする。
@@ -66,6 +68,10 @@ class FakeReplanner:
         proposed_target = max(current, (current_target * Decimal("0.75")).quantize(Decimal("0.01")))
         if proposed_target == current_target:
             proposed_target = current_target + Decimal("1.00")
+        if metric.kind == "checklist":
+            proposed_target = current_target
+        if metric.kind == "occurrence":
+            proposed_target = max(Decimal("1"), proposed_target.to_integral_value())
         days = max((target_date - today).days, 0)
         plan = GoalPlan(
             title=context.title,
@@ -76,6 +82,8 @@ class FakeReplanner:
                     "name": metric.name,
                     "target_value": float(proposed_target),
                     "unit": metric.unit,
+                    "kind": metric.kind,
+                    "checklist_items": metric.checklist_items,
                 }
             ],
             milestones=[

@@ -39,7 +39,12 @@ async def maintenance(request: Request, call_next):
 @app.exception_handler(GoogleAPICallError)
 @app.exception_handler(RetryError)
 async def database_unavailable(request: Request, error: Exception):
-    logging.getLogger(__name__).warning("Firestore operation failed: %s", type(error).__name__)
+    cause = getattr(error, "cause", None) or error.__cause__
+    logging.getLogger(__name__).warning(
+        "Firestore operation failed: %s (cause=%s)",
+        type(error).__name__,
+        type(cause).__name__ if cause else "none",
+    )
     return JSONResponse(
         status_code=500, content={"detail": "保存・取得できませんでした。再試行してください"}
     )

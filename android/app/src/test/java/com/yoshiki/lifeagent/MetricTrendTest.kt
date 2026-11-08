@@ -34,3 +34,29 @@ class MetricTrendTest {
             listOf(log("a", "2026-10-25T10:00:00Z", 0.3))).size)
     }
 }
+
+class TypedMetricTrendTest {
+    @Test fun observationsReplaceInsteadOfAccumulateAndRetainZero() {
+        val metric = Metric("体脂肪率", 15.0, "%", id = "m", currentValue = 0.0, kind = "measurement")
+        val logs = listOf(25.0, 20.0, 0.0).mapIndexed { index, value ->
+            val time = "2026-11-0${index + 1}T00:00:00Z"
+            ProgressLog("$index", "", time, time, listOf(ProgressMetricUpdate("m", "体脂肪率", value, "%", "measurement")))
+        }
+        assertEquals(listOf(25.0, 20.0, 0.0), metricTrend(metric, logs.reversed()).map { it.value })
+        assertTrue(metricTrend(metric.copy(currentValue = 30.0), logs).isEmpty())
+    }
+
+    @Test fun inputsMatchTheirRecordingMeaning() {
+        val measurement = Metric("測定", 15.0, "%", id = "m", kind = "measurement")
+        assertEquals(25.0, metricInput(measurement, "25")!!.value, 0.0)
+        assertEquals(0.0, metricInput(measurement, "0")!!.value, 0.0)
+        assertEquals(25.0, metricInput(measurement.copy(kind = "cumulative"), "25")!!.value, 0.0)
+        val checklist = Metric("準備", 2.0, "項目", id = "c", kind = "checklist", checklistItems = listOf("日付", "宿"), completedItems = listOf("宿"))
+        val update = metricInput(checklist, "[]")!!
+        assertEquals(emptyList<String>(), update.completedItems)
+        assertEquals(listOf("宿"), update.expectedCompletedItems)
+        assertNull(metricInput(checklist, ""))
+        val occurrence = metricInput(measurement.copy(kind = "occurrence"), "1")!!
+        assertEquals(java.time.LocalDate.now().toString(), occurrence.activityDate)
+    }
+}

@@ -15,7 +15,6 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
@@ -38,7 +37,6 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -51,7 +49,8 @@ import com.yoshiki.lifeagent.data.Goal
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.Metric
 import com.yoshiki.lifeagent.data.MetricProgressInput
-import com.yoshiki.lifeagent.data.validProgressValue
+import com.yoshiki.lifeagent.data.metricInput
+import com.yoshiki.lifeagent.data.progressEditValue
 import java.math.BigDecimal
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -64,7 +63,15 @@ import retrofit2.HttpException
 enum class CoachPhase { EDITING, GENERATING, CANDIDATE, CONFIRMING, SAVING, RESULT_UNKNOWN }
 
 data class CoachMetricEdit(val metric: Metric, val value: String = "")
-data class CoachSavedMetric(val name: String, val value: Double, val unit: String)
+data class CoachSavedMetric(val name: String, val value: Double, val unit: String,
+    val kind: String = "cumulative", val completedItems: List<String> = emptyList()) {
+    fun label() = when (kind) {
+        "checklist" -> "$name: 完了 ${completedItems.joinToString("、").ifEmpty { "なし" }}"
+        "occurrence" -> "$name: 実行を記録"
+        "measurement" -> "$name: ${coachNumber(value)} $unit"
+        else -> "$name: +${coachNumber(value)} $unit"
+    }
+}
 data class CoachTurn(
     val id: String,
     val body: String,
@@ -151,7 +158,7 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
                     state.update { it.copy(goal = goal, recordBody = source, reply = response.reply,
                         phase = CoachPhase.CANDIDATE, warnings = preview.warnings,
                         metrics = goal.metrics.sortedBy { it.position }.map { metric -> CoachMetricEdit(
-                            metric, preview.metricUpdates.find { it.metricId == metric.id }?.value?.let(::coachNumber) ?: "") }) }
+                            metric, progressEditValue(metric, preview.metricUpdates.find { it.metricId == metric.id })) }) }
                 } else {
                     require(response.intent == "discuss" && response.goalId == null)
                     state.update { it.copy(body = "", phase = CoachPhase.EDITING, reply = null,
@@ -214,17 +221,17 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
         if (!validBody()) return null
         val filled = current.metrics.filter { it.value.isNotBlank() }
         if (filled.isEmpty()) {
-            state.update { it.copy(error = "今回値を1つ以上入力してください（0も保存できます）") }
+            state.update { it.copy(error = "今回進んだ測定項目を1つ以上入力してください") }
             return null
         }
-        val valid = filled.all { validProgressValue(it.value) }
-        if (!valid) {
-            state.update { it.copy(error = "今回値は0以上10億以下の数（小数2桁まで）で入力してください") }
+        val updates = runCatching { filled.map { requireNotNull(metricInput(it.metric, it.value)) } }.getOrElse {
+            state.update { it.copy(error = "種別に合う数値・チェック項目を入力してください。数値は0以上10億以下・小数2桁までです") }
             return null
         }
         return CoachSaveRequest(UUID.randomUUID().toString(), goal.id, (current.recordBody ?: current.body).trim(),
-            filled.map { MetricProgressInput(it.metric.id, it.value.toDouble()) },
-            filled.map { CoachSavedMetric(it.metric.name, it.value.toDouble(), it.metric.unit) })
+            updates, filled.zip(updates).map { (edit, input) ->
+                CoachSavedMetric(edit.metric.name, input.value, edit.metric.unit, edit.metric.kind, input.completedItems.orEmpty())
+            })
     }
 
     fun saveProgress() {
@@ -252,7 +259,9 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
                 if (rejected) pendingSave = null
                 state.update { it.copy(
                     phase = if (rejected) CoachPhase.CONFIRMING else CoachPhase.RESULT_UNKNOWN,
-                    error = if (rejected) "保存が拒否されました。入力内容とログイン状態を確認してください"
+                    error = if (error is HttpException && error.code() == 409)
+                        "同日の実行は記録済みか、チェック状態が更新されています。候補を取り消して目標を確認してください。"
+                        else if (rejected) "保存が拒否されました。入力内容とログイン状態を確認してください"
                         else "保存結果を確認できません。同じ内容で再試行してください",
                 ) }
             }
@@ -341,7 +350,7 @@ fun CoachScreen(
                             turn.reply?.let { reply -> CoachCard("コーチ") { Text(reply) } }
                             if (turn.saved) CoachCard("保存済み") {
                                 turn.goalTitle?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
-                                turn.updates.forEach { Text("${it.name}: +${coachNumber(it.value)} ${it.unit}") }
+                                turn.updates.forEach { Text(it.label()) }
                                 Text("この記録で保存した増加量です。",
                                     style = MaterialTheme.typography.bodySmall)
                             }
@@ -367,7 +376,7 @@ fun CoachScreen(
                         CoachCard("更新候補・未保存") {
                             Text(state.goal?.title.orEmpty(), style = MaterialTheme.typography.titleMedium)
                             state.metrics.filter { it.value.isNotBlank() }.forEach {
-                                Text("${it.metric.name}: +${it.value} ${it.metric.unit}")
+                                Text("${it.metric.name}: 記録候補あり")
                             }
                             Text("まだ保存されていません。")
                             state.warnings.forEach { Text(it) }
@@ -462,15 +471,8 @@ fun CoachConfirmationScreen(
             state.metrics.forEach { edit ->
                 CoachCard(edit.metric.name) {
                     Text("現在 ${coachNumber(edit.metric.currentValue)} / 目標 ${coachNumber(edit.metric.targetValue)} ${edit.metric.unit}")
-                    OutlinedTextField(
-                        value = edit.value, onValueChange = { onMetricChange(edit.metric.id, it) },
-                        label = { Text("${edit.metric.name} の今回値") },
-                        enabled = state.phase == CoachPhase.CONFIRMING, modifier = Modifier.fillMaxWidth(),
-                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal), singleLine = true,
-                    )
-                    edit.value.toBigDecimalOrNull()?.takeIf { it >= java.math.BigDecimal.ZERO }?.let {
-                        Text("保存後 ${it.add(java.math.BigDecimal.valueOf(edit.metric.currentValue)).stripTrailingZeros().toPlainString()} ${edit.metric.unit}")
-                    }
+                    MetricValueField(edit.metric, edit.value, state.phase == CoachPhase.CONFIRMING,
+                        onChange = { onMetricChange(edit.metric.id, it) })
                 }
             }
             state.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }

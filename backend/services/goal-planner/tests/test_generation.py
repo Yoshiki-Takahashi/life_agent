@@ -94,8 +94,8 @@ def test_progress_candidates_can_be_zero_or_exceed_an_already_reached_target(cli
         json={"goal": context.model_dump(mode="json"), "body": f"{value}冊読み終えた"},
     )
     assert result.status_code == 200
-    assert result.json()["metric_updates"] == [
-        dict(metric_id=str(context.metrics[0].id), value=value)
+    assert [(u["metric_id"], u["value"]) for u in result.json()["metric_updates"]] == [
+        (str(context.metrics[0].id), value)
     ]
 
 
@@ -207,3 +207,14 @@ def test_bad_generated_questions_fail_closed(client, questions):
         "/internal/v1/goal-questions", json=dict(title="読書", target_date=str(date.today()))
     )
     assert response.status_code == 503
+
+
+def test_typed_advice_context_serializes_recorded_dates():
+    import json
+
+    context = goal("測定と実行", None, [("測定値", "%", 25, 15)])
+    context.metrics[0].kind = "measurement"
+    context.metrics[0].last_recorded_at = datetime.now(UTC)
+    context.progress_logs = []
+    payload = advice_context(context, date.today())
+    assert json.loads(json.dumps(payload))["metrics"][0]["last_recorded_at"]

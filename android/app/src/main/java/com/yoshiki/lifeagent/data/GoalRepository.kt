@@ -56,7 +56,7 @@ class HttpGoalRepository(
         targetDate: String,
         answers: List<GoalAnswer>,
     ): GoalPlan = api.previewGoal(
-        authorization(), GoalPreviewRequest(title, description, targetDate, answers)
+        authorization(), GoalPreviewRequest(title, description, targetDate, answers, metricTypesEnabled = true)
     ).toGoalPlan()
 
     override suspend fun goalQuestions(title: String, description: String?, targetDate: String): GoalQuestions =
@@ -68,7 +68,7 @@ class HttpGoalRepository(
             title = plan.title,
             description = plan.description,
             targetDate = plan.targetDate,
-            metrics = plan.metrics.map { MetricPayload(it.name, it.targetValue, it.unit) },
+            metrics = plan.metrics.map { MetricPayload(it.name, it.targetValue, it.unit, it.kind, it.checklistItems) },
             milestones = plan.milestones.map { MilestonePayload(it.title, it.targetDate) },
         )
     ).toGoal()
@@ -97,7 +97,7 @@ class HttpGoalRepository(
         ProgressLogCreateRequest(
             body = body,
             clientRequestId = clientRequestId,
-            metricUpdates = metricUpdates.map { ProgressMetricUpdatePayload(it.metricId, it.value) },
+            metricUpdates = metricUpdates.map { ProgressMetricUpdatePayload(it.metricId, it.value, it.completedItems, it.activityDate, it.expectedCompletedItems, it.kind) },
         ),
     ).toGoal()
 }
@@ -218,6 +218,7 @@ data class GoalPreviewRequest(
     val description: String? = null,
     @SerialName("target_date") val targetDate: String,
     val answers: List<GoalAnswer> = emptyList(),
+    @SerialName("metric_types_enabled") val metricTypesEnabled: Boolean = false,
 )
 
 @Serializable
@@ -234,6 +235,8 @@ data class MetricPayload(
     val name: String,
     @SerialName("target_value") val targetValue: Double,
     val unit: String,
+    val kind: String = "cumulative",
+    @SerialName("checklist_items") val checklistItems: List<String> = emptyList(),
 )
 
 @Serializable
@@ -296,9 +299,12 @@ data class MetricResponse(
     @SerialName("current_value") val currentValue: Double = 0.0,
     val unit: String,
     val position: Int,
+    val kind: String = "cumulative",
+    @SerialName("checklist_items") val checklistItems: List<String> = emptyList(),
+    @SerialName("completed_items") val completedItems: List<String> = emptyList(),
     @SerialName("created_at") val createdAt: String,
 ) {
-    fun toMetric() = Metric(name, targetValue, unit, position, id, currentValue)
+    fun toMetric() = Metric(name, targetValue, unit, position, id, currentValue, kind, checklistItems, completedItems)
 }
 
 @Serializable
@@ -323,6 +329,10 @@ data class ProgressLogCreateRequest(
 data class ProgressMetricUpdatePayload(
     @SerialName("metric_id") val metricId: String,
     val value: Double,
+    @SerialName("completed_items") val completedItems: List<String>? = null,
+    @SerialName("activity_date") val activityDate: String? = null,
+    @SerialName("expected_completed_items") val expectedCompletedItems: List<String>? = null,
+    val kind: String? = null,
 )
 
 @Serializable
@@ -348,11 +358,14 @@ data class ProgressMetricUpdateResponse(
     @SerialName("metric_name") val metricName: String,
     val value: Double,
     val unit: String,
+    val kind: String = "cumulative",
+    @SerialName("completed_items") val completedItems: List<String> = emptyList(),
+    @SerialName("activity_date") val activityDate: String? = null,
 ) {
-    fun toProgressMetricUpdate() = ProgressMetricUpdate(metricId, metricName, value, unit)
+    fun toProgressMetricUpdate() = ProgressMetricUpdate(metricId, metricName, value, unit, kind, completedItems, activityDate)
 }
 
-private fun MetricPayload.toMetric(position: Int) = Metric(name, targetValue, unit, position)
+private fun MetricPayload.toMetric(position: Int) = Metric(name, targetValue, unit, position, kind = kind, checklistItems = checklistItems)
 
 private fun MilestonePayload.toMilestone(position: Int) = Milestone(title, targetDate, position)
 

@@ -19,13 +19,17 @@ logger = logging.getLogger(__name__)
 
 SYSTEM_PROMPT = """You create practical initial plans for personal goals.
 Return one to three measurable metrics and three to five milestones.
-Every metric needs a concise name, a positive numeric target_value, and a unit.
-The app starts every metric at zero and only ADDS completed positive increments; it cannot
-store observations, reset weekly values, replace totals, or track personal bests.
-Choose cumulative completed outcomes: books finished, summaries written, completed features,
-workout sessions or total repetitions. Never use weekly rates, consecutive/best repetitions,
-body weight, or other values requiring replacement. Put frequency or performance aspirations
-in milestones instead. If necessary use an additive activity proxy and name it explicitly.
+If metric_types_enabled is false, ONLY use cumulative metrics and empty checklist_items.
+If true, select the best supported kind for the goal.
+Every metric has one fixed kind: cumulative, occurrence, measurement, checklist.
+cumulative ADDS completed positive increments (pages, minutes, finished books).
+occurrence records one activity per local calendar day (gym attendance, daily reading).
+measurement stores the observed numeric value, replacing the current value (body fat percent).
+checklist tracks explicit steps in checklist_items (travel dates, accommodation, destination).
+Choose the kind matching the user's purpose. checklist_items must be empty except for checklist;
+checklist needs 1-20 unique short labels and target_value equal to the number of items.
+Other kinds need a positive target_value; occurrence targets are whole numbers of days.
+Never invent prior progress. Measurements do not start with an observed zero.
 Use short, plain units such as 冊, 件, 回, 分. Put the measurement definition in the metric name,
 not parentheses in the unit. target_value must have at most two decimal places.
 Milestone dates must be between today's date and the goal target date, in nondecreasing order.
@@ -72,6 +76,37 @@ class FakeGoalPlanner:
             payload.target_date,
         )
         metrics = [{"name": "独立Planner達成率", "target_value": 100, "unit": "%"}]
+        text = f"{payload.title} {payload.description or ''}"
+        if "体脂肪" in text or "体重" in text:
+            metrics = [
+                dict(
+                    name="体脂肪率" if "体脂肪" in text else "体重",
+                    target_value=15 if "体脂肪" in text else 60,
+                    unit="%" if "体脂肪" in text else "kg",
+                    kind="measurement",
+                )
+            ]
+        elif "習慣" in text or "ジム" in text:
+            metrics = [
+                dict(
+                    name="ジム" if "ジム" in text else "習慣の実行",
+                    target_value=12,
+                    unit="日",
+                    kind="occurrence",
+                )
+            ]
+        elif "旅行" in text:
+            metrics = [
+                dict(
+                    name="旅行準備",
+                    target_value=3,
+                    unit="項目",
+                    kind="checklist",
+                    checklist_items=["日付を決める", "宿を決める", "行き先を決める"],
+                )
+            ]
+        if not payload.metric_types_enabled:
+            metrics = [{"name": "独立Planner達成率", "target_value": 100, "unit": "%"}]
         if any(item.answer and "時間も記録" in item.question for item in payload.answers):
             metrics.append({"name": "取り組んだ時間", "target_value": 60, "unit": "分"})
         milestones = [
@@ -86,7 +121,7 @@ class FakeGoalPlanner:
         if any(item.answer and "始めていますか" in item.question for item in payload.answers):
             milestones[0]["title"] = "これまでの取り組みを確認する"
         return GoalPlan(
-            **payload.model_dump(exclude={"answers"}),
+            **payload.model_dump(exclude={"answers", "metric_types_enabled"}),
             metrics=metrics,
             milestones=milestones,
         )
@@ -119,6 +154,13 @@ class OpenAIGoalPlanner:
             {"today": date.today().isoformat(), **payload.model_dump(mode="json")},
         )
         try:
-            return GoalPlan(**payload.model_dump(exclude={"answers"}), **generated.model_dump())
+            if not payload.metric_types_enabled and any(
+                m.kind != "cumulative" for m in generated.metrics
+            ):
+                raise ValueError("Legacy client requires cumulative metrics")
+            return GoalPlan(
+                **payload.model_dump(exclude={"answers", "metric_types_enabled"}),
+                **generated.model_dump(),
+            )
         except ValueError as error:
             raise AIUnavailableError("Invalid generated plan") from error

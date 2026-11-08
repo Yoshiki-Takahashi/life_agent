@@ -7,7 +7,7 @@
 - OpenAI APIの呼び出し
 - GoalのYes / No質問、回答に基づく初期計画、Progress Parser、AdvisorのStructured Output生成
 - プロンプトとSchemaのバージョン管理
-- 読書、アプリ開発、筋トレの回帰評価
+- 読書、アプリ開発、筋トレと、実行日・測定値・チェックリストの回帰評価
 
 Goalの保存やユーザー認可はCore APIが担当します。OpenAI APIキーはこのサービスだけに設定し、AndroidやCore APIへ渡しません。
 

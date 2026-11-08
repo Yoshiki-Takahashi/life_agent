@@ -71,6 +71,11 @@ class AppFlowTest {
         field("metric-1", "単位").performScrollTo().performTextReplacement("分")
         field("metric-0", "Metricを削除").performScrollTo().performClick()
         field("metric-0", "Metric名").assertTextContains("読んだ時間")
+        field("metric-0", "測定値").performScrollTo().performClick()
+        compose.onNodeWithText("Metricを追加").performScrollTo().performClick()
+        field("metric-1", "Metric名").performScrollTo().performTextReplacement("読書準備")
+        field("metric-1", "チェックリスト").performScrollTo().performClick()
+        field("metric-1", "チェック項目（1行に1項目）").performScrollTo().performTextReplacement("本を選ぶ\n本を用意する")
         repeat(2) { field("milestone-0", "Milestoneを削除").performScrollTo().performClick() }
         field("milestone-0", "Milestoneを削除").assertIsNotEnabled()
         compose.onNodeWithText("Milestoneを追加").performScrollTo().performClick()
@@ -87,8 +92,10 @@ class AppFlowTest {
         waitFor("概要")
         runBlocking {
             val saved = api.getGoal(api.listGoals().single().id)
-            assertEquals(listOf("読んだ時間"), saved.metrics.map { it.name })
-            assertEquals(60.0, saved.metrics.single().targetValue, 0.0)
+            assertEquals(listOf("読んだ時間", "読書準備"), saved.metrics.map { it.name })
+            assertEquals(listOf("measurement", "checklist"), saved.metrics.map { it.kind })
+            assertEquals(listOf("本を選ぶ", "本を用意する"), saved.metrics[1].checklistItems)
+            assertEquals(60.0, saved.metrics.first().targetValue, 0.0)
             assertEquals(2, saved.milestones.size)
             assertEquals("読み方を振り返る", saved.milestones.last().title)
         }

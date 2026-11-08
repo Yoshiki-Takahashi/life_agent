@@ -31,6 +31,10 @@ class Metric(StoredModel):
     target_value: Decimal
     current_value: Decimal = Decimal("0")
     unit: str
+    kind: Literal["cumulative", "occurrence", "measurement", "checklist"] = "cumulative"
+    checklist_items: list[str] = Field(default_factory=list)
+    completed_items: list[str] = Field(default_factory=list)
+    last_recorded_at: datetime | None = None
     position: int
     archived_at: datetime | None = None
     created_at: datetime = Field(default_factory=now)
@@ -47,13 +51,21 @@ class Milestone(StoredModel):
 class ProgressMetricUpdate(StoredModel):
     metric_id: uuid.UUID
     value: Decimal
+    kind: Literal["cumulative", "occurrence", "measurement", "checklist"] = "cumulative"
+    completed_items: list[str] = Field(default_factory=list)
+    activity_date: date | None = None
     # Resolved from the current (possibly archived) Metric definition when reading.
     metric_name: str = Field(default="", exclude=True)
     unit: str = Field(default="", exclude=True)
 
 
-class ProgressLog(StoredModel):
+class ActivityDay(StoredModel):
     schema_version: Literal[1] = 1
+    log_id: uuid.UUID
+
+
+class ProgressLog(StoredModel):
+    schema_version: Literal[1, 2] = 2
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     body: str
     client_request_id: str
@@ -63,7 +75,7 @@ class ProgressLog(StoredModel):
 
 
 class Goal(StoredModel):
-    schema_version: Literal[1] = 1
+    schema_version: Literal[1, 2] = 2
     id: uuid.UUID = Field(default_factory=uuid.uuid4)
     owner_id: str
     title: str

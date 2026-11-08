@@ -10,7 +10,13 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from life_agent_core.ai_service import AIUnavailableError, InternalAIClient
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import Settings, get_settings
-from life_agent_core.database import Database, decode, document, run_transaction
+from life_agent_core.database import (
+    Database,
+    decode,
+    document,
+    read_in_transaction,
+    run_transaction,
+)
 from life_agent_core.models import Goal, GoalStatus, Metric, Milestone, ProgressLog
 from life_agent_core.schemas import (
     GoalConfirmRequest,
@@ -69,6 +75,34 @@ def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None
         metric = MetricDraft(name="達成率", target_value=100, unit="%")
         titles = ("実行内容を決める", "中間目標を達成する", "Goalを達成する")
 
+    if "体脂肪" in text or "体重" in text:
+        metric = MetricDraft(
+            name="体脂肪率" if "体脂肪" in text else "体重",
+            target_value=15 if "体脂肪" in text else 60,
+            unit="%" if "体脂肪" in text else "kg",
+            kind="measurement",
+        )
+    elif "習慣" in text or "ジム" in text:
+        metric = MetricDraft(
+            name="ジム" if "ジム" in text else "習慣の実行",
+            target_value=12,
+            unit="日",
+            kind="occurrence",
+        )
+    elif "旅行" in text:
+        metric = MetricDraft(
+            name="旅行準備",
+            target_value=3,
+            unit="項目",
+            kind="checklist",
+            checklist_items=["日付を決める", "宿を決める", "行き先を決める"],
+        )
+    if not payload.metric_types_enabled:
+        metric = (
+            MetricDraft(name="完了した取り組み", target_value=12, unit="回")
+            if metric.kind != "cumulative"
+            else metric
+        )
     metrics = [metric]
     if any(item.answer and "時間も記録" in item.question for item in payload.answers):
         metrics.append(MetricDraft(name="取り組んだ時間", target_value=60, unit="分"))
@@ -129,7 +163,10 @@ def goal_questions(payload: GoalInput, planner: Planner, user_id: CurrentUserId)
 @router.post("/api/v1/goals/preview", response_model=GoalPlan)
 def preview_goal(payload: GoalPreviewRequest, planner: Planner, user_id: CurrentUserId) -> GoalPlan:
     try:
-        return planner.generate(payload)
+        plan = planner.generate(payload)
+        if not payload.metric_types_enabled and any(m.kind != "cumulative" for m in plan.metrics):
+            raise AIUnavailableError("Legacy client requires cumulative metrics")
+        return plan
     except AIUnavailableError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -147,7 +184,7 @@ def confirm_goal(payload: GoalConfirmRequest, db: Database, user_id: CurrentUser
         description=payload.description,
         target_date=payload.target_date,
         metrics=[
-            Metric(name=item.name, target_value=item.target_value, unit=item.unit, position=index)
+            Metric(**item.model_dump(), position=index)
             for index, item in enumerate(payload.metrics)
         ],
         milestones=[
@@ -216,7 +253,10 @@ def get_goal(goal_id: uuid.UUID, db: Database, user_id: CurrentUserId) -> GoalRe
 
 
 def load_goal(goal_id: uuid.UUID, db: firestore.Client, user_id: str, transaction=None) -> Goal:
-    snapshot = db.collection("goals").document(str(goal_id)).get(transaction=transaction)
+    reference = db.collection("goals").document(str(goal_id))
+    snapshot = (
+        reference.get() if transaction is None else read_in_transaction(reference, transaction)
+    )
     return owned_goal(snapshot, user_id)
 
 

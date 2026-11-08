@@ -1,6 +1,6 @@
 ---
 name: lifeagent-issue
-description: Start development of all open LifeAgent GitHub Issues with subagents, clarify requirements, validate changes, and prepare reviewable results.
+description: Develop all open LifeAgent GitHub Issues with subagents, validate changes, merge pull requests, complete deployment when applicable, and close completed issues.
 ---
 
 # LifeAgentのOpen Issueを開発する
@@ -12,6 +12,9 @@ GitHubからLifeAgentのOpenなIssueを全件取得し、Issue本文・コメン
 - 並行して編集する場合はIssueごとに独立した作業場所やブランチを使う。分離できない場合や変更箇所が競合する場合は調査を並行し、実装を順次行う。依存するIssueは順序を調整する。
 - 重要な仕様が曖昧なら、選択肢と推奨案をまとめてこのチャットでユーザーに質問し、回答が必要な変更は待つ。独立して進められるIssueは継続する。小さな実装判断は自分で決める。needs-triageの改善メモも調査対象とし、実装に必要な仕様を整理する。
 - Issueごとに範囲を実装し、AGENTS.mdおよびdocs/development-workflow.mdに従って関連文書と必要なテストを更新する。AI関連では指定された回帰評価を考慮する。
-- 実行可能な関連lint・テスト・ビルドを行い、環境や権限により実行できない検証は理由とともに明記する。実AI・Android端末・GCPの確認を行っていなければ完了扱いにしない。
-- このスキルの呼び出しをDraft PR作成の依頼として扱い、権限がある場合はIssue単位で`Closes #番号`を含むDraft PRを作り、変更・検証結果・未確認事項を記載する。作成できない場合は差分とPR本文案を提示する。マージやデプロイは行わない。
-- 最後に、確認時点の全Open Issueについて、実装・質問待ち・既存PR・保留の状況と理由を報告する。IssueやPRへのコメント・更新はユーザーの指示と利用可能な権限に従う。
+- 実行可能な関連lint・テスト・ビルドを行い、環境や権限により実行できない検証は理由とともに明記する。実AI・Android端末・GCPの確認は変更内容と対象Issueに応じて判断し、実施した範囲と未確認事項を区別する。
+- このスキルの呼び出しを通常のOpen PR作成・マージ・必要なデプロイ・Issueクローズの依頼として扱う。権限がある場合はIssue単位で通常のOpen PRを作り、変更・検証結果・未確認事項を記載する。Issueは最後にクローズするため、PR本文には`Closes #番号`など自動クローズするキーワードを使わず、関連Issueとして参照する。この手順は同じスキル実行におけるAGENTS.mdや開発手順のPR作成・マージ・Issueクローズに関する記載に優先する。
+- PRのGitHub Actionsが完了し、必要なチェックがすべて成功したことを確認してから自動的にマージする。失敗時は原因を調査・修正し、検査を再実行する。チェック失敗や未完了のままマージしない。
+- マージ後、対象変更にデプロイが必要な場合は自動デプロイを確認し、必要に応じて実行して完了まで確認する。デプロイ等でエラーが起きた場合は原因を調査し、修正PRを作成してActionsの成功を確認後にマージし、デプロイ成功まで確認する。権限や環境などの制約で続行できない場合は、原因と未完了の範囲を報告する。
+- 対象Issueの作業、必要なチェックとデプロイが完了した後に、該当Issueを明示的にクローズする。未完了や確認できない項目がある場合はクローズせず、理由を報告する。
+- 最後に、確認時点の全Open Issueについて、完了・質問待ち・既存PR・保留の状況と理由を報告する。IssueやPRへのその他のコメント・更新はユーザーの指示と利用可能な権限に従う。

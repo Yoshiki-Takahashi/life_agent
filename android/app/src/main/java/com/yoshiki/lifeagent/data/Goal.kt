@@ -137,11 +137,14 @@ fun progressEditValue(metric: Metric, update: ProgressMetricUpdatePayload?): Str
 }
 
 fun metricSavedValue(metric: Metric, input: MetricProgressInput): Double =
-    if (metric.kind in setOf("measurement", "checklist")) input.value else metric.currentValue + input.value
+    if (metric.kind in setOf("measurement", "checklist")) input.value
+    else (BigDecimal.valueOf(metric.currentValue) + BigDecimal.valueOf(input.value)).toDouble()
+
+fun metricNumber(value: Double): String = BigDecimal.valueOf(value).stripTrailingZeros().toPlainString()
 
 fun progressLabel(update: ProgressMetricUpdate): String = when (update.kind) {
     "checklist" -> "${update.metricName}: 完了 ${update.completedItems.joinToString("、").ifEmpty { "なし" }}"
     "occurrence" -> "${update.metricName}: ${update.activityDate} 実行済み"
-    "measurement" -> "${update.metricName}: ${update.value} ${update.unit}"
-    else -> "${update.metricName}: +${update.value} ${update.unit}"
+    "measurement" -> "${update.metricName}: ${metricNumber(update.value)} ${update.unit}"
+    else -> "${update.metricName}: +${metricNumber(update.value)} ${update.unit}"
 }

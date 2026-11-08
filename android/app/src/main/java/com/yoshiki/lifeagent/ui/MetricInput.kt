@@ -14,6 +14,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import com.yoshiki.lifeagent.data.Metric
+import com.yoshiki.lifeagent.data.metricNumber
 import com.yoshiki.lifeagent.data.metricInput
 import com.yoshiki.lifeagent.data.metricKinds
 import com.yoshiki.lifeagent.data.metricSavedValue
@@ -50,7 +51,7 @@ fun MetricValueField(metric: Metric, value: String, enabled: Boolean, onChange: 
         }
         runCatching { metricInput(metric, value) }.getOrNull()?.let { input ->
             Text(if (metric.kind == "checklist") "保存後 ${input.value.toInt()} / ${metric.checklistItems.size} 項目完了"
-                else "保存後 ${metricSavedValue(metric, input)} ${metric.unit}")
+                else "保存後 ${metricNumber(metricSavedValue(metric, input))} ${metric.unit}")
         }
         if (value.isNotBlank()) TextButton(onClick = { onChange("") }, enabled = enabled) { Text("この項目の入力を取り消す") }
     }

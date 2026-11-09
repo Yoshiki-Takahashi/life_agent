@@ -11,6 +11,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.IconButton
+import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -72,6 +77,7 @@ data class GoalDetailUiState(
     val progressSaved: Boolean = false,
     val replanReason: String = "",
     val replanProposal: ReplanProposal? = null,
+    val excludedReplanChangeIds: Set<String> = emptySet(),
     val isLoadingReplan: Boolean = false,
     val isApplyingReplan: Boolean = false,
     val replanError: String? = null,
@@ -150,6 +156,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                 replanReason = value,
                 replanError = null,
                 replanProposal = null,
+                excludedReplanChangeIds = emptySet(),
                 replanApplied = false,
             )
         }
@@ -288,6 +295,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                 isLoadingReplan = true,
                 replanError = null,
                 replanProposal = null,
+                excludedReplanChangeIds = emptySet(),
                 replanApplied = false,
             )
         }
@@ -295,7 +303,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
             runCatching { repository.previewReplan(goal.id, reason) }
                 .onSuccess { proposal ->
                     _uiState.update {
-                        it.copy(replanProposal = proposal, replanReason = reason)
+                        it.copy(replanProposal = proposal, replanReason = reason, excludedReplanChangeIds = emptySet())
                     }
                 }
                 .onFailure {
@@ -309,7 +317,18 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
 
     fun cancelReplan() {
         if (_uiState.value.isApplyingReplan) return
-        _uiState.update { it.copy(replanProposal = null, replanError = null, replanApplied = false) }
+        _uiState.update { it.copy(replanProposal = null, excludedReplanChangeIds = emptySet(),
+            replanError = null, replanApplied = false) }
+    }
+
+    fun toggleReplanChange(changeId: String) {
+        val state = _uiState.value
+        if (state.isApplyingReplan || state.replanProposal?.diff?.none { it.changeId == changeId } != false) return
+        _uiState.update { it.copy(
+            excludedReplanChangeIds = if (changeId in it.excludedReplanChangeIds)
+                it.excludedReplanChangeIds - changeId else it.excludedReplanChangeIds + changeId,
+            replanError = null,
+        ) }
     }
 
     fun applyReplan() {
@@ -317,9 +336,10 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         val goal = state.goal ?: return
         val proposal = state.replanProposal ?: return
         if (state.isLoadingReplan || state.isApplyingReplan) return
+        if (proposal.diff.isNotEmpty() && proposal.diff.all { it.changeId in state.excludedReplanChangeIds }) return
         _uiState.update { it.copy(isApplyingReplan = true, replanError = null) }
         viewModelScope.launch {
-            runCatching { repository.applyReplan(goal.id, proposal.proposalId) }
+            runCatching { repository.applyReplan(goal.id, proposal.proposalId, state.excludedReplanChangeIds.toList()) }
                 .onSuccess { updatedGoal ->
                     _uiState.value = stateForGoal(updatedGoal).copy(
                         replanApplied = true,
@@ -330,7 +350,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                     _uiState.update {
                         it.copy(
                             isApplyingReplan = false,
-                            replanError = "再計画を保存できませんでした。候補を作り直してください",
+                            replanError = "保存できませんでした。残した変更の期限・件数を確認し、棄却を戻すか候補を作り直してください",
                         )
                     }
                 }
@@ -374,6 +394,7 @@ fun GoalDetailScreen(
     onPreviewReplan: () -> Unit = {},
     onCancelReplan: () -> Unit = {},
     onApplyReplan: () -> Unit = {},
+    onToggleReplanChange: (String) -> Unit = {},
     onComplete: () -> Unit = {},
 ) {
     var confirmCompletion by androidx.compose.runtime.remember { androidx.compose.runtime.mutableStateOf(false) }
@@ -434,6 +455,7 @@ fun GoalDetailScreen(
                             onReplanReasonChange = onReplanReasonChange,
                             onPreviewReplan = { focusManager.clearFocus(); keyboard?.hide(); onPreviewReplan() },
                             onCancelReplan = onCancelReplan,
+                            onToggleReplanChange = onToggleReplanChange,
                             onApplyReplan = { focusManager.clearFocus(); keyboard?.hide(); onApplyReplan() },
                         )
                     }
@@ -458,6 +480,7 @@ private fun GoalDetail(
     onPreviewReplan: () -> Unit = {},
     onCancelReplan: () -> Unit = {},
     onApplyReplan: () -> Unit = {},
+    onToggleReplanChange: (String) -> Unit = {},
 ) {
     val goal = requireNotNull(state.goal)
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -542,6 +565,7 @@ private fun GoalDetail(
             onPreviewReplan = onPreviewReplan,
             onCancelReplan = onCancelReplan,
             onApplyReplan = onApplyReplan,
+            onToggleReplanChange = onToggleReplanChange,
         )
         Text("達成までのMilestone", style = MaterialTheme.typography.titleLarge)
         goal.milestones.sortedBy { it.position }.forEachIndexed { index, milestone ->
@@ -565,6 +589,7 @@ private fun ReplanEntry(
     onPreviewReplan: () -> Unit,
     onCancelReplan: () -> Unit,
     onApplyReplan: () -> Unit,
+    onToggleReplanChange: (String) -> Unit,
 ) {
     Text("計画を見直す", style = MaterialTheme.typography.titleLarge)
     Card(Modifier.fillMaxWidth()) {
@@ -586,24 +611,50 @@ private fun ReplanEntry(
             state.replanProposal?.let { proposal ->
                 Text("変更候補を確認", style = MaterialTheme.typography.titleMedium)
                 Text("まだ保存されていません。変更内容を確認してから適用してください。")
-                proposal.diff.forEach { item ->
-                    Card(Modifier.fillMaxWidth()) {
-                        Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                            Text(item.targetLabel, style = MaterialTheme.typography.titleMedium)
-                            Text("${item.before ?: "なし"} → ${item.after ?: "なし"}")
-                            Text(item.rationale)
+                listOf("goal" to "目標", "metric" to "メトリクス（測定項目）", "milestone" to "マイルストン（中間目標）").forEach { (type, heading) ->
+                    val items = proposal.diff.filter { it.targetType == type }
+                    if (items.isNotEmpty()) Text(heading, style = MaterialTheme.typography.titleMedium)
+                    items.forEach { item ->
+                        val excluded = item.changeId in state.excludedReplanChangeIds
+                        val action = when (item.changeType) { "add" -> "追加"; "remove" -> "削除"; else -> "変更" }
+                        val colors = MaterialTheme.colorScheme
+                        val background = when {
+                            excluded -> colors.surfaceVariant
+                            item.changeType == "add" -> colors.primaryContainer
+                            item.changeType == "remove" -> colors.errorContainer
+                            else -> colors.tertiaryContainer
+                        }
+                        Card(Modifier.fillMaxWidth().testTag("replan-${item.changeId}"),
+                            colors = CardDefaults.cardColors(containerColor = background)) {
+                            Column(Modifier.padding(14.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                                    Column(Modifier.weight(1f)) {
+                                        Text(if (excluded) "$action・棄却済み" else action, style = MaterialTheme.typography.labelLarge)
+                                        Text(item.targetLabel, style = MaterialTheme.typography.titleMedium)
+                                    }
+                                    item.changeId?.let { id ->
+                                        if (excluded) TextButton(onClick = { onToggleReplanChange(id) }, enabled = !state.isApplyingReplan) { Text("元に戻す") }
+                                        else IconButton(onClick = { onToggleReplanChange(id) }, enabled = !state.isApplyingReplan,
+                                            modifier = Modifier.semantics { contentDescription = "${item.targetLabel}の変更を棄却" }) {
+                                            Text("×", style = MaterialTheme.typography.headlineSmall)
+                                        }
+                                    }
+                                }
+                                item.before?.let { Text("変更前：$it") }
+                                item.after?.let { Text("変更後：$it") }
+                                if (excluded) Text("この変更は保存しません")
+                            }
                         }
                     }
                 }
-                Text("新しい期限 ${proposal.proposedPlan.targetDate}")
-                proposal.proposedPlan.metrics.forEach { metric ->
-                    Text("${metric.name}: ${formatNumber(metric.targetValue)} ${metric.unit}")
-                }
+                val remaining = proposal.diff.count { it.changeId !in state.excludedReplanChangeIds }
+                Text("保存する変更：$remaining 件")
+                if (remaining == 0) Text("保存する変更がありません。棄却を戻すか候補を取り消してください。")
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     TextButton(onClick = onCancelReplan, enabled = !state.isApplyingReplan) {
                         Text("候補を取り消す")
                     }
-                    Button(onClick = onApplyReplan, enabled = !state.isApplyingReplan) {
+                    Button(onClick = onApplyReplan, enabled = !state.isApplyingReplan && remaining > 0) {
                         Text(if (state.isApplyingReplan) "保存中…" else "この変更を保存")
                     }
                 }

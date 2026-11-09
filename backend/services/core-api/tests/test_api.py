@@ -507,7 +507,7 @@ def test_edited_plan_counts_and_all_metrics_remain_recordable(client, count):
 
     app.dependency_overrides[get_replanner] = lambda: Mock(
         propose=lambda *_: ReplanCandidate(
-            proposed_plan={**plan, "description": None},
+            proposed_plan={**plan, "description": "確認済みの計画"},
             diff=[
                 dict(
                     change_type="update",

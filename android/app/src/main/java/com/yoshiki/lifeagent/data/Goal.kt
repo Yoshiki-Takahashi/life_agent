@@ -96,6 +96,7 @@ data class ReplanDiffItem(
     val before: String?,
     val after: String?,
     val rationale: String,
+    val changeId: String? = null,
 )
 
 fun validProgressValue(text: String): Boolean {

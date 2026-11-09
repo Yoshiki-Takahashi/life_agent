@@ -26,7 +26,7 @@ interface GoalRepository {
     suspend fun previewProgress(goalId: String, body: String): ProgressPreview
     suspend fun getAdvice(goalId: String): Advice
     suspend fun previewReplan(goalId: String, reason: String): ReplanProposal
-    suspend fun applyReplan(goalId: String, proposalId: String): Goal
+    suspend fun applyReplan(goalId: String, proposalId: String, excludedChangeIds: List<String> = emptyList()): Goal
     suspend fun recordProgress(
         goalId: String,
         body: String,
@@ -83,8 +83,8 @@ class HttpGoalRepository(
     override suspend fun previewReplan(goalId: String, reason: String): ReplanProposal =
         api.previewReplan(authorization(), goalId, ReplanPreviewRequest(reason)).toReplanProposal()
 
-    override suspend fun applyReplan(goalId: String, proposalId: String): Goal =
-        api.applyReplan(authorization(), goalId, ReplanApplyRequest(proposalId)).toGoal()
+    override suspend fun applyReplan(goalId: String, proposalId: String, excludedChangeIds: List<String>): Goal =
+        api.applyReplan(authorization(), goalId, ReplanApplyRequest(proposalId, excludedChangeIds)).toGoal()
 
     override suspend fun recordProgress(
         goalId: String,
@@ -388,7 +388,10 @@ data class Advice(
 data class ReplanPreviewRequest(val reason: String)
 
 @Serializable
-data class ReplanApplyRequest(@SerialName("proposal_id") val proposalId: String)
+data class ReplanApplyRequest(
+    @SerialName("proposal_id") val proposalId: String,
+    @SerialName("excluded_change_ids") val excludedChangeIds: List<String> = emptyList(),
+)
 
 @Serializable
 data class ReplanProposalResponse(
@@ -417,6 +420,7 @@ data class ReplanDiffItemResponse(
     val before: String? = null,
     val after: String? = null,
     val rationale: String,
+    @SerialName("change_id") val changeId: String? = null,
 ) {
     fun toReplanDiffItem() = ReplanDiffItem(
         changeType = changeType,
@@ -425,6 +429,7 @@ data class ReplanDiffItemResponse(
         before = before,
         after = after,
         rationale = rationale,
+        changeId = changeId,
     )
 }
 

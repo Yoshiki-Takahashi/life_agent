@@ -101,6 +101,63 @@ class AppFlowTest {
         }
     }
 
+    @Test fun replanCardsRejectRestoreAndSaveOnlyRemainingChanges() {
+        assumeTrue(InstrumentationRegistry.getArguments().getString("networkE2E") == "true")
+        val owner = "replan-selection-e2e-${UUID.randomUUID()}"
+        val api = Network.createGoalRepository("http://127.0.0.1:18007/") { owner }
+        val goal = runBlocking {
+            val plan = api.previewGoal("本を読む", null, LocalDate.now().plusDays(90).toString())
+            api.confirmGoal(plan.copy(metrics = plan.metrics + Metric("読書メモ", 10.0, "件")))
+        }
+        var proposal: ReplanProposal? = null
+        val repository = object : GoalRepository by api {
+            override suspend fun previewReplan(goalId: String, reason: String): ReplanProposal =
+                api.previewReplan(goalId, reason).also { proposal = it }
+        }
+        compose.setContent { LifeAgentTheme { LifeAgentApp(repository, owner, {},
+            Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
+        waitFor(goal.title)
+        compose.onNodeWithText(goal.title).performClick()
+        compose.onNodeWithText("計画").performClick()
+        compose.onNodeWithText("見直し理由").performScrollTo().performTextReplacement("無理なく続けたい")
+        compose.onNodeWithText("再計画候補を作る").performScrollTo().performClick()
+        waitFor("変更候補を確認")
+        compose.onNodeWithText("メトリクス（測定項目）").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("マイルストン（中間目標）").performScrollTo().assertIsDisplayed()
+        val changes = requireNotNull(proposal).diff
+        compose.onNode(hasText("削除") and hasAnyAncestor(hasTestTag("replan-metric:1")))
+            .performScrollTo().assertIsDisplayed()
+        compose.onNode(hasText("変更") and hasAnyAncestor(hasTestTag("replan-metric:0")))
+            .performScrollTo().assertIsDisplayed()
+        changes.forEach { change ->
+            compose.onNodeWithContentDescription("${change.targetLabel}の変更を棄却")
+                .performScrollTo().performClick()
+        }
+        compose.onNodeWithText("この変更を保存").performScrollTo().assertIsNotEnabled()
+        runBlocking { assertEquals(goal, api.getGoal(goal.id)) }
+        changes.forEach { change ->
+            compose.onNode(hasText("元に戻す") and hasAnyAncestor(hasTestTag("replan-${change.changeId}")))
+                .performScrollTo().performClick()
+        }
+        // Exclude both the first Metric's update and the second Metric's removal.
+        changes.filter { it.targetType == "metric" }.forEach { change ->
+            compose.onNodeWithContentDescription("${change.targetLabel}の変更を棄却")
+                .performScrollTo().performClick()
+        }
+        compose.onNodeWithText("この変更を保存").performScrollTo().performClick()
+        waitFor("再計画を保存しました")
+        runBlocking {
+            val saved = api.getGoal(goal.id)
+            assertEquals(goal.metrics, saved.metrics)
+            assertNotEquals(goal.milestones, saved.milestones)
+            assertEquals(goal.planRevision + 1, saved.planRevision)
+        }
+        compose.onNodeWithText("目標一覧").performClick()
+        waitFor(goal.title)
+        compose.onNodeWithText(goal.title).performClick()
+        compose.onNodeWithText("読書メモ", substring = true).performScrollTo().assertIsDisplayed()
+    }
+
     private fun field(parent: String, text: String) =
         compose.onNode(hasText(text) and hasAnyAncestor(hasTestTag(parent)))
 

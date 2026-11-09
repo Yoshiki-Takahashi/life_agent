@@ -155,7 +155,8 @@ class AppFlowTest {
         compose.onNodeWithText("目標一覧").performClick()
         waitFor(goal.title)
         compose.onNodeWithText(goal.title).performClick()
-        compose.onNodeWithText("読書メモ", substring = true).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("概要").performClick()
+        compose.onNodeWithText("読書メモ").performScrollTo().assertIsDisplayed()
     }
 
     private fun field(parent: String, text: String) =

@@ -142,6 +142,12 @@ class ReplanCandidate(BaseModel):
     diff: list[ReplanDiffItem] = Field(min_length=1, max_length=12)
 
 
+class ReplanChange(ReplanDiffItem):
+    before: str | None = Field(default=None, max_length=3000)
+    after: str | None = Field(default=None, max_length=3000)
+    change_id: str | None = None
+
+
 class ReplanProposal(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -149,7 +155,7 @@ class ReplanProposal(BaseModel):
     base_plan_revision: int
     reason: str
     proposed_plan: GoalPlan
-    diff: list[ReplanDiffItem] = Field(min_length=1, max_length=12)
+    diff: list[ReplanChange] = Field(min_length=1, max_length=23)
     created_at: datetime
 
 
@@ -157,6 +163,7 @@ class ReplanApplyRequest(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     proposal_id: uuid.UUID
+    excluded_change_ids: list[str] = Field(default_factory=list, max_length=23)
 
 
 class GoalConfirmRequest(GoalInput):

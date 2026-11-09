@@ -362,7 +362,7 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
     }
     override suspend fun previewReplan(goalId: String, reason: String) = ReplanProposal("proposal", 1, reason,
         previewGoal(goalId, null, date), emptyList(), "2026-01-01T00:00:00Z")
-    override suspend fun applyReplan(goalId: String, proposalId: String): Goal {
+    override suspend fun applyReplan(goalId: String, proposalId: String, excludedChangeIds: List<String>): Goal {
         applyCalls++; return getGoal(goalId).copy(planRevision=2)
     }
 }

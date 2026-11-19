@@ -15,10 +15,8 @@ def test_replan_with_no_matching_changes_returns_specific_conflict(client, creat
     path = f"/api/v1/goals/{goal['id']}"
     reason = {"reason": "いまの計画を確認したい"}
     questions = client.post(path + "/replan/questions", json=reason).json()["questions"]
-    preview = client.post(
-        path + "/replan/preview",
-        json={**reason, "answers": [dict(question=question, answer=False) for question in questions]},
-    )
+    answers = [dict(question=question, answer=False) for question in questions]
+    preview = client.post(path + "/replan/preview", json={**reason, "answers": answers})
     assert preview.status_code == 409
     assert preview.json()["detail"]["code"] == "replan_no_changes"
     assert client.get(path).json() == goal

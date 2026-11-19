@@ -1,5 +1,6 @@
 package com.yoshiki.lifeagent
 
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.test.platform.app.InstrumentationRegistry
@@ -29,7 +30,8 @@ class MetricTypesFlowTest {
             Metric("体脂肪率", 15.0, "%", kind = "measurement"),
             Metric("旅行準備", 2.0, "項目", kind = "checklist", checklistItems = listOf("日付を決める", "宿を予約する")),
         ), listOf(Milestone("振り返る", deadline)))) }
-        compose.setContent { LifeAgentTheme { LifeAgentApp(api, owner, {},
+        val darkTheme = mutableStateOf(false)
+        compose.setContent { LifeAgentTheme(darkTheme = darkTheme.value) { LifeAgentApp(api, owner, {},
             Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
         waitFor("種別テスト")
         compose.onNodeWithText("種別テスト").performClick()
@@ -48,9 +50,13 @@ class MetricTypesFlowTest {
             assertEquals(listOf("日付を決める"), saved.metrics[3].completedItems)
         }
         compose.onNodeWithText("進捗", useUnmergedTree = true).performClick()
-        compose.onNodeWithContentDescription("$today 実行済み", useUnmergedTree = true)
-            .performScrollTo().assertIsDisplayed()
-        screenshot("issue47-calendar.png")
+        val recordedDay = compose.onNodeWithContentDescription("$today 実行済み", useUnmergedTree = true)
+        recordedDay.performScrollTo().assertIsDisplayed()
+        screenshot("issue68-calendar-light.png")
+        compose.runOnIdle { darkTheme.value = true }
+        recordedDay.performScrollTo().assertIsDisplayed()
+        screenshot("issue68-calendar-dark.png")
+        compose.runOnIdle { darkTheme.value = false }
         compose.onNodeWithText("縦軸: 測定値（%）、横軸: 記録日時").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("1 / 2 項目完了").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("宿を予約する").performScrollTo().assertIsDisplayed()

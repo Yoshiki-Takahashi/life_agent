@@ -21,7 +21,8 @@ class MetricTypesFlowTest {
         assumeTrue(InstrumentationRegistry.getArguments().getString("networkE2E") == "true")
         val owner = "types-${UUID.randomUUID()}"
         val api = Network.createGoalRepository("http://127.0.0.1:18007/") { owner }
-        val deadline = LocalDate.now().plusDays(90).toString()
+        val today = LocalDate.now()
+        val deadline = today.plusDays(90).toString()
         val goal = runBlocking { api.confirmGoal(GoalPlan("種別テスト", null, deadline, listOf(
             Metric("ページ", 100.0, "ページ"),
             Metric("ジム", 10.0, "日", kind = "occurrence"),
@@ -36,7 +37,7 @@ class MetricTypesFlowTest {
         compose.onNodeWithText("記録", useUnmergedTree = true).performClick()
         compose.onNodeWithText("進捗メモ").performTextReplacement("今日は読書とジム、測定と旅行準備をした")
         compose.onNodeWithText("ページ の今回値").performScrollTo().performTextReplacement("2")
-        compose.onNodeWithText("今日（${LocalDate.now()}）実行した").performScrollTo().performClick()
+        compose.onNodeWithText("今日（$today）実行した").performScrollTo().performClick()
         compose.onNodeWithText("体脂肪率 の測定値").performScrollTo().performTextReplacement("25")
         compose.onNodeWithText("日付を決める").performScrollTo().performClick()
         compose.onNodeWithText("進捗を保存").performScrollTo().performClick()
@@ -47,7 +48,8 @@ class MetricTypesFlowTest {
             assertEquals(listOf("日付を決める"), saved.metrics[3].completedItems)
         }
         compose.onNodeWithText("進捗", useUnmergedTree = true).performClick()
-        compose.onNodeWithText("色付きは実行を記録した日です。空欄は未記録で、未実施とは限りません。").performScrollTo().assertIsDisplayed()
+        compose.onNodeWithContentDescription("$today 実行済み", useUnmergedTree = true)
+            .performScrollTo().assertIsDisplayed()
         screenshot("issue47-calendar.png")
         compose.onNodeWithText("縦軸: 測定値（%）、横軸: 記録日時").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("1 / 2 項目完了").performScrollTo().assertIsDisplayed()

@@ -162,6 +162,7 @@ AIの障害・不正出力は503。保存失敗は500で返し、途中までの
 AIの説明文を保存対象の識別には使いません。各差分の`change_id`は候補内の識別子で、
 `goal:title`・`goal:description`・`goal:target_date`、`metric:表示順`、`milestone:表示順`です。
 MetricとMilestoneは既存の位置対応を維持し、項目単位で追加・変更・削除を表します。
+残る項目の位置を維持するため、AIは末尾への追加と末尾からの削除を提案します。
 変更前・変更後は名前・種別・目標値・単位・チェック項目または期限を表示できる文字列です。
 
 `POST /api/v1/goals/{id}/replan/apply`は`proposal_id`に加え、任意の`excluded_change_ids`を受け取ります。

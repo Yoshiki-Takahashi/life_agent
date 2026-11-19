@@ -11,7 +11,9 @@ def test_core_ai_and_database_boundary():
     url = os.getenv("CORE_API_URL")
     if not url:
         pytest.skip("Run scripts/test-weekend-3.sh for isolated integration")
-    with httpx.Client(base_url=url, headers={"Authorization": f"Bearer {uuid4()}"}) as client:
+    with httpx.Client(
+        base_url=url, headers={"Authorization": f"Bearer {uuid4()}"}, timeout=60
+    ) as client:
         goal_input = {"title": "本を読む", "target_date": str(date.today() + timedelta(days=90))}
         questions = client.post("/api/v1/goals/questions", json=goal_input)
         assert questions.status_code == 200

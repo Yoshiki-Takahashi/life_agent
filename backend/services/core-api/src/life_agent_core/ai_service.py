@@ -24,6 +24,10 @@ class AIUnavailableError(Exception):
     """The AI result could not be obtained or validated."""
 
 
+class AIInputTooLargeError(Exception):
+    """The AI service rejected an oversized input before generating a result."""
+
+
 class InternalAIClient:
     def __init__(self, settings: Settings):
         self.url = settings.goal_planner_url.rstrip("/") + "/internal/v1/"
@@ -38,6 +42,8 @@ class InternalAIClient:
             response = httpx.post(
                 self.url + path, json=payload, headers=headers, timeout=self.timeout
             )
+            if response.status_code == 413:
+                raise AIInputTooLargeError
             response.raise_for_status()
             return schema.model_validate(response.json())
         except (GoogleAuthError, httpx.HTTPError, ValueError, TypeError) as error:

@@ -10,6 +10,7 @@ from life_agent_core.ai_service import (
     AIUnavailableError,
     HttpCoach,
 )
+from life_agent_core.ai_usage import reserve_ai_call
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
 from life_agent_core.database import Database, decode
@@ -126,6 +127,7 @@ def coach_message(
     user_id: CurrentUserId,
     coach: Annotated[Coach, Depends(get_coach)],
 ) -> CoachReply:
+    reserve_ai_call(db, user_id)
     snapshots = (
         db.collection("goals")
         .where(filter=FieldFilter("owner_id", "==", user_id))

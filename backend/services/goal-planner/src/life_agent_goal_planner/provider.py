@@ -2,6 +2,7 @@ import json
 import logging
 from collections.abc import Callable
 
+import tiktoken
 from openai import OpenAI, OpenAIError
 from pydantic import BaseModel
 
@@ -11,6 +12,10 @@ logger = logging.getLogger(__name__)
 
 
 class AIUnavailableError(Exception):
+    pass
+
+
+class AIInputTooLargeError(Exception):
     pass
 
 
@@ -24,6 +29,15 @@ def generate[T: BaseModel](
     if not settings.openai_api_key:
         raise AIUnavailableError("OpenAI key is not configured")
     try:
+        context_text = json.dumps(context, ensure_ascii=False)
+        schema_text = json.dumps(schema.model_json_schema(), ensure_ascii=False)
+        encoding = tiktoken.get_encoding("o200k_base")
+        # Allow room for message roles and the SDK's strict Structured Output wrapper.
+        input_tokens = 256 + sum(
+            len(encoding.encode_ordinary(text)) for text in (prompt, context_text, schema_text)
+        )
+        if input_tokens > settings.openai_max_input_tokens:
+            raise AIInputTooLargeError
         client = factory(
             api_key=settings.openai_api_key,
             timeout=settings.openai_timeout_seconds,
@@ -33,7 +47,7 @@ def generate[T: BaseModel](
             model=settings.openai_model,
             input=[
                 {"role": "system", "content": prompt},
-                {"role": "user", "content": json.dumps(context, ensure_ascii=False)},
+                {"role": "user", "content": context_text},
             ],
             text_format=schema,
             max_output_tokens=2000,
@@ -42,6 +56,6 @@ def generate[T: BaseModel](
         if response.output_parsed is None:
             raise AIUnavailableError("No parsed output")
         return schema.model_validate(response.output_parsed)
-    except (OpenAIError, ValueError, TypeError) as error:
+    except (OpenAIError, OSError, ValueError, TypeError) as error:
         logger.warning("AI candidate generation failed: %s", type(error).__name__)
         raise AIUnavailableError("AI generation failed") from error

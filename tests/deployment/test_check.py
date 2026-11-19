@@ -32,6 +32,7 @@ def test_failed_probe_cleans_only_its_unique_test_owner(monkeypatch, foreign_own
     import httpx
 
     from life_agent_core.config import get_settings
+    from life_agent_core.database import request_key
     from life_agent_core.main import app
 
     monkeypatch.setenv("CLOUD_RUN_JOB", "verification")
@@ -45,7 +46,12 @@ def test_failed_probe_cleans_only_its_unique_test_owner(monkeypatch, foreign_own
     snapshot.to_dict.return_value = {
         "owner_id": "real-user" if foreign_owner else "deploy-check-unique"
     }
-    db.collection.return_value.where.return_value.stream.return_value = [snapshot]
+    usage = MagicMock()
+    usage.to_dict.return_value = {"owner_key": request_key("deploy-check-unique")}
+    collections = {"goals": MagicMock(), "ai_daily_usage": MagicMock()}
+    db.collection.side_effect = collections.__getitem__
+    collections["goals"].where.return_value.stream.return_value = [snapshot]
+    collections["ai_daily_usage"].where.return_value.stream.return_value = [usage]
     monkeypatch.setattr("life_agent_core.database.get_db", lambda: db)
     client = httpx.AsyncClient
     monkeypatch.setattr(
@@ -63,6 +69,7 @@ def test_failed_probe_cleans_only_its_unique_test_owner(monkeypatch, foreign_own
             db.recursive_delete.assert_not_called()
         else:
             db.recursive_delete.assert_called_once_with(snapshot.reference)
+            usage.reference.delete.assert_called_once_with()
         db.close.assert_called_once()
         assert not app.dependency_overrides
     finally:

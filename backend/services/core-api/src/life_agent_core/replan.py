@@ -10,6 +10,7 @@ from life_agent_core.ai_service import (
     AIUnavailableError,
     HttpReplanner,
 )
+from life_agent_core.ai_usage import reserve_ai_call
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
 from life_agent_core.database import (
@@ -142,6 +143,7 @@ def preview_replan(
     goal = load_goal(goal_id, db, user_id)
     require_active(goal)
     context = goal_response(goal)
+    reserve_ai_call(db, user_id)
     try:
         candidate = validate_replan(replanner.propose(context, payload.reason), context)
         changes = plan_changes(context, candidate.proposed_plan)

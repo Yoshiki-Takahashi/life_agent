@@ -8,6 +8,7 @@ from google.cloud import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
 
 from life_agent_core.ai_service import AIUnavailableError, InternalAIClient
+from life_agent_core.ai_usage import reserve_ai_call
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import Settings, get_settings
 from life_agent_core.database import (
@@ -150,7 +151,10 @@ Planner = Annotated[GoalPlanner, Depends(get_goal_planner)]
 
 
 @router.post("/api/v1/goals/questions", response_model=GoalQuestions)
-def goal_questions(payload: GoalInput, planner: Planner, user_id: CurrentUserId) -> GoalQuestions:
+def goal_questions(
+    payload: GoalInput, planner: Planner, user_id: CurrentUserId, db: Database
+) -> GoalQuestions:
+    reserve_ai_call(db, user_id)
     try:
         return GoalQuestions.model_validate(planner.questions(payload))
     except (AIUnavailableError, ValueError, TypeError) as error:
@@ -161,7 +165,10 @@ def goal_questions(payload: GoalInput, planner: Planner, user_id: CurrentUserId)
 
 
 @router.post("/api/v1/goals/preview", response_model=GoalPlan)
-def preview_goal(payload: GoalPreviewRequest, planner: Planner, user_id: CurrentUserId) -> GoalPlan:
+def preview_goal(
+    payload: GoalPreviewRequest, planner: Planner, user_id: CurrentUserId, db: Database
+) -> GoalPlan:
+    reserve_ai_call(db, user_id)
     try:
         plan = planner.generate(payload)
         if not payload.metric_types_enabled and any(m.kind != "cumulative" for m in plan.metrics):

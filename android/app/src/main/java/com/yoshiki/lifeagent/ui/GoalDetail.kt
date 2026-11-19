@@ -242,9 +242,11 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                             },
                         ) }
                     }
-                }.onFailure {
+                }.onFailure { error ->
                     if (revision == inputRevision) _uiState.update {
-                        it.copy(progressError = "解析できませんでした。再試行または手入力してください")
+                        it.copy(progressError = error.aiLimitMessage()?.let { message ->
+                            "$message。実績は手入力できます"
+                        } ?: "解析できませんでした。再試行または手入力してください")
                     }
                 }
             _uiState.update { it.copy(isParsing = false) }
@@ -272,9 +274,10 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                 .onSuccess { advice ->
                     if (revision == adviceRevision) _uiState.update { it.copy(advice = advice) }
                 }
-                .onFailure {
+                .onFailure { error ->
                     if (revision == adviceRevision) _uiState.update {
-                        it.copy(adviceError = "助言を取得できませんでした。進捗は保存済みです")
+                        it.copy(adviceError = error.aiLimitMessage()
+                            ?: "助言を取得できませんでした。進捗は保存済みです")
                     }
                 }
             if (revision == adviceRevision) _uiState.update { it.copy(isLoadingAdvice = false) }
@@ -306,9 +309,10 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                         it.copy(replanProposal = proposal, replanReason = reason, excludedReplanChangeIds = emptySet())
                     }
                 }
-                .onFailure {
+                .onFailure { error ->
                     _uiState.update {
-                        it.copy(replanError = "再計画候補を生成できませんでした。再試行してください")
+                        it.copy(replanError = error.aiLimitMessage()
+                            ?: "再計画候補を生成できませんでした。再試行してください")
                     }
                 }
             _uiState.update { it.copy(isLoadingReplan = false) }

@@ -1,7 +1,8 @@
 from functools import lru_cache
 from typing import Annotated
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import Depends, FastAPI, HTTPException, Request, status
+from fastapi.responses import JSONResponse
 
 from life_agent_goal_planner.coach import Coach, FakeCoach, OpenAICoach, validate_reply
 from life_agent_goal_planner.config import get_settings
@@ -18,7 +19,7 @@ from life_agent_goal_planner.progress import (
     OpenAIProgressParser,
     ProgressParser,
 )
-from life_agent_goal_planner.provider import AIUnavailableError
+from life_agent_goal_planner.provider import AIInputTooLargeError, AIUnavailableError
 from life_agent_goal_planner.replan import FakeReplanner, OpenAIReplanner, Replanner
 from life_agent_goal_planner.schemas import (
     Advice,
@@ -36,6 +37,11 @@ from life_agent_goal_planner.schemas import (
 )
 
 app = FastAPI(title="LifeAgent Goal Planner", version="0.1.0")
+
+
+@app.exception_handler(AIInputTooLargeError)
+async def ai_input_too_large(request: Request, error: AIInputTooLargeError):
+    return JSONResponse(status_code=413, content={"detail": "AI input too large"})
 
 
 @lru_cache

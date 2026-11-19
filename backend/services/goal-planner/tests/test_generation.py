@@ -81,8 +81,27 @@ def test_shared_provider_uses_structured_private_bounded_calls():
     assert generate(settings, factory, Advice, "prompt", {"owned": "context"}) == expected
     call = factory.return_value.responses.parse.call_args.kwargs
     assert call["text_format"] is Advice and call["store"] is False
+    assert call["max_output_tokens"] == 2000
     assert factory.call_args.kwargs["max_retries"] == 0
     assert factory.call_args.kwargs["timeout"] == 20
+
+
+def test_oversized_coach_context_is_rejected_before_provider_call(client):
+    factory = Mock()
+    coach = OpenAICoach(Settings(openai_api_key="test", openai_max_input_tokens=3000), factory)
+    app.dependency_overrides[get_coach] = lambda: coach
+    # The individual messages fit the API fields. Their combined context exceeds the cap.
+    response = client.post(
+        "/internal/v1/coach",
+        json={
+            "body": "相談",
+            "goals": [],
+            "as_of_date": "2026-11-19",
+            "history": [{"role": "user", "content": "進捗を確認する。" * 180}] * 12,
+        },
+    )
+    assert response.status_code == 413
+    factory.assert_not_called()
 
 
 @pytest.mark.parametrize("value", [0, 13])

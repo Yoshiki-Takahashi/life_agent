@@ -32,6 +32,10 @@ Cloud Runでは非公開serviceとしてdeployし、Core APIのruntime service a
 - `OPENAI_API_KEY`: 実AI利用時に必須
 - `OPENAI_MODEL`: 既定値`gpt-5.6-luna`
 - `OPENAI_TIMEOUT_SECONDS`: 既定値20秒
+- `OPENAI_MAX_INPUT_TOKENS`: 既定値16,000。GPT-5系のトークナイザーでプロンプト・文脈・
+  Structured Outputスキーマを含む入力を見積もり、超過時はOpenAIに送信する前に`413`を返す。
+
+トークナイザーの辞書はDockerビルド時に取得します。uvで直接実行すると初回に取得・キャッシュします。
 
 ## Quality checks
 

@@ -11,6 +11,9 @@ import org.junit.Assert.*
 import org.junit.Before
 import org.junit.Test
 import java.time.LocalDate
+import okhttp3.ResponseBody.Companion.toResponseBody
+import retrofit2.HttpException
+import retrofit2.Response
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class AppStateTest {
@@ -65,6 +68,29 @@ class AppStateTest {
         advanceUntilIdle()
         assertNotNull(coach.uiState.value.turns.single().advice)
         assertEquals(2, repository.saves.size)
+    }
+
+    @Test fun coachKeepsManualSaveAvailableWhenAiLimitIsReachedDuringParsing() = runTest(dispatcher) {
+        val store = TestGoals()
+        val quotaError = HttpException(Response.error<Any>(429, "".toResponseBody()))
+        val repository = object : GoalRepository by store {
+            override suspend fun previewProgress(goalId: String, body: String): ProgressPreview = throw quotaError
+            override suspend fun getAdvice(goalId: String): Advice = throw quotaError
+        }
+        val coach = CoachViewModel(repository)
+        coach.updateBody("1冊読んだ")
+        coach.sendMessage()
+        advanceUntilIdle()
+        assertEquals("1冊読んだ", coach.uiState.value.body)
+        assertTrue(coach.uiState.value.candidates.isEmpty())
+        assertNotNull(coach.uiState.value.error)
+        coach.startManualConfirmation()
+        coach.updateMetric("books", "1")
+        coach.saveProgress()
+        advanceUntilIdle()
+        assertEquals(listOf(MetricProgressInput("books", 1.0)), store.saves.single().updates)
+        assertTrue(coach.uiState.value.turns.single().saved)
+        assertNotNull(coach.uiState.value.turns.single().adviceError)
     }
 
     @Test fun candidatesSaveIndividuallyAndCompletionWaitsForAllDecisions() = runTest(dispatcher) {

@@ -17,9 +17,10 @@ async def check():
     os.environ["ALLOWED_USER_ID"] = uid
     from google.cloud.firestore_v1.base_query import FieldFilter
 
+    from life_agent_core.ai_usage import AI_USAGE_COLLECTION
     from life_agent_core.auth import FakeTokenVerifier, get_token_verifier
     from life_agent_core.config import get_settings
-    from life_agent_core.database import get_db
+    from life_agent_core.database import get_db, request_key
     from life_agent_core.main import app
 
     get_settings.cache_clear()
@@ -85,6 +86,14 @@ async def check():
                 if snapshot.to_dict()["owner_id"] != uid:
                     raise RuntimeError("Unexpected owner during test-data cleanup")
                 db.recursive_delete(snapshot.reference)
+            owner_key = request_key(uid)
+            usage = db.collection(AI_USAGE_COLLECTION).where(
+                filter=FieldFilter("owner_key", "==", owner_key)
+            )
+            for snapshot in usage.stream():
+                if snapshot.to_dict()["owner_key"] != owner_key:
+                    raise RuntimeError("Unexpected owner during AI usage cleanup")
+                snapshot.reference.delete()
         finally:
             app.dependency_overrides.clear()
             db.close()

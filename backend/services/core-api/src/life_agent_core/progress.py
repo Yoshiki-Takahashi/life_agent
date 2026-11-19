@@ -12,6 +12,7 @@ from life_agent_core.ai_service import (
     HttpAdvisor,
     HttpProgressParser,
 )
+from life_agent_core.ai_usage import reserve_ai_call
 from life_agent_core.auth import CurrentUserId
 from life_agent_core.config import get_settings
 from life_agent_core.database import (
@@ -252,6 +253,7 @@ def preview_progress(
     parser: Annotated[ProgressParser, Depends(get_progress_parser)],
 ) -> ProgressPreview:
     context = goal_response(load_goal(goal_id, db, user_id))
+    reserve_ai_call(db, user_id)
     try:
         result = ProgressPreview.model_validate(parser.parse(context, payload.body))
         return validate_candidates(result, context)
@@ -269,6 +271,7 @@ def generate_advice(
     advisor: Annotated[Advisor, Depends(get_advisor)],
 ) -> Advice:
     context = goal_response(load_goal_with_details(goal_id, db, user_id, history_limit=10))
+    reserve_ai_call(db, user_id)
     try:
         return Advice.model_validate(advisor.advise(context))
     except (AIUnavailableError, ValueError, TypeError) as error:

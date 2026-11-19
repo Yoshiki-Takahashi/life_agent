@@ -2,6 +2,7 @@ package com.yoshiki.lifeagent.ui
 
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -16,6 +17,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -25,18 +27,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.CustomAccessibilityAction
 import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -62,7 +72,11 @@ import retrofit2.HttpException
 
 enum class CoachPhase { EDITING, GENERATING, CANDIDATE, CONFIRMING, SAVING, RESULT_UNKNOWN }
 
-data class CoachMetricEdit(val metric: Metric, val value: String = "")
+data class CoachMetricEdit(val metric: Metric, val value: String = "") {
+    fun savedMetric(input: MetricProgressInput) = CoachSavedMetric(
+        metric.name, input.value, metric.unit, metric.kind, input.completedItems.orEmpty(),
+    )
+}
 data class CoachSavedMetric(val name: String, val value: Double, val unit: String,
     val kind: String = "cumulative", val completedItems: List<String> = emptyList()) {
     fun label() = when (kind) {
@@ -95,18 +109,27 @@ data class CoachUiState(
     val warnings: List<String> = emptyList(),
     val turns: List<CoachTurn> = emptyList(),
     val error: String? = null,
+    val resolvedMetricIds: Set<String> = emptySet(),
+    val savedCandidates: List<CoachSavedMetric> = emptyList(),
+    val showCompletion: Boolean = false,
 ) {
     val busy get() = phase in setOf(CoachPhase.GENERATING, CoachPhase.SAVING)
     val resultUnknown get() = phase == CoachPhase.RESULT_UNKNOWN
     val hasDraft get() = body.isNotBlank()
     val canLeave get() = !busy && !resultUnknown
-    val canEditBody get() = phase !in setOf(CoachPhase.SAVING, CoachPhase.RESULT_UNKNOWN)
-
+    val canEditBody get() = phase != CoachPhase.SAVING && !resultUnknown && resolvedMetricIds.isEmpty()
+    val reviewing get() = phase in setOf(CoachPhase.CANDIDATE, CoachPhase.SAVING, CoachPhase.RESULT_UNKNOWN)
+    val candidates get() = metrics.filter { it.value.isNotBlank() && it.metric.id !in resolvedMetricIds }
 }
+
+private fun CoachUiState.clearCandidate() = copy(goal = null, phase = CoachPhase.EDITING, recordBody = null,
+    reply = null, metrics = emptyList(), warnings = emptyList(), error = null,
+    resolvedMetricIds = emptySet(), savedCandidates = emptyList())
 
 private data class CoachSaveRequest(
     val id: String, val goalId: String, val body: String,
     val updates: List<MetricProgressInput>, val labels: List<CoachSavedMetric>,
+    val candidateId: String?,
 )
 
 class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
@@ -126,19 +149,19 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
     fun discardDraft() {
         if (!state.value.canLeave) return
         cancelCandidate()
-        state.update { it.copy(body = "", recordBody = null, reply = null) }
+        state.update { it.copy(body = "") }
     }
 
     fun sendMessage() {
         val current = state.value
-        if (current.busy || !current.canEditBody || !validBody()) return
+        if (current.phase != CoachPhase.EDITING || !validBody()) return
         val revision = ++inputRevision
         val activeSession = session
         val history = current.turns.flatMap { turn ->
             listOf(CoachMessage("user", turn.body)) +
                 listOfNotNull(turn.reply?.let { CoachMessage("assistant", it) })
         }.takeLast(12)
-        state.update { it.copy(phase = CoachPhase.GENERATING, error = null) }
+        state.update { it.copy(phase = CoachPhase.GENERATING, error = null, showCompletion = false) }
         viewModelScope.launch {
             try {
                 val response = repository.coachMessage(current.body.trim(), history)
@@ -177,8 +200,7 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
     fun updateBody(body: String) {
         if (!state.value.canEditBody) return
         inputRevision++
-        state.update { it.copy(body = body, phase = CoachPhase.EDITING,
-            metrics = it.metrics.map { edit -> edit.copy(value = "") }, warnings = emptyList(), error = null, recordBody = null, reply = null) }
+        state.update { it.clearCandidate().copy(body = body) }
     }
 
     private fun validBody(): Boolean {
@@ -189,14 +211,40 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
         return true
     }
 
-    fun confirmCandidate() {
-        if (state.value.phase != CoachPhase.CANDIDATE ||
-            state.value.metrics.none { it.value.isNotBlank() }) return
-        state.update { it.copy(phase = CoachPhase.CONFIRMING, error = null) }
+    fun decideCandidate(metricId: String, save: Boolean) {
+        val current = state.value
+        if (current.phase != CoachPhase.CANDIDATE) return
+        val candidate = current.candidates.find { it.metric.id == metricId } ?: return
+        if (save) {
+            saveRequest(listOf(candidate), metricId)?.let(::submitProgress)
+        } else {
+            resolveCandidate(current, metricId)
+        }
+    }
+
+    private fun resolveCandidate(current: CoachUiState, metricId: String) {
+        val next = current.copy(phase = CoachPhase.CANDIDATE, error = null,
+            resolvedMetricIds = current.resolvedMetricIds + metricId)
+        if (next.candidates.isEmpty()) finishCandidate(next, showCompletion = true)
+        else state.value = next
+    }
+
+    private fun finishCandidate(current: CoachUiState, showCompletion: Boolean) {
+        val goal = requireNotNull(current.goal)
+        val saved = current.savedCandidates.isNotEmpty()
+        val turn = CoachTurn(UUID.randomUUID().toString(), current.body.trim(), current.savedCandidates,
+            goalId = goal.id, goalTitle = goal.title, saved = saved)
+        state.value = current.clearCandidate().copy(body = "", turns = current.turns + turn,
+            showCompletion = saved && showCompletion)
+        if (saved) loadAdvice(turn.id)
+    }
+
+    fun dismissCompletion() {
+        state.update { it.copy(showCompletion = false) }
     }
 
     fun startManualConfirmation() {
-        if (state.value.phase != CoachPhase.CANDIDATE) return
+        if (state.value.phase != CoachPhase.CANDIDATE || state.value.resolvedMetricIds.isNotEmpty()) return
         inputRevision++
         state.update { it.copy(phase = CoachPhase.CONFIRMING, error = null) }
     }
@@ -209,17 +257,17 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
     }
 
     fun cancelCandidate() {
-        if (!state.value.canLeave) return
+        val current = state.value
+        if (!current.canLeave) return
         inputRevision++
-        state.update { it.copy(phase = CoachPhase.EDITING, warnings = emptyList(), error = null, recordBody = null, reply = null,
-            metrics = it.metrics.map { edit -> edit.copy(value = "") }) }
+        if (current.savedCandidates.isNotEmpty()) finishCandidate(current, showCompletion = false)
+        else state.value = current.clearCandidate()
     }
 
-    private fun saveRequest(): CoachSaveRequest? {
+    private fun saveRequest(filled: List<CoachMetricEdit>, candidateId: String? = null): CoachSaveRequest? {
         val current = state.value
         val goal = current.goal ?: return null
         if (!validBody()) return null
-        val filled = current.metrics.filter { it.value.isNotBlank() }
         if (filled.isEmpty()) {
             state.update { it.copy(error = "今回進んだ測定項目を1つ以上入力してください") }
             return null
@@ -229,14 +277,21 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
             return null
         }
         return CoachSaveRequest(UUID.randomUUID().toString(), goal.id, (current.recordBody ?: current.body).trim(),
-            updates, filled.zip(updates).map { (edit, input) ->
-                CoachSavedMetric(edit.metric.name, input.value, edit.metric.unit, edit.metric.kind, input.completedItems.orEmpty())
-            })
+            updates, filled.zip(updates) { edit, input -> edit.savedMetric(input) }, candidateId)
     }
 
     fun saveProgress() {
-        if (state.value.phase !in setOf(CoachPhase.CONFIRMING, CoachPhase.RESULT_UNKNOWN)) return
-        val request = pendingSave ?: saveRequest()?.also { pendingSave = it } ?: return
+        val current = state.value
+        val request = when (current.phase) {
+            CoachPhase.CONFIRMING -> saveRequest(current.metrics.filter { it.value.isNotBlank() })
+            CoachPhase.RESULT_UNKNOWN -> pendingSave
+            else -> null
+        } ?: return
+        submitProgress(request)
+    }
+
+    private fun submitProgress(request: CoachSaveRequest) {
+        pendingSave = request
         val activeSession = session
         state.update { it.copy(phase = CoachPhase.SAVING, error = null) }
         viewModelScope.launch {
@@ -244,21 +299,18 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
                 val updated = repository.recordProgress(request.goalId, request.body, request.updates, request.id)
                 if (session != activeSession) return@launch
                 pendingSave = null
-                state.update { it.copy(goal = updated, phase = CoachPhase.EDITING, body = "",
-                    metrics = updated.metrics.sortedBy { metric -> metric.position }.map { CoachMetricEdit(it) },
-                    warnings = emptyList(), error = null,
-                    recordBody = null, reply = null,
-                    turns = it.turns + CoachTurn(request.id, request.body, request.labels,
-                        goalId = updated.id, goalTitle = updated.title)) }
-                loadAdvice(request.id)
+                val current = state.value.let { it.copy(goal = updated, savedCandidates = it.savedCandidates + request.labels) }
+                if (request.candidateId == null) finishCandidate(current, showCompletion = false)
+                else resolveCandidate(current, request.candidateId)
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 if (session != activeSession) return@launch
                 // A transport/5xx failure may follow a committed write. Keep the exact request frozen.
                 val rejected = error is HttpException && error.code() in 400..499
                 if (rejected) pendingSave = null
+                val retryPhase = if (request.candidateId == null) CoachPhase.CONFIRMING else CoachPhase.CANDIDATE
                 state.update { it.copy(
-                    phase = if (rejected) CoachPhase.CONFIRMING else CoachPhase.RESULT_UNKNOWN,
+                    phase = if (rejected) retryPhase else CoachPhase.RESULT_UNKNOWN,
                     error = if (error is HttpException && error.code() == 409)
                         "同日の実行は記録済みか、チェック状態が更新されています。候補を取り消して目標を確認してください。"
                         else if (rejected) "保存が拒否されました。入力内容とログイン状態を確認してください"
@@ -310,19 +362,28 @@ fun CoachScreen(
     onBack: () -> Unit,
     onBodyChange: (String) -> Unit,
     onSend: () -> Unit,
-    onConfirm: () -> Unit,
+    onCandidateDecision: (String, Boolean) -> Unit,
     onManual: () -> Unit,
     onCancel: () -> Unit,
+    onSaveRetry: () -> Unit,
+    onCompletionDismiss: () -> Unit,
     onAdviceRetry: (String) -> Unit,
 ) {
     val conversation = rememberLazyListState()
-    LaunchedEffect(state.turns.size, state.phase, state.reply) {
-        val last = conversation.layoutInfo.totalItemsCount - 1
-        if (last >= 0) conversation.animateScrollToItem(last)
+    val generating = state.phase == CoachPhase.GENERATING
+    val candidates = state.candidates
+    LaunchedEffect(state.turns.size, generating, state.recordBody) {
+        // Bring the latest reply or swipe instructions into view without jumping after each decision.
+        conversation.animateScrollToItem(state.turns.size + if (generating || state.reviewing) 2 else 0)
     }
     val focus = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
     BackHandler { if (state.canLeave) onBack() }
+    if (state.showCompletion) AlertDialog(
+        onDismissRequest = onCompletionDismiss,
+        title = { Text("記録が完了しました") },
+        confirmButton = { TextButton(onClick = onCompletionDismiss) { Text("OK") } },
+    )
     Scaffold(
         modifier = Modifier.imePadding(),
         topBar = { TopAppBar(title = { Text("コーチ") }, navigationIcon = {
@@ -351,8 +412,6 @@ fun CoachScreen(
                             if (turn.saved) CoachCard("保存済み") {
                                 turn.goalTitle?.let { Text(it, style = MaterialTheme.typography.titleMedium) }
                                 turn.updates.forEach { Text(it.label()) }
-                                Text("この記録で保存した増加量です。",
-                                    style = MaterialTheme.typography.bodySmall)
                             }
                             if (turn.adviceLoading) CoachCard("現在の状況へのAI助言") {
                                 CircularProgressIndicator()
@@ -368,27 +427,32 @@ fun CoachScreen(
                             } }
                         }
                     }
-                    if (state.phase in setOf(CoachPhase.GENERATING, CoachPhase.CANDIDATE)) item {
-                        CoachCard("あなた・未保存の入力") { Text(state.body) }
+                    if (generating || state.reviewing) item {
+                        CoachCard("あなた") { Text(state.body) }
                     }
-                    if (state.phase == CoachPhase.CANDIDATE) item {
-                        state.reply?.let { reply -> CoachCard("コーチ") { Text(reply) } }
-                        CoachCard("更新候補・未保存") {
-                            Text(state.goal?.title.orEmpty(), style = MaterialTheme.typography.titleMedium)
-                            state.metrics.filter { it.value.isNotBlank() }.forEach {
-                                Text("${it.metric.name}: 記録候補あり")
+                    if (state.reviewing) {
+                        item {
+                            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                                if (candidates.isEmpty()) {
+                                    state.reply?.let { reply -> CoachCard("コーチ") { Text(reply) } }
+                                } else {
+                                    Text("右にスワイプで記録、左で見送る", style = MaterialTheme.typography.bodyMedium)
+                                }
+                                state.warnings.forEach { Text(it, style = MaterialTheme.typography.bodyMedium) }
                             }
-                            Text("まだ保存されていません。")
-                            state.warnings.forEach { Text(it) }
-                            if (state.metrics.any { it.value.isNotBlank() }) Button(onClick = onConfirm) {
-                                Text("確認して保存へ")
-                            }
+                        }
+                        items(candidates, key = { "coach-candidate-${it.metric.id}" }) { candidate ->
+                            CoachCandidateCard(state.goal?.title.orEmpty(), candidate,
+                                enabled = state.phase == CoachPhase.CANDIDATE,
+                                onDecision = { save -> onCandidateDecision(candidate.metric.id, save) })
+                        }
+                        if (state.phase == CoachPhase.CANDIDATE && state.resolvedMetricIds.isEmpty()) item {
                             TextButton(onClick = onManual) { Text("今回値を手入力する") }
-                            TextButton(onClick = onCancel) { Text("候補を取り消す") }
+                            if (candidates.isEmpty()) TextButton(onClick = onCancel) { Text("候補を取り消す") }
                         }
                     }
-                    if (state.phase == CoachPhase.GENERATING) item {
-                        CoachCard("返答を考えています") { CircularProgressIndicator(); Text("この操作では実績を保存しません。") }
+                    if (generating) item {
+                        CoachCard("返答を考えています") { CircularProgressIndicator() }
                     }
 
                 }
@@ -408,23 +472,71 @@ fun CoachScreen(
                             onBodyChange = onBodyChange)
                         state.error?.let { Text(it, color = MaterialTheme.colorScheme.error,
                             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite }) }
-                        Button(
-                            onClick = {
+                        when (state.phase) {
+                            CoachPhase.EDITING -> Button(onClick = {
                                 focus.clearFocus()
                                 keyboard?.hide()
-                                if (state.phase == CoachPhase.CANDIDATE && state.metrics.any { it.value.isNotBlank() })
-                                    onConfirm() else onSend()
-                            },
-                            enabled = !state.busy && state.canEditBody,
-                            modifier = Modifier.fillMaxWidth(),
-                        ) {
-                            Text(if (state.phase == CoachPhase.CANDIDATE && state.metrics.any { it.value.isNotBlank() })
-                                "候補を確認する" else "送信")
+                                onSend()
+                            }, modifier = Modifier.fillMaxWidth()) { Text("送信") }
+                            CoachPhase.SAVING -> Text("記録を保存中…", modifier = Modifier.semantics {
+                                liveRegion = LiveRegionMode.Polite
+                            })
+                            CoachPhase.RESULT_UNKNOWN -> Button(onClick = onSaveRetry,
+                                modifier = Modifier.fillMaxWidth()) { Text("同じ内容で再試行") }
+                            else -> Unit
                         }
-                        Text("未保存の入力はアプリ終了後に復元されません。",
-                            style = MaterialTheme.typography.bodySmall)
                     }
                 }
+            }
+        }
+    }
+}
+
+@Composable
+private fun CoachCandidateCard(goalTitle: String, candidate: CoachMetricEdit, enabled: Boolean,
+    onDecision: (Boolean) -> Unit) {
+    val swipe = rememberSwipeToDismissBoxState()
+    val right = if (LocalLayoutDirection.current == LayoutDirection.Ltr) SwipeToDismissBoxValue.StartToEnd
+        else SwipeToDismissBoxValue.EndToStart
+    val shape = RoundedCornerShape(16.dp)
+    val label = runCatching { metricInput(candidate.metric, candidate.value) }.getOrNull()
+        ?.let { candidate.savedMetric(it).label() } ?: candidate.metric.name
+    LaunchedEffect(swipe.settledValue) {
+        val direction = swipe.settledValue
+        if (direction != SwipeToDismissBoxValue.Settled) {
+            if (enabled) onDecision(direction == right)
+            swipe.reset()
+        }
+    }
+    SwipeToDismissBox(
+        state = swipe,
+        gesturesEnabled = enabled,
+        modifier = Modifier.fillMaxWidth().testTag("coach-candidate-${candidate.metric.id}")
+            .semantics(mergeDescendants = true) {
+                if (enabled) customActions = listOf(
+                    CustomAccessibilityAction("この候補を記録") { onDecision(true); true },
+                    CustomAccessibilityAction("この候補を見送る") { onDecision(false); true },
+                )
+            },
+        backgroundContent = {
+            val direction = swipe.dismissDirection
+            if (direction != SwipeToDismissBoxValue.Settled) {
+                val save = direction == right
+                Surface(shape = shape, modifier = Modifier.fillMaxSize(), color =
+                    if (save) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.surfaceVariant) {
+                    Box(Modifier.padding(horizontal = 16.dp), contentAlignment =
+                        if (direction == SwipeToDismissBoxValue.StartToEnd) Alignment.CenterStart else Alignment.CenterEnd) {
+                        Text(if (save) "記録" else "見送る")
+                    }
+                }
+            }
+        },
+    ) {
+        Card(modifier = Modifier.fillMaxWidth(), shape = shape,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow)) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Text(goalTitle, style = MaterialTheme.typography.titleMedium)
+                Text(label, style = MaterialTheme.typography.bodyMedium)
             }
         }
     }

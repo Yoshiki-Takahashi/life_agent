@@ -197,12 +197,14 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onBack = { requestNavigation("home") },
                     onBodyChange = coachViewModel::updateBody,
                     onSend = coachViewModel::sendMessage,
-                    onConfirm = { coachViewModel.confirmCandidate(); navController.navigate("coach-confirm") { launchSingleTop = true } },
+                    onCandidateDecision = coachViewModel::decideCandidate,
                     onManual = {
                         coachViewModel.startManualConfirmation()
                         if (coachViewModel.uiState.value.phase == CoachPhase.CONFIRMING) navController.navigate("coach-confirm") { launchSingleTop = true }
                     },
                     onCancel = coachViewModel::cancelCandidate,
+                    onSaveRetry = coachViewModel::saveProgress,
+                    onCompletionDismiss = coachViewModel::dismissCompletion,
                     onAdviceRetry = coachViewModel::loadAdvice,
                 )
             }

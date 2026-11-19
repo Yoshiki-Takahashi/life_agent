@@ -186,20 +186,29 @@ class AppFlowTest {
         compose.onNodeWithText("進捗").performClick()
         compose.onNodeWithText("履歴と現在値を確認できないため推移を表示できません").assertDoesNotExist()
         compose.onNodeWithText("コーチ").performClick()
-        send("今回は2冊読み終えた")
-        waitFor("候補を確認する", timeoutMs = 60000)
-        conversation("確認して保存へ").performClick()
-        compose.onNodeWithText("読了冊数 の今回値").performScrollTo().assertTextContains("2")
-        compose.onNodeWithText("読書時間 の今回値").performScrollTo().performTextReplacement("0")
-        compose.onNodeWithText("保存後 0 分").assertExists()
-        compose.onNodeWithText("この内容で保存する").performScrollTo().performClick()
-        waitFor("コーチに話す")
+        send("今回は2冊と5ページを読んだ。読書時間は0分でした")
+        val (books, minutes, pages) = goal.metrics
+        waitFor("右にスワイプで記録、左で見送る", timeoutMs = 60000)
+        val accepted = candidate(books.id).assertTextContains("読了冊数: +2 冊")
+        val actionLabels = accepted.fetchSemanticsNode().config[androidx.compose.ui.semantics.SemanticsActions.CustomActions]
+            .map { it.label }
+        assertEquals(listOf("この候補を記録", "この候補を見送る"), actionLabels)
+        accepted.performTouchInput { swipeRight() }
+        compose.waitUntil(20000) { compose.onAllNodesWithTag("coach-candidate-${books.id}").fetchSemanticsNodes().isEmpty() }
+        runBlocking { assertEquals(15.0, api.getGoal(goal.id).metrics[0].currentValue, 0.0) }
+        compose.onNodeWithText("記録が完了しました").assertDoesNotExist()
+        candidate(pages.id).performTouchInput { swipeLeft() }
+        compose.onNodeWithText("記録が完了しました").assertDoesNotExist()
+        candidate(minutes.id).performTouchInput { swipeRight() }
+        dismissCoachCompletion()
         runBlocking {
             val saved = api.getGoal(goal.id)
             assertEquals(listOf(15.0, 0.0, 0.0), saved.metrics.map { it.currentValue })
-            assertEquals(3, saved.progressLogs.size)
-            assertEquals(listOf(0.0, 0.0), saved.progressLogs[1].metricUpdates.map { it.value })
-            assertTrue(saved.progressLogs.all { it.metricUpdates.size == 2 })
+            assertEquals(4, saved.progressLogs.size)
+            assertEquals(listOf(0.0, 0.0), saved.progressLogs.filter { it.metricUpdates.size == 2 }
+                .first().metricUpdates.map { it.value })
+            assertEquals(mapOf(books.id to 2.0, minutes.id to 0.0), saved.progressLogs.map { it.metricUpdates }
+                .filter { it.size == 1 }.associate { it.single().metricId to it.single().value })
         }
         compose.onNodeWithText("目標一覧").performClick()
         waitFor(goal.title)
@@ -253,21 +262,21 @@ class AppFlowTest {
         assertTrue(requests.isEmpty())
         runBlocking { assertTrue(api.getGoal(goals.first().id).progressLogs.isEmpty()) }
         compose.onNodeWithText("送信").performScrollTo().performClick()
-        waitFor("候補を確認する")
-        conversation("確認して保存へ").performClick()
         compose.onNodeWithText("目標一覧").assertIsDisplayed()
-        compose.onNodeWithText("この内容で保存する").performScrollTo().performClick()
+        waitFor("右にスワイプで記録、左で見送る", timeoutMs = 60000)
+        candidate(goals[0].metrics.single().id).performTouchInput { swipeRight() }
         waitFor("同じ内容で再試行")
+        compose.onNodeWithText("今回値を確認").assertDoesNotExist()
+        compose.onNodeWithText("記録が完了しました").assertDoesNotExist()
         compose.onNodeWithText("同じ内容で再試行").performScrollTo().performClick()
-        waitFor("コーチに話す")
+        dismissCoachCompletion()
         conversation("助言だけ再試行").performClick()
         conversation("保存済み進捗", true)
         assertEquals(requests[0], requests[1])
         send("1回トレーニングした")
-        waitFor("候補を確認する")
-        conversation("確認して保存へ").performClick()
-        compose.onNodeWithText("この内容で保存する").performScrollTo().performClick()
-        waitFor("コーチに話す")
+        waitFor("右にスワイプで記録、左で見送る", timeoutMs = 60000)
+        candidate(goals[1].metrics.single().id).performTouchInput { swipeRight() }
+        dismissCoachCompletion()
         runBlocking { goals.forEach { goal ->
             val saved = api.getGoal(goal.id)
             assertEquals(1, saved.progressLogs.size)
@@ -306,6 +315,20 @@ class AppFlowTest {
         androidx.test.espresso.Espresso.closeSoftKeyboard()
         compose.onNodeWithText("送信").performScrollTo().assertIsDisplayed().performClick()
     }
+
+    private fun candidate(metricId: String): SemanticsNodeInteraction {
+        val tag = "coach-candidate-$metricId"
+        compose.onNodeWithTag("coach-conversation").performScrollToNode(hasTestTag(tag))
+        return compose.onNodeWithTag(tag).assertIsDisplayed()
+    }
+
+    private fun dismissCoachCompletion() {
+        waitFor("記録が完了しました")
+        compose.onNodeWithText("OK").performClick()
+        compose.onNodeWithText("コーチに話す").assertIsDisplayed()
+        compose.onNodeWithText("今回値を確認").assertDoesNotExist()
+    }
+
     private fun waitFor(text: String, substring: Boolean = false, timeoutMs: Long = 10000) {
         try {
             compose.waitUntil(timeoutMs) { compose.onAllNodesWithText(text, substring=substring).fetchSemanticsNodes().isNotEmpty() }

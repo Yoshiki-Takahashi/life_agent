@@ -57,11 +57,13 @@ class MetricTypesFlowTest {
         compose.onNodeWithText("コーチに話す").performTextReplacement("種別テスト 体脂肪率20%を記録したい")
         androidx.test.espresso.Espresso.closeSoftKeyboard()
         compose.onNodeWithText("送信").performScrollTo().assertIsDisplayed().performClick()
-        waitFor("確認して保存へ")
-        compose.onNodeWithText("確認して保存へ").performScrollTo().performClick()
-        waitFor("今回値を確認")
-        compose.onNodeWithText("この内容で保存する").performScrollTo().performClick()
-        waitFor("コーチに話す")
+        waitFor("右にスワイプで記録、左で見送る")
+        val candidateTag = "coach-candidate-${goal.metrics[2].id}"
+        compose.onNodeWithTag("coach-conversation").performScrollToNode(hasTestTag(candidateTag))
+        compose.onNodeWithTag(candidateTag).assertTextContains("体脂肪率: 20 %").performTouchInput { swipeRight() }
+        waitFor("記録が完了しました")
+        compose.onNodeWithText("OK").performClick()
+        compose.onNodeWithText("コーチに話す").assertIsDisplayed()
         compose.waitUntil(10000) { runBlocking { api.getGoal(goal.id).metrics[2].currentValue == 20.0 } }
         runBlocking { assertEquals(2, api.getGoal(goal.id).progressLogs.size) }
     }

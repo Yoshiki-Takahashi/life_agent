@@ -18,7 +18,7 @@ class AppStateTest {
     @Before fun before() = Dispatchers.setMain(dispatcher)
     @After fun after() = Dispatchers.resetMain()
 
-    @Test fun oneConversationRecordsDifferentGoalsOnlyAfterConfirmation() = runTest(dispatcher) {
+    @Test fun oneConversationRecordsDifferentGoalsOnlyAfterTheCandidateIsAccepted() = runTest(dispatcher) {
         val repository = TestGoals()
         val coach = CoachViewModel(repository)
         coach.updateBody("相談")
@@ -31,9 +31,10 @@ class AppStateTest {
             val before = repository.saves.size
             coach.saveProgress()
             assertEquals(before, repository.saves.size)
-            coach.confirmCandidate()
-            coach.saveProgress()
+            coach.decideCandidate(coach.uiState.value.candidates.single().metric.id, save = true)
             advanceUntilIdle()
+            assertTrue(coach.uiState.value.showCompletion)
+            coach.dismissCompletion()
         }
         assertEquals(listOf("reading", "training"), repository.saves.map { it.goalId })
         assertEquals(3, coach.uiState.value.turns.size)
@@ -50,8 +51,7 @@ class AppStateTest {
         coach.updateBody("1冊読んだ")
         coach.sendMessage()
         advanceUntilIdle()
-        coach.confirmCandidate()
-        coach.saveProgress()
+        coach.decideCandidate("books", save = true)
         advanceUntilIdle()
         assertTrue(coach.uiState.value.resultUnknown)
         coach.updateBody("変更できない本文")
@@ -65,6 +65,48 @@ class AppStateTest {
         advanceUntilIdle()
         assertNotNull(coach.uiState.value.turns.single().advice)
         assertEquals(2, repository.saves.size)
+    }
+
+    @Test fun candidatesSaveIndividuallyAndCompletionWaitsForAllDecisions() = runTest(dispatcher) {
+        val repository = TestGoals(extraMetrics = true).apply {
+            previewUpdates = listOf(ProgressMetricUpdatePayload("books", 2.0),
+                ProgressMetricUpdatePayload("minutes", 0.0), ProgressMetricUpdatePayload("pages", 5.0))
+        }
+        val coach = CoachViewModel(repository)
+        coach.updateBody("2冊と5ページを読んだ。読書時間は0分")
+        coach.sendMessage()
+        advanceUntilIdle()
+        assertTrue(repository.saves.isEmpty())
+        coach.decideCandidate("books", save = true)
+        advanceUntilIdle()
+        assertEquals(listOf(MetricProgressInput("books", 2.0)), repository.saves.single().updates)
+        assertFalse(coach.uiState.value.showCompletion)
+        assertEquals(0, repository.adviceCalls)
+        coach.decideCandidate("books", save = true)
+        coach.decideCandidate("minutes", save = true)
+        advanceUntilIdle()
+        assertFalse(coach.uiState.value.showCompletion)
+        coach.decideCandidate("pages", save = false)
+        advanceUntilIdle()
+        assertEquals(listOf(listOf(MetricProgressInput("books", 2.0)), listOf(MetricProgressInput("minutes", 0.0))),
+            repository.saves.map { it.updates })
+        assertEquals(listOf(2.0, 0.0), coach.uiState.value.turns.single().updates.map { it.value })
+        assertTrue(coach.uiState.value.showCompletion)
+        assertEquals(1, repository.adviceCalls)
+    }
+
+    @Test fun decliningEveryCandidateDoesNotSaveOrShowCompletion() = runTest(dispatcher) {
+        val repository = TestGoals()
+        val coach = CoachViewModel(repository)
+        coach.updateBody("1冊読んだ")
+        coach.sendMessage()
+        advanceUntilIdle()
+        coach.decideCandidate("books", save = false)
+        advanceUntilIdle()
+        assertFalse(coach.uiState.value.showCompletion)
+        assertEquals(CoachPhase.EDITING, coach.uiState.value.phase)
+        assertTrue(repository.saves.isEmpty())
+        assertEquals(0, repository.adviceCalls)
     }
 
     @Test fun staleReplyCannotReplaceEditedInputOrRestoreLoggedOutSession() = runTest(dispatcher) {
@@ -275,11 +317,12 @@ class AppStateTest {
                 MetricProgressInput("minutes", 0.0))
             assertEquals(expected, repository.saves.single().updates)
 
+            repository.previewUpdates = emptyList()
             val coach = CoachViewModel(repository)
             coach.updateBody("1冊読み終えた")
             coach.sendMessage()
             advanceUntilIdle()
-            coach.confirmCandidate()
+            coach.startManualConfirmation()
             coach.updateMetric("books", value)
             coach.updateMetric("minutes", "0")
             coach.saveProgress()
@@ -303,6 +346,8 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
     var pendingReply: CompletableDeferred<CoachReply>? = null
     var loseSave = false
     var failAdvice = false
+    var adviceCalls = 0
+    var previewUpdates: List<ProgressMetricUpdatePayload>? = null
     var confirmCalls = 0
     var applyCalls = 0
     var questionCalls = 0
@@ -327,7 +372,7 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
     override suspend fun listGoals() = goals.values.map {
         GoalSummary(it.id, it.title, date, it.status, 1, 3, it.createdAt, it.updatedAt) }
     override suspend fun previewProgress(goalId: String, body: String) = ProgressPreview(
-        listOf(ProgressMetricUpdatePayload(getGoal(goalId).metrics.first().id, 1.0)), emptyList())
+        previewUpdates ?: listOf(ProgressMetricUpdatePayload(getGoal(goalId).metrics.first().id, 1.0)), emptyList())
     override suspend fun recordProgress(goalId: String, body: String,
         metricUpdates: List<MetricProgressInput>, clientRequestId: String): Goal {
         saves += Saved(goalId, body, metricUpdates, clientRequestId)
@@ -339,6 +384,7 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
         return updated
     }
     override suspend fun getAdvice(goalId: String): Advice {
+        adviceCalls++
         if (failAdvice) { failAdvice = false; error("unavailable") }
         return Advice("次の一歩", listOf("無理のない量を選ぶ"))
     }

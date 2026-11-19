@@ -180,8 +180,8 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         val goal = state.goal ?: return
         if (state.isSavingProgress || state.isParsing) return
         val body = state.progressBody.trim()
-        if (body.isBlank() || body.length > 2000) {
-            _uiState.update { it.copy(progressError = "進捗メモを1〜2,000文字で入力してください") }
+        if (body.length > 2000) {
+            _uiState.update { it.copy(progressError = "進捗メモは2,000文字以内で入力してください") }
             return
         }
         val updates = runCatching { state.metricProgress.mapNotNull { metricInput(it.metric(), it.value) } }
@@ -686,7 +686,7 @@ private fun ProgressEntry(
                 onValueChange = onProgressBodyChange,
                 label = { Text("進捗メモ") },
                 enabled = !state.isSavingProgress,
-                supportingText = { Text("例：今日は2冊読み終えた") },
+                supportingText = { Text("任意。例：今日は2冊読み終えた") },
                 modifier = Modifier.fillMaxWidth(),
             )
             SpeechInputButton(body = state.progressBody, enabled = !state.isParsing && !state.isSavingProgress,
@@ -723,7 +723,7 @@ private fun ProgressHistory(goal: Goal) {
         goal.progressLogs.forEach { log ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(log.body, style = MaterialTheme.typography.titleMedium)
+                    if (log.body.isNotBlank()) Text(log.body, style = MaterialTheme.typography.titleMedium)
                     log.metricUpdates.forEach { update ->
                         Text(
                             progressLabel(update),

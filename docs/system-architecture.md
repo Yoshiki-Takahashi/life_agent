@@ -42,7 +42,7 @@ Coreの候補版は、同じ実行で配置したPlannerのタグURLへ固定し
 | Goal | 所有者ID、タイトル、任意の説明、期限、状態、計画の版、作成・更新日時 |
 | Metric | 目標内の測定項目。固定種別、名前、単位、目標値、現在値、チェック定義・完了項目、最終記録日時、表示順、非表示日時 |
 | Milestone | 中間目標のタイトル、期限、表示順。完了状態は保持しない |
-| ProgressLog | 実績の文章、記録日時、再送を識別するID |
+| ProgressLog | 任意の実績メモ、記録日時、再送を識別するID |
 | ProgressMetricUpdate | 実績に紐づくMetricの種別と値、完了項目、実行日 |
 | ReplanProposal | 所有者、対象目標、基準の計画版、見直し理由、候補計画、差分、適用状態 |
 | AIDailyUsage | Firebase uidのハッシュ、日本時間の日付、AI利用枠の消費数 |

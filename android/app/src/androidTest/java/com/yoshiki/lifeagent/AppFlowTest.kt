@@ -110,17 +110,29 @@ class AppFlowTest {
             api.confirmGoal(plan.copy(metrics = plan.metrics + Metric("読書メモ", 10.0, "件")))
         }
         var proposal: ReplanProposal? = null
+        var questions: GoalQuestions? = null
         val repository = object : GoalRepository by api {
-            override suspend fun previewReplan(goalId: String, reason: String): ReplanProposal =
-                api.previewReplan(goalId, reason).also { proposal = it }
+            override suspend fun replanQuestions(goalId: String, reason: String): GoalQuestions =
+                api.replanQuestions(goalId, reason).also { questions = it }
+            override suspend fun previewReplan(goalId: String, reason: String, answers: List<GoalAnswer>): ReplanProposal =
+                api.previewReplan(goalId, reason, answers).also { proposal = it }
         }
         compose.setContent { LifeAgentTheme { LifeAgentApp(repository, owner, {},
             Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
         waitFor(goal.title)
         compose.onNodeWithText(goal.title).performClick()
-        compose.onNodeWithText("計画").performClick()
+        waitFor("概要")
+        compose.onNodeWithText(goal.milestones.first().title).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("再計画").performClick()
+        compose.onNodeWithText(goal.milestones.first().title).assertDoesNotExist()
         compose.onNodeWithText("見直し理由").performScrollTo().performTextReplacement("無理なく続けたい")
-        compose.onNodeWithText("再計画候補を作る").performScrollTo().performClick()
+        compose.onNodeWithText("質問へ進む").performScrollTo().performClick()
+        waitFor("見直しのための質問")
+        compose.onNodeWithText("回答から再計画候補を作る").performScrollTo().assertIsNotEnabled()
+        requireNotNull(questions).questions.indices.forEach { index ->
+            field("question-$index", "はい").performScrollTo().performClick()
+        }
+        compose.onNodeWithText("回答から再計画候補を作る").performScrollTo().performClick()
         waitFor("変更候補を確認")
         compose.onNodeWithText("メトリクス（測定項目）").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("マイルストン（中間目標）").performScrollTo().assertIsDisplayed()
@@ -285,7 +297,7 @@ class AppFlowTest {
         compose.onNodeWithText("目標一覧").performClick()
         waitFor("本を読む")
         compose.onNodeWithText("本を読む").performClick()
-        listOf("概要", "進捗", "記録", "計画").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
+        listOf("概要", "進捗", "記録", "再計画").forEach { compose.onNodeWithText(it).assertIsDisplayed() }
         compose.onNodeWithText("進捗メモ").assertDoesNotExist()
         compose.onNodeWithText("記録").performClick()
         compose.onNodeWithText("進捗メモ").assertExists()
@@ -296,7 +308,7 @@ class AppFlowTest {
         compose.onNodeWithText("本文に追加").performClick()
         compose.onNodeWithText("進捗メモ").assertTextContains("既存の入力\nさらに1冊読み終えた")
         assertEquals(3, requests.size)
-        compose.onNodeWithText("計画").performClick()
+        compose.onNodeWithText("再計画").performClick()
         compose.onNodeWithText("計画を見直す").assertExists()
         compose.onNodeWithText("コーチ").performClick()
         compose.onNodeWithText("破棄して移動").performClick()

@@ -20,7 +20,7 @@ from life_agent_goal_planner.main import (
 from life_agent_goal_planner.planner import FakeGoalPlanner
 from life_agent_goal_planner.progress import FakeAdvisor, FakeProgressParser, advice_context
 from life_agent_goal_planner.provider import AIUnavailableError, generate
-from life_agent_goal_planner.replan import FakeReplanner
+from life_agent_goal_planner.replan import FakeReplanner, OpenAIReplanner
 from life_agent_goal_planner.schemas import Advice, CoachAIRequest, CoachReply
 
 
@@ -70,6 +70,39 @@ def test_fixed_contracts_through_internal_endpoints(client, title, name, unit, b
         ),
     )
     assert coach.status_code == 200 and title in coach.json()["reply"]
+
+
+def test_replan_sends_owned_plan_reason_and_answers_to_provider(client):
+    import json
+
+    context = goal("読書", "新書を読む", [("読了冊数", "冊", 2, 12)])
+    reason = "合計は維持したいが、毎週の負担を減らしたい"
+    candidate = FakeReplanner().propose(context, reason)
+    questions = ["目標期限は延ばせますか？", "読みたい本は決まっていますか？", "週末に読めますか？"]
+    factory = MagicMock()
+    factory.return_value.responses.parse.side_effect = [
+        SimpleNamespace(output_parsed=dict(questions=questions)),
+        SimpleNamespace(output_parsed=candidate),
+    ]
+    app.dependency_overrides[get_replanner] = lambda: OpenAIReplanner(
+        Settings(openai_api_key="test"), factory
+    )
+    payload = {"goal": context.model_dump(mode="json"), "reason": reason}
+    response = client.post("/internal/v1/replan-questions", json=payload)
+    assert response.status_code == 200 and response.json()["questions"] == questions
+    answers = [
+        dict(question=question, answer=index == 0) for index, question in enumerate(questions)
+    ]
+    proposal = client.post("/internal/v1/replan", json={**payload, "answers": answers})
+    assert proposal.status_code == 200 and proposal.json() == candidate.model_dump(mode="json")
+    calls = factory.return_value.responses.parse.call_args_list
+    question_context, preview_context = [
+        json.loads(call.kwargs["input"][1]["content"]) for call in calls
+    ]
+    assert question_context["reason"] == reason
+    assert question_context["goal"]["title"] == context.title
+    assert question_context["goal"]["metrics"][0]["current_value"] == 2
+    assert preview_context["reason"] == reason and preview_context["answers"] == answers
 
 
 def test_shared_provider_uses_structured_private_bounded_calls():

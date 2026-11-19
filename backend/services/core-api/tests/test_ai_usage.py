@@ -30,6 +30,7 @@ def test_ai_quota_is_shared_atomic_and_resets_at_japan_midnight(
         ("/api/v1/goals/preview", goal_input, 200),
         (path + "/progress/preview", {"body": "1冊読んだ"}, 200),
         (path + "/advice", None, 503),
+        (path + "/replan/questions", {"reason": "計画を調整したい"}, 200),
         (path + "/replan/preview", {"reason": "計画を調整したい"}, 200),
         (COACH, {"body": "進め方を相談したい"}, 200),
     ]
@@ -37,7 +38,7 @@ def test_ai_quota_is_shared_atomic_and_resets_at_japan_midnight(
     app.dependency_overrides[get_advisor] = lambda: advisor
     for url, payload, status in requests:
         assert client.post(url, json=payload).status_code == status
-    for _ in range(12):
+    for _ in range(11):
         assert client.post(QUESTIONS, json=goal_input).status_code == 200
 
     with ThreadPoolExecutor(max_workers=2) as pool:

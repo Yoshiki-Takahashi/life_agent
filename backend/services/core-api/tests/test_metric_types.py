@@ -192,7 +192,7 @@ def test_replanning_cannot_reinterpret_history(client):
         def __init__(self, change_kind):
             self.change_kind = change_kind
 
-        def propose(self, context, reason):
+        def propose(self, context, reason, answers):
             fields = ("name", "target_value", "unit", "kind", "checklist_items")
             metrics = [{key: m[key] for key in fields} for m in saved.json()["metrics"]]
             metrics[2]["target_value"] = 10  # Lower observation target is valid.

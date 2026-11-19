@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -44,6 +45,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yoshiki.lifeagent.data.Advice
 import com.yoshiki.lifeagent.data.Goal
+import com.yoshiki.lifeagent.data.GoalAnswer
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.MetricProgressInput
 import com.yoshiki.lifeagent.data.ReplanProposal
@@ -52,11 +54,15 @@ import com.yoshiki.lifeagent.data.metricInput
 import com.yoshiki.lifeagent.data.progressEditValue
 import com.yoshiki.lifeagent.data.progressLabel
 import java.util.UUID
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 
 data class GoalDetailUiState(
     val goal: Goal? = null,
@@ -76,13 +82,16 @@ data class GoalDetailUiState(
     val adviceError: String? = null,
     val progressSaved: Boolean = false,
     val replanReason: String = "",
+    val replanQuestions: List<QuestionEdit> = emptyList(),
     val replanProposal: ReplanProposal? = null,
     val excludedReplanChangeIds: Set<String> = emptySet(),
     val isLoadingReplan: Boolean = false,
     val isApplyingReplan: Boolean = false,
     val replanError: String? = null,
     val replanApplied: Boolean = false,
-)
+) {
+    val replanBusy get() = isLoadingReplan || isApplyingReplan
+}
 
 data class MetricProgressEdit(
     val metricId: String,
@@ -150,16 +159,9 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     }
 
     fun updateReplanReason(value: String) {
-        if (_uiState.value.isLoadingReplan || _uiState.value.isApplyingReplan) return
-        _uiState.update {
-            it.copy(
-                replanReason = value,
-                replanError = null,
-                replanProposal = null,
-                excludedReplanChangeIds = emptySet(),
-                replanApplied = false,
-            )
-        }
+        val state = _uiState.value
+        if (state.replanBusy || state.replanQuestions.isNotEmpty()) return
+        _uiState.update { it.copy(replanReason = value, replanError = null, replanApplied = false) }
     }
 
     fun updateMetricProgress(index: Int, value: String) {
@@ -178,7 +180,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     fun saveProgress() {
         val state = _uiState.value
         val goal = state.goal ?: return
-        if (state.isSavingProgress || state.isParsing) return
+        if (state.isSavingProgress || state.isParsing || state.replanBusy) return
         val body = state.progressBody.trim()
         if (body.isBlank() || body.length > 2000) {
             _uiState.update { it.copy(progressError = "進捗メモを1〜2,000文字で入力してください") }
@@ -203,7 +205,10 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
             runCatching { repository.recordProgress(goal.id, body, frozenUpdates, id) }
                 .onSuccess { updatedGoal ->
                     requestId = null
-                    _uiState.value = stateForGoal(updatedGoal).copy(progressSaved = true)
+                    _uiState.update { it.copy(
+                        goal = updatedGoal, progressBody = "", metricProgress = metricProgressEdits(updatedGoal),
+                        isSavingProgress = false, hasPreview = false, parserWarnings = emptyList(), progressSaved = true,
+                    ) }
                     loadAdvice()
                 }
                 .onFailure { error ->
@@ -284,38 +289,82 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         }
     }
 
+    fun requestReplanQuestions() {
+        val state = _uiState.value
+        val goal = state.goal ?: return
+        if (goal.status != "active" || state.replanBusy || state.isSavingProgress || state.isParsing || state.isCompleting ||
+            state.isLoading || state.replanQuestions.isNotEmpty()) return
+        val reason = state.replanReason.trim()
+        if (reason.isEmpty() || reason.length > 2000) {
+            _uiState.update { it.copy(replanError = "見直し理由を1〜2,000文字で入力してください") }
+            return
+        }
+        _uiState.update { it.copy(replanReason = reason, isLoadingReplan = true,
+            replanError = null, replanApplied = false) }
+        viewModelScope.launch {
+            try {
+                val result = repository.replanQuestions(goal.id, reason)
+                require(result.questions.size in 3..8 && result.questions.distinct().size == result.questions.size)
+                require(result.questions.all { it.isNotBlank() && it.length <= 200 })
+                _uiState.update { it.copy(replanQuestions = result.questions.map(::QuestionEdit), isLoadingReplan = false) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                _uiState.update { it.copy(isLoadingReplan = false, replanError = error.aiLimitMessage()
+                    ?: "質問を生成できませんでした。理由を保持したまま再試行できます") }
+            }
+        }
+    }
+
+    fun editReplanReason() {
+        if (_uiState.value.replanBusy) return
+        _uiState.update { it.copy(replanQuestions = emptyList(), replanProposal = null,
+            excludedReplanChangeIds = emptySet(), replanError = null) }
+    }
+
+    fun answerReplanQuestion(index: Int, answer: Boolean) {
+        val state = _uiState.value
+        if (state.replanBusy || state.replanProposal != null) return
+        _uiState.update {
+            it.copy(replanQuestions = it.replanQuestions.mapIndexed { i, question ->
+                if (i == index) question.copy(answer = answer) else question
+            }, replanError = null)
+        }
+    }
+
     fun previewReplan() {
         val state = _uiState.value
         val goal = state.goal ?: return
-        if (state.isLoadingReplan || state.isApplyingReplan) return
-        val reason = state.replanReason.trim()
-        if (reason.isBlank()) {
-            _uiState.update { it.copy(replanError = "見直し理由を入力してください") }
-            return
-        }
-        _uiState.update {
-            it.copy(
-                isLoadingReplan = true,
-                replanError = null,
-                replanProposal = null,
-                excludedReplanChangeIds = emptySet(),
-                replanApplied = false,
-            )
-        }
+        if (state.replanBusy || state.isSavingProgress || state.isParsing || state.isCompleting || state.isLoading ||
+            state.replanProposal != null || goal.status != "active") return
+        if (state.replanQuestions.isEmpty() || state.replanQuestions.any { it.answer == null }) return
+        val answers = state.replanQuestions.map { GoalAnswer(it.question, requireNotNull(it.answer)) }
+        _uiState.update { it.copy(isLoadingReplan = true, replanError = null) }
         viewModelScope.launch {
-            runCatching { repository.previewReplan(goal.id, reason) }
-                .onSuccess { proposal ->
-                    _uiState.update {
-                        it.copy(replanProposal = proposal, replanReason = reason, excludedReplanChangeIds = emptySet())
-                    }
+            try {
+                val proposal = repository.previewReplan(goal.id, state.replanReason, answers)
+                _uiState.update { it.copy(replanProposal = proposal, isLoadingReplan = false) }
+            } catch (error: CancellationException) {
+                throw error
+            } catch (error: Exception) {
+                val message = when {
+                    error is HttpException && error.code() == 409 -> replanConflictMessage(error)
+                    else -> error.aiLimitMessage()
                 }
-                .onFailure { error ->
-                    _uiState.update {
-                        it.copy(replanError = error.aiLimitMessage()
-                            ?: "再計画候補を生成できませんでした。再試行してください")
-                    }
-                }
-            _uiState.update { it.copy(isLoadingReplan = false) }
+                _uiState.update { it.copy(isLoadingReplan = false, replanError = message
+                    ?: "再計画候補を生成できませんでした。回答を保持したまま再試行できます") }
+            }
+        }
+    }
+
+    private fun replanConflictMessage(error: HttpException): String? {
+        val code = runCatching {
+            val body = error.response()?.errorBody()?.string() ?: return null
+            Json.parseToJsonElement(body).jsonObject["detail"]?.jsonObject?.get("code")?.jsonPrimitive?.content
+        }.getOrNull()
+        return when (code) {
+            "replan_no_changes" -> "見直し理由と回答に合う変更候補がありません。回答か見直し理由を変更してください"
+            else -> null
         }
     }
 
@@ -339,7 +388,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         val state = _uiState.value
         val goal = state.goal ?: return
         val proposal = state.replanProposal ?: return
-        if (state.isLoadingReplan || state.isApplyingReplan) return
+        if (state.replanBusy || state.isSavingProgress || state.isParsing || state.isCompleting || state.isLoading) return
         if (proposal.diff.isNotEmpty() && proposal.diff.all { it.changeId in state.excludedReplanChangeIds }) return
         _uiState.update { it.copy(isApplyingReplan = true, replanError = null) }
         viewModelScope.launch {
@@ -361,19 +410,18 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         }
     }
 
-    private fun stateForGoal(goal: Goal) = GoalDetailUiState(
-        goal = goal,
-        metricProgress = goal.metrics.sortedBy { it.position }.map { metric ->
-            MetricProgressEdit(
-                metricId = metric.id,
-                name = metric.name,
-                currentValue = metric.currentValue,
-                targetValue = metric.targetValue,
-                unit = metric.unit,
-                kind = metric.kind, checklistItems = metric.checklistItems, completedItems = metric.completedItems,
-            )
-        },
-    )
+    private fun stateForGoal(goal: Goal) = GoalDetailUiState(goal = goal, metricProgress = metricProgressEdits(goal))
+
+    private fun metricProgressEdits(goal: Goal) = goal.metrics.sortedBy { it.position }.map { metric ->
+        MetricProgressEdit(
+            metricId = metric.id,
+            name = metric.name,
+            currentValue = metric.currentValue,
+            targetValue = metric.targetValue,
+            unit = metric.unit,
+            kind = metric.kind, checklistItems = metric.checklistItems, completedItems = metric.completedItems,
+        )
+    }
 
     companion object {
         fun factory(repository: GoalRepository): ViewModelProvider.Factory =
@@ -395,6 +443,9 @@ fun GoalDetailScreen(
     onLoadAdvice: () -> Unit = {},
     onReview: () -> Unit = {},
     onReplanReasonChange: (String) -> Unit = {},
+    onRequestReplanQuestions: () -> Unit = {},
+    onEditReplanReason: () -> Unit = {},
+    onAnswerReplanQuestion: (Int, Boolean) -> Unit = { _, _ -> },
     onPreviewReplan: () -> Unit = {},
     onCancelReplan: () -> Unit = {},
     onApplyReplan: () -> Unit = {},
@@ -411,6 +462,9 @@ fun GoalDetailScreen(
     )
     var selectedTab by rememberSaveable(state.goal?.id) { mutableIntStateOf(0) }
     val scrollStates = List(4) { rememberScrollState() }
+    LaunchedEffect(state.replanQuestions.isNotEmpty(), state.replanProposal?.proposalId) {
+        scrollStates[3].scrollTo(0)
+    }
     BackHandler { if (!state.isCompleting) onBack() }
     val focusManager = LocalFocusManager.current
     val keyboard = LocalSoftwareKeyboardController.current
@@ -430,9 +484,9 @@ fun GoalDetailScreen(
         Column(Modifier.fillMaxSize().padding(padding)) {
             state.completionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             if (state.goal != null) TabRow(selectedTabIndex = selectedTab) {
-                listOf("概要", "進捗", "記録", "計画").forEachIndexed { index, label ->
+                listOf("概要", "進捗", "記録", "再計画").forEachIndexed { index, label ->
                     Tab(selected = selectedTab == index,
-                        enabled = !state.isCompleting,
+                        enabled = !state.isCompleting && !state.replanBusy,
                         onClick = { focusManager.clearFocus(); keyboard?.hide(); selectedTab = index },
                         text = { Text(label) })
                 }
@@ -457,7 +511,14 @@ fun GoalDetailScreen(
                             onCancelPreview = onCancelPreview,
                             onLoadAdvice = onLoadAdvice,
                             onReplanReasonChange = onReplanReasonChange,
-                            onPreviewReplan = { focusManager.clearFocus(); keyboard?.hide(); onPreviewReplan() },
+                            onRequestReplanQuestions = {
+                                focusManager.clearFocus()
+                                keyboard?.hide()
+                                onRequestReplanQuestions()
+                            },
+                            onEditReplanReason = onEditReplanReason,
+                            onAnswerReplanQuestion = onAnswerReplanQuestion,
+                            onPreviewReplan = onPreviewReplan,
                             onCancelReplan = onCancelReplan,
                             onToggleReplanChange = onToggleReplanChange,
                             onApplyReplan = { focusManager.clearFocus(); keyboard?.hide(); onApplyReplan() },
@@ -481,6 +542,9 @@ private fun GoalDetail(
     onCancelPreview: () -> Unit = {},
     onLoadAdvice: () -> Unit = {},
     onReplanReasonChange: (String) -> Unit = {},
+    onRequestReplanQuestions: () -> Unit = {},
+    onEditReplanReason: () -> Unit = {},
+    onAnswerReplanQuestion: (Int, Boolean) -> Unit = { _, _ -> },
     onPreviewReplan: () -> Unit = {},
     onCancelReplan: () -> Unit = {},
     onApplyReplan: () -> Unit = {},
@@ -493,7 +557,6 @@ private fun GoalDetail(
     }
     if (goal.status == "completed" && selectedTab >= 2) {
         Text("完了済みの目標です。記録と計画の変更はできません。")
-        if (selectedTab == 3) goal.milestones.forEach { Text("${it.title}  ${it.targetDate}") }
         return
     }
     if (state.isCompleting) { CircularProgressIndicator(); return }
@@ -519,6 +582,15 @@ private fun GoalDetail(
                         else "${formatNumber(metric.currentValue)} / ${formatNumber(metric.targetValue)} ${metric.unit}",
                         color = MaterialTheme.colorScheme.primary,
                     )
+                }
+            }
+        }
+        Text("達成までのマイルストーン", style = MaterialTheme.typography.titleLarge)
+        goal.milestones.sortedBy { it.position }.forEach { milestone ->
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(milestone.title, style = MaterialTheme.typography.titleMedium)
+                    Text(milestone.targetDate)
                 }
             }
         }
@@ -566,23 +638,14 @@ private fun GoalDetail(
         ReplanEntry(
             state = state,
             onReplanReasonChange = onReplanReasonChange,
+            onRequestReplanQuestions = onRequestReplanQuestions,
+            onEditReplanReason = onEditReplanReason,
+            onAnswerReplanQuestion = onAnswerReplanQuestion,
             onPreviewReplan = onPreviewReplan,
             onCancelReplan = onCancelReplan,
             onApplyReplan = onApplyReplan,
             onToggleReplanChange = onToggleReplanChange,
         )
-        Text("達成までのMilestone", style = MaterialTheme.typography.titleLarge)
-        goal.milestones.sortedBy { it.position }.forEachIndexed { index, milestone ->
-            Card(Modifier.fillMaxWidth()) {
-                Row(Modifier.fillMaxWidth().padding(18.dp), horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-                    Text("${index + 1}", color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.titleLarge)
-                    Column {
-                        Text(milestone.title, style = MaterialTheme.typography.titleMedium)
-                        Text(milestone.targetDate)
-                    }
-                }
-            }
-        }
     }
 }
 
@@ -590,29 +653,39 @@ private fun GoalDetail(
 private fun ReplanEntry(
     state: GoalDetailUiState,
     onReplanReasonChange: (String) -> Unit,
+    onRequestReplanQuestions: () -> Unit,
+    onEditReplanReason: () -> Unit,
+    onAnswerReplanQuestion: (Int, Boolean) -> Unit,
     onPreviewReplan: () -> Unit,
     onCancelReplan: () -> Unit,
     onApplyReplan: () -> Unit,
     onToggleReplanChange: (String) -> Unit,
 ) {
-    Text("計画を見直す", style = MaterialTheme.typography.titleLarge)
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-            OutlinedTextField(
-                value = state.replanReason,
-                onValueChange = onReplanReasonChange,
-                label = { Text("見直し理由") },
-                supportingText = { Text("例：予定より忙しく、期限と冊数を調整したい") },
-                enabled = !state.isLoadingReplan && !state.isApplyingReplan,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Button(
-                onClick = onPreviewReplan,
-                enabled = !state.isLoadingReplan && !state.isApplyingReplan,
-            ) {
-                Text(if (state.isLoadingReplan) "生成中…" else "再計画候補を作る")
-            }
-            state.replanProposal?.let { proposal ->
+    val enabled = !state.replanBusy && !state.isSavingProgress && !state.isParsing
+    val proposal = state.replanProposal
+    if (proposal == null && state.replanQuestions.isEmpty()) {
+        Text("計画を見直す", style = MaterialTheme.typography.titleLarge)
+        OutlinedTextField(
+            value = state.replanReason,
+            onValueChange = onReplanReasonChange,
+            label = { Text("見直し理由") },
+            supportingText = { Text("例：予定より忙しく、期限と冊数を調整したい") },
+            enabled = enabled,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Button(onClick = onRequestReplanQuestions, enabled = enabled && state.replanReason.isNotBlank()) {
+            Text(if (state.isLoadingReplan) "質問を生成中…" else "質問へ進む")
+        }
+    } else if (proposal == null) {
+        Text("見直しのための質問", style = MaterialTheme.typography.titleLarge)
+        QuestionCards(state.replanQuestions, onAnswerReplanQuestion, enabled, yesLabel = "はい", noLabel = "いいえ")
+        TextButton(onClick = onEditReplanReason, enabled = enabled) { Text("理由を編集") }
+        Button(onClick = onPreviewReplan, enabled = enabled && state.replanQuestions.all { it.answer != null }) {
+            Text(if (state.isLoadingReplan) "候補を生成中…" else "回答から再計画候補を作る")
+        }
+    } else {
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("変更候補を確認", style = MaterialTheme.typography.titleMedium)
                 Text("まだ保存されていません。変更内容を確認してから適用してください。")
                 listOf("goal" to "目標", "metric" to "メトリクス（測定項目）", "milestone" to "マイルストン（中間目標）").forEach { (type, heading) ->
@@ -658,14 +731,14 @@ private fun ReplanEntry(
                     TextButton(onClick = onCancelReplan, enabled = !state.isApplyingReplan) {
                         Text("候補を取り消す")
                     }
-                    Button(onClick = onApplyReplan, enabled = !state.isApplyingReplan && remaining > 0) {
+                    Button(onClick = onApplyReplan, enabled = enabled && remaining > 0) {
                         Text(if (state.isApplyingReplan) "保存中…" else "この変更を保存")
                     }
                 }
             }
-            state.replanError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
         }
     }
+    state.replanError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 }
 
 @Composable

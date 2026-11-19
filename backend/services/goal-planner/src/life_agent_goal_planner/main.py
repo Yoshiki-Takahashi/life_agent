@@ -34,6 +34,7 @@ from life_agent_goal_planner.schemas import (
     ProgressPreview,
     ProgressPreviewAIRequest,
     ReplanAIRequest,
+    ReplanQuestionAIRequest,
 )
 
 app = FastAPI(title="LifeAgent Goal Planner", version="0.1.0")
@@ -134,10 +135,22 @@ def create_advice(payload: AdviceAIRequest, advisor: AdvisorDependency) -> Advic
         ) from error
 
 
+@app.post("/internal/v1/replan-questions", response_model=GoalQuestions)
+def create_replan_questions(
+    payload: ReplanQuestionAIRequest, replanner: ReplannerDependency
+) -> GoalQuestions:
+    try:
+        return GoalQuestions.model_validate(replanner.questions(payload.goal, payload.reason))
+    except (AIUnavailableError, ValueError, TypeError) as error:
+        raise HTTPException(
+            status_code=503, detail="再計画の質問を生成できませんでした。再試行してください"
+        ) from error
+
+
 @app.post("/internal/v1/replan", response_model=GeneratedReplan)
 def create_replan(payload: ReplanAIRequest, replanner: ReplannerDependency) -> GeneratedReplan:
     try:
-        return replanner.propose(payload.goal, payload.reason)
+        return replanner.propose(payload.goal, payload.reason, payload.answers)
     except AIUnavailableError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,

@@ -25,7 +25,8 @@ interface GoalRepository {
     suspend fun getGoal(goalId: String): Goal
     suspend fun previewProgress(goalId: String, body: String): ProgressPreview
     suspend fun getAdvice(goalId: String): Advice
-    suspend fun previewReplan(goalId: String, reason: String): ReplanProposal
+    suspend fun replanQuestions(goalId: String, reason: String): GoalQuestions
+    suspend fun previewReplan(goalId: String, reason: String, answers: List<GoalAnswer> = emptyList()): ReplanProposal
     suspend fun applyReplan(goalId: String, proposalId: String, excludedChangeIds: List<String> = emptyList()): Goal
     suspend fun recordProgress(
         goalId: String,
@@ -80,8 +81,11 @@ class HttpGoalRepository(
 
     override suspend fun getAdvice(goalId: String): Advice = api.getAdvice(authorization(), goalId)
 
-    override suspend fun previewReplan(goalId: String, reason: String): ReplanProposal =
-        api.previewReplan(authorization(), goalId, ReplanPreviewRequest(reason)).toReplanProposal()
+    override suspend fun replanQuestions(goalId: String, reason: String): GoalQuestions =
+        api.replanQuestions(authorization(), goalId, ReplanQuestionsRequest(reason))
+
+    override suspend fun previewReplan(goalId: String, reason: String, answers: List<GoalAnswer>): ReplanProposal =
+        api.previewReplan(authorization(), goalId, ReplanPreviewRequest(reason, answers)).toReplanProposal()
 
     override suspend fun applyReplan(goalId: String, proposalId: String, excludedChangeIds: List<String>): Goal =
         api.applyReplan(authorization(), goalId, ReplanApplyRequest(proposalId, excludedChangeIds)).toGoal()
@@ -160,6 +164,13 @@ interface GoalApi {
         @Path("goalId") goalId: String,
         @Body request: ProgressLogCreateRequest,
     ): GoalResponse
+
+    @POST("api/v1/goals/{goalId}/replan/questions")
+    suspend fun replanQuestions(
+        @Header("Authorization") authorization: String,
+        @Path("goalId") goalId: String,
+        @Body request: ReplanQuestionsRequest,
+    ): GoalQuestions
 
     @POST("api/v1/goals/{goalId}/replan/preview")
     suspend fun previewReplan(
@@ -385,7 +396,10 @@ data class Advice(
 )
 
 @Serializable
-data class ReplanPreviewRequest(val reason: String)
+data class ReplanQuestionsRequest(val reason: String)
+
+@Serializable
+data class ReplanPreviewRequest(val reason: String, val answers: List<GoalAnswer> = emptyList())
 
 @Serializable
 data class ReplanApplyRequest(

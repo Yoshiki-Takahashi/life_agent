@@ -2,7 +2,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class GoalInput(BaseModel):
@@ -52,17 +52,18 @@ class GoalAnswer(BaseModel):
     answer: bool = Field(strict=True)
 
 
+def unique_answers(value: list[GoalAnswer]) -> list[GoalAnswer]:
+    if len({item.question for item in value}) != len(value):
+        raise ValueError("Duplicate answers")
+    return value
+
+
+GoalAnswers = Annotated[list[GoalAnswer], Field(max_length=8), AfterValidator(unique_answers)]
+
+
 class GoalPlanRequest(GoalInput):
     metric_types_enabled: bool = Field(default=False, strict=True)
-    answers: list[GoalAnswer] = Field(default_factory=list, max_length=8)
-
-    @field_validator("answers")
-    @classmethod
-    def unique_answers(cls, value: list[GoalAnswer]) -> list[GoalAnswer]:
-        questions = [item.question for item in value]
-        if len(questions) != len(set(questions)):
-            raise ValueError("Duplicate answers")
-        return value
+    answers: GoalAnswers = Field(default_factory=list)
 
 
 MetricKind = Literal["cumulative", "occurrence", "measurement", "checklist"]
@@ -142,7 +143,7 @@ class GeneratedReplan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     proposed_plan: GoalPlan
-    diff: list[ReplanDiffItem] = Field(min_length=1, max_length=12)
+    diff: list[ReplanDiffItem] = Field(max_length=12)
 
 
 class ProgressMetricUpdateRequest(BaseModel):
@@ -256,11 +257,15 @@ class AdviceAIRequest(BaseModel):
     goal: GoalResponse
 
 
-class ReplanAIRequest(BaseModel):
+class ReplanQuestionAIRequest(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     goal: GoalResponse
     reason: str = Field(min_length=1, max_length=2000)
+
+
+class ReplanAIRequest(ReplanQuestionAIRequest):
+    answers: GoalAnswers = Field(default_factory=list)
 
 
 class CoachMessage(BaseModel):

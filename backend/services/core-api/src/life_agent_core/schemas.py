@@ -3,7 +3,7 @@ from datetime import date, datetime
 from typing import Annotated, Literal
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
+from pydantic import AfterValidator, BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from life_agent_core.models import GoalStatus
 
@@ -55,17 +55,18 @@ class GoalAnswer(BaseModel):
     answer: bool = Field(strict=True)
 
 
+def unique_answers(value: list[GoalAnswer]) -> list[GoalAnswer]:
+    if len({item.question for item in value}) != len(value):
+        raise ValueError("同じ質問への回答を重複させないでください")
+    return value
+
+
+GoalAnswers = Annotated[list[GoalAnswer], Field(max_length=8), AfterValidator(unique_answers)]
+
+
 class GoalPreviewRequest(GoalInput):
     metric_types_enabled: bool = Field(default=False, strict=True)
-    answers: list[GoalAnswer] = Field(default_factory=list, max_length=8)
-
-    @field_validator("answers")
-    @classmethod
-    def unique_answers(cls, value: list[GoalAnswer]) -> list[GoalAnswer]:
-        questions = [item.question for item in value]
-        if len(questions) != len(set(questions)):
-            raise ValueError("同じ質問への回答を重複させないでください")
-        return value
+    answers: GoalAnswers = Field(default_factory=list)
 
 
 MetricKind = Literal["cumulative", "occurrence", "measurement", "checklist"]
@@ -118,10 +119,14 @@ class GoalPlan(BaseModel):
         return self
 
 
-class ReplanRequest(BaseModel):
+class ReplanReason(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     reason: str = Field(min_length=1, max_length=2000)
+
+
+class ReplanRequest(ReplanReason):
+    answers: GoalAnswers = Field(default_factory=list)
 
 
 class ReplanDiffItem(BaseModel):
@@ -139,7 +144,7 @@ class ReplanCandidate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     proposed_plan: GoalPlan
-    diff: list[ReplanDiffItem] = Field(min_length=1, max_length=12)
+    diff: list[ReplanDiffItem] = Field(max_length=12)
 
 
 class ReplanChange(ReplanDiffItem):

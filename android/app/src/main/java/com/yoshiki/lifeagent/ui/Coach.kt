@@ -174,14 +174,19 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
                     val goal = repository.getGoal(target)
                     if (session != activeSession || inputRevision != revision) return@launch
                     require(goal.id == target)
-                    val preview = repository.previewProgress(goal.id, source)
+                    val (preview, limitMessage) = try {
+                        repository.previewProgress(goal.id, source) to null
+                    } catch (error: HttpException) {
+                        null to (error.aiLimitMessage() ?: throw error)
+                    }
                     if (session != activeSession || inputRevision != revision) return@launch
-                    require(preview.metricUpdates.all { update -> goal.metrics.any { it.id == update.metricId } })
-                    require(preview.metricUpdates.map { it.metricId }.distinct().size == preview.metricUpdates.size)
+                    val updates = preview?.metricUpdates.orEmpty()
+                    require(updates.all { update -> goal.metrics.any { it.id == update.metricId } })
+                    require(updates.map { it.metricId }.distinct().size == updates.size)
                     state.update { it.copy(goal = goal, recordBody = source, reply = response.reply,
-                        phase = CoachPhase.CANDIDATE, warnings = preview.warnings,
+                        phase = CoachPhase.CANDIDATE, warnings = preview?.warnings.orEmpty(), error = limitMessage,
                         metrics = goal.metrics.sortedBy { it.position }.map { metric -> CoachMetricEdit(
-                            metric, progressEditValue(metric, preview.metricUpdates.find { it.metricId == metric.id })) }) }
+                            metric, progressEditValue(metric, updates.find { it.metricId == metric.id })) }) }
                 } else {
                     require(response.intent == "discuss" && response.goalId == null)
                     state.update { it.copy(body = "", phase = CoachPhase.EDITING, reply = null,
@@ -191,7 +196,9 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 if (session == activeSession && inputRevision == revision) state.update {
-                    it.copy(phase = CoachPhase.EDITING, error = "返答を作れませんでした。本文を残しています。再試行してください")
+                    it.copy(phase = CoachPhase.EDITING, error = error.aiLimitMessage()?.let { message ->
+                        "$message。実績は目標詳細から手入力できます"
+                    } ?: "返答を作れませんでした。本文を残しています。再試行してください")
                 }
             }
         }
@@ -336,7 +343,9 @@ class CoachViewModel(private val repository: GoalRepository) : ViewModel() {
             } catch (error: Exception) {
                 if (error is CancellationException) throw error
                 if (session == activeSession) updateTurn(turnId) {
-                    it.copy(adviceLoading = false, adviceError = "記録は保存済みです。助言だけ再試行できます")
+                    it.copy(adviceLoading = false, adviceError = error.aiLimitMessage()?.let { message ->
+                        "記録は保存済みです。$message"
+                    } ?: "記録は保存済みです。助言だけ再試行できます")
                 }
             }
         }

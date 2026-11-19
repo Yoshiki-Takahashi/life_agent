@@ -150,9 +150,10 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
                 _uiState.update { it.copy(questions = result.questions.map(::QuestionEdit),
                     isLoadingQuestions = false, questionError = null, navigateToQuestions = true) }
             } catch (error: CancellationException) { throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 if (version == draftVersion) _uiState.update { it.copy(isLoadingQuestions = false,
-                    formError = "質問を生成できませんでした。入力を保持したまま再試行できます") }
+                    formError = error.aiLimitMessage()
+                        ?: "質問を生成できませんでした。入力を保持したまま再試行できます") }
             }
         }
     }
@@ -208,9 +209,10 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
                     isPreviewing = false, planError = null, navigateToPreview = true,
                 ) }
             } catch (error: CancellationException) { throw error
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 if (version == draftVersion) _uiState.update { it.copy(isPreviewing = false,
-                    questionError = "計画を作成できませんでした。回答と編集内容を保持したまま再試行できます") }
+                    questionError = error.aiLimitMessage()
+                        ?: "計画を作成できませんでした。回答と編集内容を保持したまま再試行できます") }
             }
         }
     }

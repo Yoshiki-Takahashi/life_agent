@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     openai_api_key: str | None = Field(default=None, repr=False)
     openai_model: str = "gpt-5.6-luna"
     openai_timeout_seconds: float = 20.0
+    openai_max_input_tokens: int = Field(default=16_000, gt=0)
 
     @field_validator("openai_api_key")
     @classmethod

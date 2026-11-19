@@ -64,6 +64,13 @@ class ActivityDay(StoredModel):
     log_id: uuid.UUID
 
 
+class AIDailyUsage(StoredModel):
+    schema_version: Literal[1] = 1
+    owner_key: str
+    local_date: date
+    count: int = Field(default=0, ge=0, strict=True)
+
+
 class ProgressLog(StoredModel):
     schema_version: Literal[1, 2] = 2
     id: uuid.UUID = Field(default_factory=uuid.uuid4)

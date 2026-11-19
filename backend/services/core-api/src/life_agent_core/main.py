@@ -6,6 +6,7 @@ from fastapi.responses import JSONResponse
 from google.api_core.exceptions import GoogleAPICallError, RetryError
 
 from life_agent_core import coach, feedback, goals, progress, replan
+from life_agent_core.ai_service import AIInputTooLargeError
 from life_agent_core.config import get_settings
 
 
@@ -23,6 +24,14 @@ for feature in (goals, progress, replan, coach, feedback):
 @app.get("/health")
 def health() -> dict[str, str]:
     return {"status": "ok"}
+
+
+@app.exception_handler(AIInputTooLargeError)
+async def ai_input_too_large(request: Request, error: AIInputTooLargeError):
+    return JSONResponse(
+        status_code=413,
+        content={"detail": "AIに渡す情報が上限を超えました。入力を短くして再試行してください"},
+    )
 
 
 @app.middleware("http")

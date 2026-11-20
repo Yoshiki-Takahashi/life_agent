@@ -98,7 +98,7 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
         "feedback" -> "feedback"
         else -> "home"
     }
-    val detailBusy = detailState.isCompleting || detailState.isSavingProgress || detailState.isParsing ||
+    val detailBusy = detailState.isCompleting || detailState.isSavingProgress ||
         detailState.isApplyingReplan || detailState.isLoadingReplan
     val menuEnabled = when (group) {
         "coach" -> coachState.canLeave
@@ -273,8 +273,6 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onProgressBodyChange = detailViewModel::updateProgressBody,
                     onMetricProgressChange = detailViewModel::updateMetricProgress,
                     onSaveProgress = detailViewModel::saveProgress,
-                    onParseProgress = detailViewModel::parseProgress,
-                    onCancelPreview = detailViewModel::cancelPreview,
                     onLoadAdvice = detailViewModel::loadAdvice,
                     onReview = { requestNavigation("review") },
                     onReplanReasonChange = detailViewModel::updateReplanReason,

@@ -188,12 +188,18 @@ class AppFlowTest {
         compose.onNodeWithText(goal.title).performClick()
         compose.onNodeWithText("記録").performClick()
         for ((index, value) in listOf("13", "0").withIndex()) {
-            compose.onNodeWithText("進捗メモ").performScrollTo().performTextReplacement("確認した実績${index + 1}")
+            if (index == 1) {
+                compose.onNodeWithText("進捗メモ").performScrollTo().performTextReplacement("確認した実績")
+            }
             compose.onNodeWithText("読了冊数 の今回値").performScrollTo().performTextReplacement(value)
             compose.onNodeWithText("読書時間 の今回値").performScrollTo().performTextReplacement("0")
             compose.onNodeWithText("進捗を保存").performScrollTo().performClick()
             compose.waitUntil(20000) { runBlocking { api.getGoal(goal.id).progressLogs.size == index + 1 } }
             waitFor("進捗を保存しました")
+            runBlocking {
+                val latest = api.getGoal(goal.id).progressLogs.first()
+                assertEquals(if (index == 0) "" else "確認した実績", latest.body)
+            }
         }
         compose.onNodeWithText("進捗").performClick()
         compose.onNodeWithText("履歴と現在値を確認できないため推移を表示できません").assertDoesNotExist()
@@ -301,12 +307,9 @@ class AppFlowTest {
         compose.onNodeWithText("進捗メモ").assertDoesNotExist()
         compose.onNodeWithText("記録").performClick()
         compose.onNodeWithText("進捗メモ").assertExists()
+        compose.onNodeWithText("音声入力").assertDoesNotExist()
+        compose.onNodeWithText("進捗メモを解析").assertDoesNotExist()
         compose.onNodeWithText("進捗メモ").performTextReplacement("既存の入力")
-        compose.onNodeWithText("音声入力").performScrollTo().performClick()
-        compose.onNodeWithText("録音開始").performClick()
-        compose.runOnIdle { speech.result("さらに1冊読み終えた") }
-        compose.onNodeWithText("本文に追加").performClick()
-        compose.onNodeWithText("進捗メモ").assertTextContains("既存の入力\nさらに1冊読み終えた")
         assertEquals(3, requests.size)
         compose.onNodeWithText("再計画").performClick()
         compose.onNodeWithText("計画を見直す").assertExists()

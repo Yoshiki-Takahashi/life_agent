@@ -140,7 +140,7 @@ def test_invalid_progress_never_partially_updates(client, create_goal, invalid):
         }[invalid]
     path = f"/api/v1/goals/{goal['id']}"
     result = client.post(
-        path + "/progress", json=dict(body="実績", client_request_id="x", metric_updates=updates)
+        path + "/progress", json=dict(body="", client_request_id="x", metric_updates=updates)
     )
     assert result.status_code == 422
     assert client.get(path).json() == goal
@@ -156,20 +156,24 @@ def test_invalid_progress_never_partially_updates(client, create_goal, invalid):
 def test_zero_and_over_target_progress_round_trip_once(client, create_goal):
     goal = create_goal(extra_metric=True)
     path = f"/api/v1/goals/{goal['id']}"
-    for request_id, values in [("mixed", [13.25, 0]), ("all-zero", [0, 0]), ("beyond", [1, 4])]:
+    operations = [
+        ("mixed", [13.25, 0], {"body": "確認した実績"}),
+        ("all-zero", [0, 0], {"body": " \n "}),
+        ("beyond", [1, 4], {}),
+    ]
+    for request_id, values, memo in operations:
         updates = [
             dict(metric_id=m["id"], value=v) for m, v in zip(goal["metrics"], values, strict=True)
         ]
         for _ in range(2):
             response = client.post(
                 path + "/progress",
-                json=dict(
-                    body="確認した実績", client_request_id=request_id, metric_updates=updates
-                ),
+                json=dict(client_request_id=request_id, metric_updates=updates, **memo),
             )
             assert response.status_code == 200
     result = client.get(path).json()
     assert [m["current_value"] for m in result["metrics"]] == [14.25, 4]
+    assert [log["body"] for log in result["progress_logs"]] == ["", "", "確認した実績"]
     assert [[u["value"] for u in log["metric_updates"]] for log in result["progress_logs"]] == [
         [1, 4],
         [0, 0],

@@ -51,7 +51,6 @@ import com.yoshiki.lifeagent.data.MetricProgressInput
 import com.yoshiki.lifeagent.data.ReplanProposal
 import com.yoshiki.lifeagent.data.Metric
 import com.yoshiki.lifeagent.data.metricInput
-import com.yoshiki.lifeagent.data.progressEditValue
 import com.yoshiki.lifeagent.data.progressLabel
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -74,9 +73,6 @@ data class GoalDetailUiState(
     val metricProgress: List<MetricProgressEdit> = emptyList(),
     val error: String? = null,
     val progressError: String? = null,
-    val isParsing: Boolean = false,
-    val hasPreview: Boolean = false,
-    val parserWarnings: List<String> = emptyList(),
     val advice: Advice? = null,
     val isLoadingAdvice: Boolean = false,
     val adviceError: String? = null,
@@ -113,7 +109,6 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     val uiState: StateFlow<GoalDetailUiState> = _uiState.asStateFlow()
 
     fun loadGoal(goalId: String) {
-        inputRevision++
         adviceRevision++
         requestId = null
         viewModelScope.launch {
@@ -131,9 +126,8 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     fun completeGoal() {
         val state = _uiState.value
         val goal = state.goal ?: return
-        if (state.isLoading || state.isCompleting || state.isSavingProgress || state.isParsing ||
+        if (state.isLoading || state.isCompleting || state.isSavingProgress ||
             state.isApplyingReplan || state.isLoadingReplan || goal.status != "active") return
-        inputRevision++
         adviceRevision++
         _uiState.update { it.copy(isCompleting = true, completionError = null) }
         viewModelScope.launch {
@@ -147,14 +141,11 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     private var pendingUpdates: List<MetricProgressInput>? = null
     private var requestId: String? = null
         set(value) { field = value; if (value == null) pendingUpdates = null }
-    private var inputRevision = 0
     private var adviceRevision = 0
 
     fun updateProgressBody(value: String) {
         if (_uiState.value.isSavingProgress) return
-        inputRevision++
         requestId = null
-        cancelPreview()
         _uiState.update { it.copy(progressBody = value, progressError = null) }
     }
 
@@ -165,7 +156,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     }
 
     fun updateMetricProgress(index: Int, value: String) {
-        if (_uiState.value.isSavingProgress || _uiState.value.isParsing) return
+        if (_uiState.value.isSavingProgress) return
         requestId = null
         _uiState.update { state ->
             state.copy(
@@ -180,10 +171,10 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     fun saveProgress() {
         val state = _uiState.value
         val goal = state.goal ?: return
-        if (state.isSavingProgress || state.isParsing || state.replanBusy) return
+        if (state.isSavingProgress || state.replanBusy) return
         val body = state.progressBody.trim()
-        if (body.isBlank() || body.length > 2000) {
-            _uiState.update { it.copy(progressError = "進捗メモを1〜2,000文字で入力してください") }
+        if (body.length > 2000) {
+            _uiState.update { it.copy(progressError = "進捗メモは2,000文字以内で入力してください") }
             return
         }
         val updates = runCatching { state.metricProgress.mapNotNull { metricInput(it.metric(), it.value) } }
@@ -207,7 +198,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                     requestId = null
                     _uiState.update { it.copy(
                         goal = updatedGoal, progressBody = "", metricProgress = metricProgressEdits(updatedGoal),
-                        isSavingProgress = false, hasPreview = false, parserWarnings = emptyList(), progressSaved = true,
+                        isSavingProgress = false, progressSaved = true,
                     ) }
                     loadAdvice()
                 }
@@ -222,50 +213,6 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
                     }
                 }
         }
-    }
-
-    fun parseProgress() {
-        val state = _uiState.value
-        val goal = state.goal ?: return
-        if (state.isParsing || state.isSavingProgress) return
-        if (state.progressBody.isBlank()) {
-            _uiState.update { it.copy(progressError = "進捗メモを入力してください") }
-            return
-        }
-        val revision = inputRevision
-        _uiState.update { it.copy(isParsing = true, progressError = null) }
-        viewModelScope.launch {
-            runCatching { repository.previewProgress(goal.id, state.progressBody.trim()) }
-                .onSuccess { preview ->
-                    if (revision == inputRevision) {
-                        requestId = null
-                        _uiState.update { current -> current.copy(
-                            hasPreview = true,
-                            parserWarnings = preview.warnings,
-                            metricProgress = current.metricProgress.map { item ->
-                                item.copy(value = progressEditValue(item.metric(), preview.metricUpdates.find { it.metricId == item.metricId }))
-                            },
-                        ) }
-                    }
-                }.onFailure { error ->
-                    if (revision == inputRevision) _uiState.update {
-                        it.copy(progressError = error.aiLimitMessage()?.let { message ->
-                            "$message。実績は手入力できます"
-                        } ?: "解析できませんでした。再試行または手入力してください")
-                    }
-                }
-            _uiState.update { it.copy(isParsing = false) }
-        }
-    }
-
-    fun cancelPreview() {
-        if (_uiState.value.isSavingProgress) return
-        requestId = null
-        _uiState.update { state -> state.copy(
-            hasPreview = false, parserWarnings = emptyList(),
-            metricProgress = if (state.hasPreview) state.metricProgress.map { it.copy(value = "") }
-                else state.metricProgress,
-        ) }
     }
 
     fun loadAdvice() {
@@ -292,7 +239,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     fun requestReplanQuestions() {
         val state = _uiState.value
         val goal = state.goal ?: return
-        if (goal.status != "active" || state.replanBusy || state.isSavingProgress || state.isParsing || state.isCompleting ||
+        if (goal.status != "active" || state.replanBusy || state.isSavingProgress || state.isCompleting ||
             state.isLoading || state.replanQuestions.isNotEmpty()) return
         val reason = state.replanReason.trim()
         if (reason.isEmpty() || reason.length > 2000) {
@@ -335,7 +282,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
     fun previewReplan() {
         val state = _uiState.value
         val goal = state.goal ?: return
-        if (state.replanBusy || state.isSavingProgress || state.isParsing || state.isCompleting || state.isLoading ||
+        if (state.replanBusy || state.isSavingProgress || state.isCompleting || state.isLoading ||
             state.replanProposal != null || goal.status != "active") return
         if (state.replanQuestions.isEmpty() || state.replanQuestions.any { it.answer == null }) return
         val answers = state.replanQuestions.map { GoalAnswer(it.question, requireNotNull(it.answer)) }
@@ -388,7 +335,7 @@ class GoalDetailViewModel(private val repository: GoalRepository) : ViewModel() 
         val state = _uiState.value
         val goal = state.goal ?: return
         val proposal = state.replanProposal ?: return
-        if (state.replanBusy || state.isSavingProgress || state.isParsing || state.isCompleting || state.isLoading) return
+        if (state.replanBusy || state.isSavingProgress || state.isCompleting || state.isLoading) return
         if (proposal.diff.isNotEmpty() && proposal.diff.all { it.changeId in state.excludedReplanChangeIds }) return
         _uiState.update { it.copy(isApplyingReplan = true, replanError = null) }
         viewModelScope.launch {
@@ -438,8 +385,6 @@ fun GoalDetailScreen(
     onProgressBodyChange: (String) -> Unit,
     onMetricProgressChange: (Int, String) -> Unit,
     onSaveProgress: () -> Unit,
-    onParseProgress: () -> Unit = {},
-    onCancelPreview: () -> Unit = {},
     onLoadAdvice: () -> Unit = {},
     onReview: () -> Unit = {},
     onReplanReasonChange: (String) -> Unit = {},
@@ -475,7 +420,7 @@ fun GoalDetailScreen(
                 navigationIcon = { TextButton(onClick = onBack, enabled = !state.isCompleting) { Text("戻る") } },
                 actions = { if (state.goal?.status == "active") TextButton(
                     onClick = { confirmCompletion = true },
-                    enabled = !state.isLoading && !state.isCompleting && !state.isSavingProgress && !state.isParsing &&
+                    enabled = !state.isLoading && !state.isCompleting && !state.isSavingProgress &&
                         !state.isApplyingReplan && !state.isLoadingReplan,
                 ) { Text(if (state.isCompleting) "保存中…" else "完了") } },
             )
@@ -507,8 +452,6 @@ fun GoalDetailScreen(
                             onProgressBodyChange = onProgressBodyChange,
                             onMetricProgressChange = onMetricProgressChange,
                             onSaveProgress = { focusManager.clearFocus(); keyboard?.hide(); onSaveProgress() },
-                            onParseProgress = { focusManager.clearFocus(); keyboard?.hide(); onParseProgress() },
-                            onCancelPreview = onCancelPreview,
                             onLoadAdvice = onLoadAdvice,
                             onReplanReasonChange = onReplanReasonChange,
                             onRequestReplanQuestions = {
@@ -538,8 +481,6 @@ private fun GoalDetail(
     onProgressBodyChange: (String) -> Unit,
     onMetricProgressChange: (Int, String) -> Unit,
     onSaveProgress: () -> Unit,
-    onParseProgress: () -> Unit = {},
-    onCancelPreview: () -> Unit = {},
     onLoadAdvice: () -> Unit = {},
     onReplanReasonChange: (String) -> Unit = {},
     onRequestReplanQuestions: () -> Unit = {},
@@ -611,9 +552,6 @@ private fun GoalDetail(
             onProgressBodyChange = onProgressBodyChange,
             onMetricProgressChange = onMetricProgressChange,
             onSaveProgress = onSaveProgress,
-            onParseProgress = onParseProgress,
-            onCancelPreview = onCancelPreview,
-            onLoadAdvice = onLoadAdvice,
         )
         if (state.progressSaved) Text("進捗を保存しました", color = MaterialTheme.colorScheme.primary)
         if (goal.progressLogs.isNotEmpty()) {
@@ -661,7 +599,7 @@ private fun ReplanEntry(
     onApplyReplan: () -> Unit,
     onToggleReplanChange: (String) -> Unit,
 ) {
-    val enabled = !state.replanBusy && !state.isSavingProgress && !state.isParsing
+    val enabled = !state.replanBusy && !state.isSavingProgress
     val proposal = state.replanProposal
     if (proposal == null && state.replanQuestions.isEmpty()) {
         Text("計画を見直す", style = MaterialTheme.typography.titleLarge)
@@ -747,9 +685,6 @@ private fun ProgressEntry(
     onProgressBodyChange: (String) -> Unit,
     onMetricProgressChange: (Int, String) -> Unit,
     onSaveProgress: () -> Unit,
-    onParseProgress: () -> Unit = {},
-    onCancelPreview: () -> Unit = {},
-    onLoadAdvice: () -> Unit = {},
 ) {
     Text("進捗を記録", style = MaterialTheme.typography.titleLarge)
     Card(Modifier.fillMaxWidth()) {
@@ -759,28 +694,15 @@ private fun ProgressEntry(
                 onValueChange = onProgressBodyChange,
                 label = { Text("進捗メモ") },
                 enabled = !state.isSavingProgress,
-                supportingText = { Text("例：今日は2冊読み終えた") },
+                supportingText = { Text("任意。例：今日は2冊読み終えた") },
                 modifier = Modifier.fillMaxWidth(),
             )
-            SpeechInputButton(body = state.progressBody, enabled = !state.isParsing && !state.isSavingProgress,
-                onBodyChange = onProgressBodyChange)
-            Button(onClick = onParseProgress, enabled = !state.isParsing && !state.isSavingProgress) {
-                Text(if (state.isParsing) "解析中…" else "進捗メモを解析")
-            }
-            if (state.hasPreview) {
-                Text("更新候補を確認", style = MaterialTheme.typography.titleMedium)
-                Text("まだ保存されていません。種別に合う記録内容を確認・修正してください。")
-                TextButton(onClick = onCancelPreview, enabled = !state.isSavingProgress && !state.isParsing) {
-                    Text("候補を取り消して手入力")
-                }
-            }
-            state.parserWarnings.forEach { Text(it) }
             state.metricProgress.forEachIndexed { index, item ->
-                MetricValueField(item.metric(), item.value, !state.isSavingProgress && !state.isParsing,
+                MetricValueField(item.metric(), item.value, !state.isSavingProgress,
                     onChange = { onMetricProgressChange(index, it) })
             }
             state.progressError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
-            Button(onClick = onSaveProgress, enabled = !state.isSavingProgress && !state.isParsing) {
+            Button(onClick = onSaveProgress, enabled = !state.isSavingProgress) {
                 if (state.isSavingProgress) CircularProgressIndicator() else Text("進捗を保存")
             }
         }
@@ -796,7 +718,7 @@ private fun ProgressHistory(goal: Goal) {
         goal.progressLogs.forEach { log ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(log.body, style = MaterialTheme.typography.titleMedium)
+                    if (log.body.isNotBlank()) Text(log.body, style = MaterialTheme.typography.titleMedium)
                     log.metricUpdates.forEach { update ->
                         Text(
                             progressLabel(update),

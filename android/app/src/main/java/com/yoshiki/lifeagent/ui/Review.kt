@@ -70,7 +70,7 @@ fun ReviewScreen(goal: Goal?, userId: String, onBack: () -> Unit) {
         logs.forEach { log ->
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp)) {
-                    Text(log.body)
+                    if (log.body.isNotBlank()) Text(log.body)
                     log.metricUpdates.forEach { Text(progressLabel(it)) }
                     Text(log.recordedAt)
                 }

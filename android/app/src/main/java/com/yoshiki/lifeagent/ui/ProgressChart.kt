@@ -128,8 +128,7 @@ fun activityDays(metric: Metric, logs: List<ProgressLog>): Set<LocalDate> = logs
 private fun ActivityCalendar(metric: Metric, logs: List<ProgressLog>) {
     var month by remember(metric.id) { mutableStateOf(YearMonth.now()) }
     val days = activityDays(metric, logs)
-    val primary = MaterialTheme.colorScheme.primaryContainer
-    val empty = MaterialTheme.colorScheme.surfaceContainerHighest
+    val colors = MaterialTheme.colorScheme
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(metric.name, style = MaterialTheme.typography.titleMedium)
@@ -148,14 +147,22 @@ private fun ActivityCalendar(metric: Metric, logs: List<ProgressLog>) {
                 repeat(7) { day ->
                     val date = start.plusDays((week * 7 + day).toLong())
                     val visible = YearMonth.from(date) == month
-                    Box(Modifier.weight(1f).height(30.dp).background(if (visible && date in days) primary else empty)
-                        .semantics { contentDescription = if (visible) "$date ${if (date in days) "実行済み" else "記録なし"}" else "月外" },
-                        contentAlignment = Alignment.Center) {
-                        if (visible) Text(date.dayOfMonth.toString())
+                    val recorded = visible && date in days
+                    Box(
+                        Modifier.weight(1f).height(30.dp)
+                            .background(if (recorded) colors.primary else colors.surfaceContainerHighest)
+                            .semantics {
+                                contentDescription = if (visible) "$date ${if (recorded) "実行済み" else "記録なし"}" else "月外"
+                            },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        if (visible) {
+                            Text(date.dayOfMonth.toString(), color = if (recorded) colors.onPrimary else colors.onSurface)
+                        }
                     }
                 }
             } }
-            Text("色付きは実行を記録した日です。空欄は未記録で、未実施とは限りません。")
+            Text("強調表示は実行を記録した日です。未記録の日も実行している場合があります。")
         }
     }
 }

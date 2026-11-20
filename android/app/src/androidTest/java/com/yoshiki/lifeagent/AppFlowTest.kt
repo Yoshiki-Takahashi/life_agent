@@ -176,12 +176,18 @@ class AppFlowTest {
         compose.onNodeWithText(goal.title).performClick()
         compose.onNodeWithText("記録").performClick()
         for ((index, value) in listOf("13", "0").withIndex()) {
-            compose.onNodeWithText("進捗メモ").performScrollTo().performTextReplacement("確認した実績${index + 1}")
+            if (index == 1) {
+                compose.onNodeWithText("進捗メモ").performScrollTo().performTextReplacement("確認した実績")
+            }
             compose.onNodeWithText("読了冊数 の今回値").performScrollTo().performTextReplacement(value)
             compose.onNodeWithText("読書時間 の今回値").performScrollTo().performTextReplacement("0")
             compose.onNodeWithText("進捗を保存").performScrollTo().performClick()
             compose.waitUntil(20000) { runBlocking { api.getGoal(goal.id).progressLogs.size == index + 1 } }
             waitFor("進捗を保存しました")
+            runBlocking {
+                val latest = api.getGoal(goal.id).progressLogs.first()
+                assertEquals(if (index == 0) "" else "確認した実績", latest.body)
+            }
         }
         compose.onNodeWithText("進捗").performClick()
         compose.onNodeWithText("履歴と現在値を確認できないため推移を表示できません").assertDoesNotExist()

@@ -217,7 +217,7 @@ class ProgressMetricUpdateRequest(BaseModel):
 
 
 class ProgressLogCreateRequest(BaseModel):
-    body: str = Field(min_length=1, max_length=2000)
+    body: str = Field(default="", max_length=2000)
     client_request_id: str = Field(min_length=1, max_length=64)
     metric_updates: list[ProgressMetricUpdateRequest] = Field(min_length=1, max_length=10)
 

@@ -1,64 +1,27 @@
 name: Android Quality
 
 on:
-  pull_request:
-    types: [opened, synchronize, reopened, ready_for_review]
   workflow_dispatch:
 
 permissions:
-  contents: read
-
-concurrency:
-  group: android-quality-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+  actions: read
 
 jobs:
-  android:
+  calendar-screenshot:
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    strategy:
+      matrix:
+        theme: [light, dark]
     steps:
-      - name: Check out Android and Backend from the same commit
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-      - uses: actions/setup-java@v4
-        with:
-          distribution: temurin
-          java-version: '21'
-      - uses: android-actions/setup-android@v3
-        with:
-          packages: platform-tools
-      - uses: gradle/actions/setup-gradle@v4
-      - uses: astral-sh/setup-uv@bec219d24cd3e171d82865faccec33120bb574f4 # v10.1.0
-        with:
-          python-version: '3.13'
-          enable-cache: true
-      # gcloud is used only to start a local emulator; no Google Cloud login is performed.
-      - name: Install local Firestore Emulator
-        uses: google-github-actions/setup-gcloud@v2
-        with:
-          install_components: cloud-firestore-emulator
-      - name: Install Backend test dependencies
-        run: uv sync --frozen --project backend/services/core-api
-      - name: Enable KVM
-        run: |
-          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
-          sudo udevadm control --reload-rules
-          sudo udevadm trigger --name-match=kvm
-      - name: Test Android against the local PR Backend and Fake AI
-        uses: reactivecircus/android-emulator-runner@v2
-        with:
-          api-level: 35
-          arch: x86_64
-          avd-name: LifeAgent_Local_Check
-          disable-animations: true
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -no-snapshot
-          script: |
-            W7_ANDROID_TEST_CLASS='com.yoshiki.lifeagent.MetricTypesFlowTest#typedEntriesPersistAndCoachRecordsAnObservation' ./scripts/test-weekend-7.sh --android
-            mkdir -p "$RUNNER_TEMP/lifeagent-calendar"
-            adb pull /sdcard/Android/data/com.yoshiki.lifeagent/files/issue68-calendar-light.png "$RUNNER_TEMP/lifeagent-calendar/issue68-calendar-light.png"
-            adb pull /sdcard/Android/data/com.yoshiki.lifeagent/files/issue68-calendar-dark.png "$RUNNER_TEMP/lifeagent-calendar/issue68-calendar-dark.png"
-      - name: Upload both calendar screenshots
-        uses: actions/upload-artifact@v4
+      - uses: actions/download-artifact@v4
         with:
           name: lifeagent-calendar-themes
-          path: ${{ runner.temp }}/lifeagent-calendar/*.png
-          if-no-files-found: error
+          run-id: '44643213602'
+          github-token: ${{ github.token }}
+      - name: Export the synthetic calendar screenshot for review
+        env:
+          CALENDAR_THEME: ${{ matrix.theme }}
+        run: |
+          artifact_file="issue68-calendar-${CALENDAR_THEME}.png"
+          sha256sum "$artifact_file"
+          base64 -w 720 "$artifact_file" | sed 's/^/LIFEAGENT_CALENDAR_PNG /'

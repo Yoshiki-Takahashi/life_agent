@@ -63,6 +63,7 @@ def test_other_uids_cannot_use_any_business_api(restricted_api, token):
         ("POST", goal + "/progress"),
         ("POST", goal + "/progress/preview"),
         ("POST", goal + "/advice"),
+        ("POST", goal + "/replan/questions"),
         ("POST", goal + "/replan/preview"),
         ("POST", goal + "/replan/apply"),
         ("POST", "/api/v1/coach/messages"),

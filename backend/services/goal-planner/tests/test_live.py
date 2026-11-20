@@ -10,7 +10,7 @@ from life_agent_goal_planner.config import Settings
 from life_agent_goal_planner.planner import OpenAIGoalPlanner
 from life_agent_goal_planner.progress import OpenAIAdvisor, OpenAIProgressParser
 from life_agent_goal_planner.replan import OpenAIReplanner
-from life_agent_goal_planner.schemas import GoalInput, GoalPlanRequest
+from life_agent_goal_planner.schemas import GoalAnswer, GoalInput, GoalPlanRequest
 
 pytestmark = [
     pytest.mark.live_ai,
@@ -53,7 +53,17 @@ def test_three_domain_regression(title, name, unit, body):
     context = goal(title, "無理なく", [(name, unit, 0, 12)])
     assert OpenAIProgressParser(settings).parse(context, body).metric_updates[0].value == 1
     assert OpenAIAdvisor(settings).advise(context).next_actions
-    assert OpenAIReplanner(settings).propose(context, "期限を延ばして負担を減らしたい").diff
+    replanner = OpenAIReplanner(settings)
+    reason = "期限を延ばして負担を減らしたい"
+    replan_questions = replanner.questions(context, reason).questions
+    assert 3 <= len(replan_questions) <= 8
+    assert all("?" in q or "？" in q or "か" in q for q in replan_questions)
+    replan = replanner.propose(
+        context,
+        reason,
+        [GoalAnswer(question=q, answer=index % 2 == 0) for index, q in enumerate(replan_questions)],
+    )
+    assert replan.diff
 
 
 @pytest.mark.parametrize(

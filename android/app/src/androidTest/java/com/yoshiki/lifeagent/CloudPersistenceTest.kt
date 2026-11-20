@@ -65,7 +65,7 @@ class CloudPersistenceTest {
         compose.waitUntil(35000) {
             compose.onAllNodesWithText("進捗").fetchSemanticsNodes().isNotEmpty()
         }
-        listOf("概要", "進捗", "記録", "計画").forEach {
+        listOf("概要", "進捗", "記録", "再計画").forEach {
             compose.onNodeWithText(it).assertIsDisplayed()
         }
     }

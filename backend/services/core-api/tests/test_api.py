@@ -104,6 +104,7 @@ def test_authentication_and_owner_isolation(client, unauthenticated_client, crea
         for operation, payload in [
             ("progress/preview", {"body": "実績"}),
             ("advice", {}),
+            ("replan/questions", {"reason": "見直し"}),
             ("replan/preview", {"reason": "見直し"}),
             ("replan/apply", {"proposal_id": str(uuid4())}),
         ]:

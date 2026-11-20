@@ -1,4 +1,5 @@
 import uuid
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from functools import lru_cache
@@ -24,7 +25,9 @@ from life_agent_core.goals import goal_response, load_goal, load_goal_with_detai
 from life_agent_core.models import Goal, Metric, Milestone, ReplanProposalStatus
 from life_agent_core.models import ReplanProposal as ReplanProposalModel
 from life_agent_core.schemas import (
+    GoalAnswer,
     GoalPlan,
+    GoalQuestions,
     GoalResponse,
     MetricDraft,
     MilestoneDraft,
@@ -33,6 +36,7 @@ from life_agent_core.schemas import (
     ReplanChange,
     ReplanDiffItem,
     ReplanProposal,
+    ReplanReason,
     ReplanRequest,
 )
 
@@ -40,7 +44,11 @@ router = APIRouter()
 
 
 class Replanner(Protocol):
-    def propose(self, context: GoalResponse, reason: str) -> ReplanCandidate: ...
+    def questions(self, context: GoalResponse, reason: str) -> GoalQuestions: ...
+
+    def propose(
+        self, context: GoalResponse, reason: str, answers: Sequence[GoalAnswer] = ()
+    ) -> ReplanCandidate: ...
 
 
 def validate_replan(result: ReplanCandidate, context: GoalResponse) -> ReplanCandidate:
@@ -63,9 +71,30 @@ def validate_replan(result: ReplanCandidate, context: GoalResponse) -> ReplanCan
 
 
 class FakeReplanner:
-    def propose(self, context: GoalResponse, reason: str) -> ReplanCandidate:
+    def questions(self, context: GoalResponse, reason: str) -> GoalQuestions:
+        questions = [
+            f"「{context.title[:120]}」の目標期限を延ばせますか？",
+            f"「{context.metrics[0].name}」の目標値を調整できますか？",
+            "中間目標を見直し、次に取り組むことを明確にしますか？",
+        ]
+        if len(context.metrics) > 1:
+            questions.append(f"末尾の測定項目「{context.metrics[-1].name}」を外しますか？")
+        return GoalQuestions(questions=questions)
+
+    def propose(
+        self, context: GoalResponse, reason: str, answers: Sequence[GoalAnswer] = ()
+    ) -> ReplanCandidate:
         today = date.today()
-        target_date = max(context.target_date + timedelta(days=14), today + timedelta(days=21))
+        choices = {answer.question: answer.answer for answer in answers}
+        deadline, target, milestones, *additional = self.questions(context, reason).questions
+        extra_metrics = context.metrics[1:] if answers else []
+        if additional and choices.get(additional[0]):
+            extra_metrics = extra_metrics[:-1]
+        target_date = (
+            max(context.target_date + timedelta(days=14), today + timedelta(days=21))
+            if choices.get(deadline, True)
+            else max(context.target_date, today)
+        )
         metric = context.metrics[0]
         current = Decimal(str(metric.current_value))
         current_target = Decimal(str(metric.target_value))
@@ -76,7 +105,25 @@ class FakeReplanner:
             proposed_target = current_target
         if metric.kind == "occurrence":
             proposed_target = max(Decimal("1"), proposed_target.to_integral_value())
+        if not choices.get(target, True):
+            proposed_target = current_target
         days = max((target_date - today).days, 0)
+        proposed_milestones = [
+            MilestoneDraft(
+                title="見直し後の最初の一歩を完了する",
+                target_date=today + timedelta(days=days // 3),
+            ),
+            MilestoneDraft(
+                title="中間地点の進捗を確認する",
+                target_date=today + timedelta(days=(days * 2) // 3),
+            ),
+            MilestoneDraft(title="更新後のGoal期限を迎える", target_date=target_date),
+        ]
+        if not choices.get(milestones, True):
+            proposed_milestones = [
+                MilestoneDraft(title=item.title, target_date=max(item.target_date, today))
+                for item in context.milestones
+            ]
         return ReplanCandidate(
             proposed_plan={
                 "title": context.title,
@@ -89,19 +136,13 @@ class FakeReplanner:
                         "unit": metric.unit,
                         "kind": metric.kind,
                         "checklist_items": metric.checklist_items,
-                    }
-                ],
-                "milestones": [
-                    {
-                        "title": "見直し後の最初の一歩を完了する",
-                        "target_date": today + timedelta(days=days // 3),
                     },
-                    {
-                        "title": "中間地点の進捗を確認する",
-                        "target_date": today + timedelta(days=(days * 2) // 3),
-                    },
-                    {"title": "更新後のGoal期限を迎える", "target_date": target_date},
+                    *[
+                        item.model_dump(include=set(MetricDraft.model_fields))
+                        for item in extra_metrics
+                    ],
                 ],
+                "milestones": proposed_milestones,
             },
             diff=[
                 ReplanDiffItem(
@@ -132,22 +173,53 @@ def get_replanner() -> Replanner:
     return FakeReplanner()
 
 
+ReplannerDependency = Annotated[Replanner, Depends(get_replanner)]
+
+
+@router.post("/api/v1/goals/{goal_id}/replan/questions", response_model=GoalQuestions)
+def replan_questions(
+    goal_id: uuid.UUID,
+    payload: ReplanReason,
+    db: Database,
+    user_id: CurrentUserId,
+    replanner: ReplannerDependency,
+) -> GoalQuestions:
+    goal = load_goal(goal_id, db, user_id)
+    require_active(goal)
+    reserve_ai_call(db, user_id)
+    try:
+        return GoalQuestions.model_validate(
+            replanner.questions(goal_response(goal), payload.reason)
+        )
+    except (AIUnavailableError, ValueError, TypeError) as error:
+        raise HTTPException(
+            status_code=503, detail="再計画の質問を生成できませんでした。再試行してください"
+        ) from error
+
+
 @router.post("/api/v1/goals/{goal_id}/replan/preview", response_model=ReplanProposal)
 def preview_replan(
     goal_id: uuid.UUID,
     payload: ReplanRequest,
     db: Database,
     user_id: CurrentUserId,
-    replanner: Annotated[Replanner, Depends(get_replanner)],
+    replanner: ReplannerDependency,
 ) -> ReplanProposal:
     goal = load_goal(goal_id, db, user_id)
     require_active(goal)
     context = goal_response(goal)
     reserve_ai_call(db, user_id)
     try:
-        candidate = validate_replan(replanner.propose(context, payload.reason), context)
+        candidate = validate_replan(
+            replanner.propose(context, payload.reason, payload.answers), context
+        )
         changes = plan_changes(context, candidate.proposed_plan)
         if not changes:
+            if payload.answers:
+                raise HTTPException(
+                    status_code=409,
+                    detail={"code": "replan_no_changes"},
+                )
             raise ValueError("計画に変更がありません")
     except (AIUnavailableError, ValueError, TypeError) as error:
         raise HTTPException(

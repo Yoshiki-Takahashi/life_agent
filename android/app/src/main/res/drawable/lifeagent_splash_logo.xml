@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Percentage padding scales with the system icon bounds, including density changes. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="18%">
+    <bitmap android:src="@drawable/lifeagent_logo" android:gravity="fill" android:filter="true" />
+</inset>

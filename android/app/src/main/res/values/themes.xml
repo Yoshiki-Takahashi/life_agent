@@ -2,4 +2,9 @@
 <resources>
 
     <style name="Theme.LifeAgent" parent="android:Theme.Material.Light.NoActionBar" />
+    <style name="Theme.LifeAgent.Starting" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@android:color/white</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/lifeagent_splash_logo</item>
+        <item name="postSplashScreenTheme">@style/Theme.LifeAgent</item>
+    </style>
 </resources>

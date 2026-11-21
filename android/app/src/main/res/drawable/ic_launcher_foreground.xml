@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Keep the selected artwork within the adaptive icon's safe zone. -->
 <inset xmlns:android="http://schemas.android.com/apk/res/android"
-    android:inset="16.666667%">
+    android:inset="-10%">
     <bitmap
         android:src="@drawable/ic_launcher_artwork"
         android:gravity="fill"

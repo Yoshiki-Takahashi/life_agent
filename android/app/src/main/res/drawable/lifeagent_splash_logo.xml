@@ -1,12 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
-    <item android:width="288dp" android:height="288dp">
-        <shape android:shape="rectangle">
-            <solid android:color="@android:color/transparent" />
-        </shape>
-    </item>
-    <!-- Keep both the mark and wordmark inside the system splash's 192dp safe circle. -->
-    <item android:width="220dp" android:height="220dp" android:gravity="center">
-        <bitmap android:src="@drawable/lifeagent_logo" android:gravity="fill" android:filter="true" />
-    </item>
-</layer-list>
+<!-- Percentage padding scales with the system icon bounds, including density changes. -->
+<inset xmlns:android="http://schemas.android.com/apk/res/android" android:inset="18%">
+    <bitmap android:src="@drawable/lifeagent_logo" android:gravity="fill" android:filter="true" />
+</inset>

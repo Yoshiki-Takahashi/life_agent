@@ -5,7 +5,7 @@
 責務:
 
 - OpenAI APIの呼び出し
-- GoalのYes / No質問、回答に基づく初期計画、Progress Parser、AdvisorのStructured Output生成
+- GoalのYes / No質問、回答に基づく初期計画と再計画、Progress Parser、AdvisorのStructured Output生成
 - プロンプトとSchemaのバージョン管理
 - 読書、アプリ開発、筋トレと、実行日・測定値・チェックリストの回帰評価
 
@@ -28,7 +28,8 @@ Cloud Runでは非公開serviceとしてdeployし、Core APIのruntime service a
 - `GOAL_PLANNER_PROVIDER`: 通常は`openai`。キー不要E2Eだけ`fake`を使用
 - `PROGRESS_PARSER_PROVIDER`: `openai`または`fake`。既定値は`fake`
 - `ADVISOR_PROVIDER`: `openai`または`fake`。既定値は`fake`
-- `REPLANNER_PROVIDER`: `openai`または`fake`。既定値は`fake`。内部APIは`POST /internal/v1/replan`
+- `REPLANNER_PROVIDER`: `openai`または`fake`。既定値は`fake`。
+  内部APIは`POST /internal/v1/replan-questions`と`POST /internal/v1/replan`
 - `OPENAI_API_KEY`: 実AI利用時に必須
 - `OPENAI_MODEL`: 既定値`gpt-5.6-luna`
 - `OPENAI_TIMEOUT_SECONDS`: 既定値20秒

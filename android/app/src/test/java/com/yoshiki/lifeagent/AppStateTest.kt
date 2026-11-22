@@ -175,8 +175,22 @@ class AppStateTest {
         detail.loadGoal("reading")
         advanceUntilIdle()
         detail.updateReplanReason("無理なく続けたい")
+        detail.requestReplanQuestions()
+        advanceUntilIdle()
+        val questions = detail.uiState.value.replanQuestions.map { it.question }
+        detail.answerReplanQuestion(0, true)
         detail.previewReplan()
         advanceUntilIdle()
+        assertTrue(repository.replanAnswers.isEmpty())
+        questions.indices.drop(1).forEach { detail.answerReplanQuestion(it, false) }
+        repository.failReplanPreview = true
+        detail.previewReplan()
+        advanceUntilIdle()
+        assertNull(detail.uiState.value.replanProposal)
+        detail.previewReplan()
+        advanceUntilIdle()
+        val answers = questions.mapIndexed { index, question -> GoalAnswer(question, index == 0) }
+        assertEquals(listOf(answers, answers), repository.replanAnswers)
         assertEquals(0, repository.applyCalls)
         detail.applyReplan()
         advanceUntilIdle()
@@ -379,9 +393,11 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
     var questionCalls = 0
     var failQuestions = false
     var failPreview = false
+    var failReplanPreview = false
     var failConfirm = false
     var pendingQuestions: CompletableDeferred<GoalQuestions>? = null
     val previewRequests = mutableListOf<GoalPreviewRequest>()
+    val replanAnswers = mutableListOf<List<GoalAnswer>>()
     var confirmed: GoalPlan? = null
     private fun goal(id: String, metricId: String, unit: String) = Goal(id, id, null, date,
         "active", "2026-01-01T00:00:00Z", listOf(Metric(metricId, 12.0, unit, id=metricId)) +
@@ -432,8 +448,14 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
         confirmed = plan
         return getGoal("reading")
     }
-    override suspend fun previewReplan(goalId: String, reason: String) = ReplanProposal("proposal", 1, reason,
-        previewGoal(goalId, null, date), emptyList(), "2026-01-01T00:00:00Z")
+    override suspend fun replanQuestions(goalId: String, reason: String): GoalQuestions =
+        GoalQuestions(listOf("読書時間を減らしたいですか？", "読書メモを続けたいですか？", "期限を延ばしたいですか？"))
+
+    override suspend fun previewReplan(goalId: String, reason: String, answers: List<GoalAnswer>): ReplanProposal {
+        replanAnswers += answers
+        if (failReplanPreview) { failReplanPreview = false; error("unavailable") }
+        return ReplanProposal("proposal", 1, reason, previewGoal(goalId, null, date), emptyList(), "2026-01-01T00:00:00Z")
+    }
     override suspend fun applyReplan(goalId: String, proposalId: String, excludedChangeIds: List<String>): Goal {
         applyCalls++; return getGoal(goalId).copy(planRevision=2)
     }

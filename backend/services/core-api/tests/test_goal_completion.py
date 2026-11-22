@@ -28,6 +28,7 @@ def test_completion_archives_preserves_history_and_is_idempotent(client, create_
         == 409
     )
     assert client.post(path + "/replan/preview", json={"reason": "変更"}).status_code == 409
+    assert client.post(path + "/replan/questions", json={"reason": "変更"}).status_code == 409
     assert (
         client.post(
             path + "/replan/apply", json={"proposal_id": proposal["proposal_id"]}

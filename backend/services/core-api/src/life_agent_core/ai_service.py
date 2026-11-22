@@ -1,4 +1,5 @@
 import logging
+from collections.abc import Sequence
 from typing import Any
 
 import httpx
@@ -12,6 +13,8 @@ from life_agent_core.schemas import (
     Advice,
     CoachAIRequest,
     CoachReply,
+    GoalAnswer,
+    GoalQuestions,
     GoalResponse,
     ProgressPreview,
     ReplanCandidate,
@@ -75,10 +78,20 @@ class HttpReplanner:
     def __init__(self, settings: Settings):
         self.client = InternalAIClient(settings)
 
-    def propose(self, context: GoalResponse, reason: str) -> ReplanCandidate:
+    def questions(self, context: GoalResponse, reason: str) -> GoalQuestions:
         return self.client.generate(
-            "replan", {"goal": context.model_dump(mode="json"), "reason": reason}, ReplanCandidate
+            "replan-questions",
+            {"goal": context.model_dump(mode="json"), "reason": reason},
+            GoalQuestions,
         )
+
+    def propose(
+        self, context: GoalResponse, reason: str, answers: Sequence[GoalAnswer] = ()
+    ) -> ReplanCandidate:
+        payload = {"goal": context.model_dump(mode="json"), "reason": reason}
+        if answers:
+            payload["answers"] = [answer.model_dump(mode="json") for answer in answers]
+        return self.client.generate("replan", payload, ReplanCandidate)
 
 
 class HttpCoach:

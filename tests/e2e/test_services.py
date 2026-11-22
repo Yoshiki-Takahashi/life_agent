@@ -11,7 +11,9 @@ def test_core_ai_and_database_boundary():
     url = os.getenv("CORE_API_URL")
     if not url:
         pytest.skip("Run scripts/test-weekend-3.sh for isolated integration")
-    with httpx.Client(base_url=url, headers={"Authorization": f"Bearer {uuid4()}"}) as client:
+    with httpx.Client(
+        base_url=url, headers={"Authorization": f"Bearer {uuid4()}"}, timeout=60
+    ) as client:
         goal_input = {"title": "本を読む", "target_date": str(date.today() + timedelta(days=90))}
         questions = client.post("/api/v1/goals/questions", json=goal_input)
         assert questions.status_code == 200
@@ -30,7 +32,20 @@ def test_core_ai_and_database_boundary():
             metric_updates=candidate["metric_updates"])).json()
         assert saved["metrics"][0]["current_value"] == 1
         assert client.post(path + "/advice").json()["next_actions"]
-        proposal = client.post(path + "/replan/preview", json={"reason": "無理なく続けたい"}).json()
+        reason = "期限はそのままで、読書量を調整したい"
+        questions = client.post(path + "/replan/questions", json={"reason": reason})
+        assert questions.status_code == 200, questions.text
+        assert 3 <= len(questions.json()["questions"]) <= 8
+        answers = [
+            dict(question=question, answer=index != 0)
+            for index, question in enumerate(questions.json()["questions"])
+        ]
+        preview = client.post(path + "/replan/preview", json={"reason": reason, "answers": answers})
+        assert preview.status_code == 200, preview.text
+        proposal = preview.json()
+        assert proposal["proposed_plan"]["target_date"] == goal["target_date"]
+        assert proposal["proposed_plan"]["metrics"][0]["target_value"] < 12
+        assert client.get(path).json() == saved
         updated = client.post(path + "/replan/apply", json={"proposal_id": proposal["proposal_id"]}).json()
         assert updated["plan_revision"] == 2 and len(updated["progress_logs"]) == 1
         reply = client.post("/api/v1/coach/messages", json={"body": "全目標を相談"})

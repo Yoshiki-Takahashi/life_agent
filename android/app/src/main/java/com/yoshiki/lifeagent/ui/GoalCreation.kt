@@ -392,22 +392,33 @@ fun GoalQuestionsScreen(state: GoalUiState, onAnswer: (Int, Boolean) -> Unit,
             verticalArrangement = Arrangement.spacedBy(16.dp)) {
             Text(state.title, style = MaterialTheme.typography.headlineSmall)
             Text("AIからの質問です。Yes / Noで答えると、測定項目と中間目標を具体化できます。")
-            Text("${state.questions.count { it.answer != null }} / ${state.questions.size} 回答済み")
-            state.questions.forEachIndexed { index, item ->
-                Card(Modifier.fillMaxWidth().testTag("question-$index")) {
-                    Column(Modifier.padding(16.dp)) {
-                        Text("${index + 1}. ${item.question}")
-                        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                            FilterChip(item.answer == true, { onAnswer(index, true) }, label = { Text("Yes") }, enabled = !state.isBusy)
-                            FilterChip(item.answer == false, { onAnswer(index, false) }, label = { Text("No") }, enabled = !state.isBusy)
-                        }
-                    }
-                }
-            }
+            QuestionCards(state.questions, onAnswer, enabled = !state.isBusy)
             state.questionError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onPreview, Modifier.fillMaxWidth(), enabled = !state.isBusy &&
                 state.questions.isNotEmpty() && state.questions.all { it.answer != null }) {
                 if (state.isPreviewing) CircularProgressIndicator() else Text("回答から計画を作る")
+            }
+        }
+    }
+}
+
+@Composable
+internal fun QuestionCards(
+    questions: List<QuestionEdit>,
+    onAnswer: (Int, Boolean) -> Unit,
+    enabled: Boolean,
+    yesLabel: String = "Yes",
+    noLabel: String = "No",
+) {
+    Text("${questions.count { it.answer != null }} / ${questions.size} 回答済み")
+    questions.forEachIndexed { index, item ->
+        Card(Modifier.fillMaxWidth().testTag("question-$index")) {
+            Column(Modifier.padding(16.dp)) {
+                Text("${index + 1}. ${item.question}")
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FilterChip(item.answer == true, { onAnswer(index, true) }, label = { Text(yesLabel) }, enabled = enabled)
+                    FilterChip(item.answer == false, { onAnswer(index, false) }, label = { Text(noLabel) }, enabled = enabled)
+                }
             }
         }
     }

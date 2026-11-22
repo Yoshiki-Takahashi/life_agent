@@ -10,8 +10,20 @@ from life_agent_core.replan import FakeReplanner, get_replanner
 from life_agent_core.schemas import GoalPlan
 
 
+def test_replan_with_no_matching_changes_returns_specific_conflict(client, create_goal):
+    goal = create_goal(extra_metric=True)
+    path = f"/api/v1/goals/{goal['id']}"
+    reason = {"reason": "いまの計画を確認したい"}
+    questions = client.post(path + "/replan/questions", json=reason).json()["questions"]
+    answers = [dict(question=question, answer=False) for question in questions]
+    preview = client.post(path + "/replan/preview", json={**reason, "answers": answers})
+    assert preview.status_code == 409
+    assert preview.json()["detail"]["code"] == "replan_no_changes"
+    assert client.get(path).json() == goal
+
+
 def preview(client, goal, edit):
-    def propose(context, reason):
+    def propose(context, reason, answers):
         candidate = FakeReplanner().propose(context, reason)
         plan = {
             "title": context.title,

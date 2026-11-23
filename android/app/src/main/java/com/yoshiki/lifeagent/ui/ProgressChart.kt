@@ -65,7 +65,7 @@ fun metricTrend(metric: Metric, logs: List<ProgressLog>): List<TrendPoint> {
 }
 
 internal class ProgressTimeAxis(firstTimestamp: Long, lastTimestamp: Long, private val zone: ZoneId) {
-    private val firstMonth = monthAt(firstTimestamp)
+    val firstMonth = monthAt(firstTimestamp)
     private val lastMonth = monthAt(lastTimestamp)
     private val start = monthStart(firstMonth)
     private val span = monthStart(lastMonth.plusMonths(1)) - start
@@ -135,10 +135,16 @@ private fun ProgressLineChart(points: List<TrendPoint>, target: Double?, measure
     Canvas(Modifier.fillMaxWidth().height(140.dp + labelHeight).semantics {
         contentDescription = "${if (measurement) "測定値" else "累積"}の推移。$description"
     }) {
+        fun measureMonth(month: YearMonth) =
+            textMeasurer.measure("${month.year}年${month.monthValue}月", labelStyle, maxLines = 1)
+
         val inset = 8.dp.toPx()
-        val width = (size.width - inset * 2).coerceAtLeast(0f)
+        val labelGap = 4.dp.toPx()
+        val leadingInset = maxOf(inset, measureMonth(axis.firstMonth).size.width / 2f)
+            .coerceAtMost(size.width / 2f)
+        val width = (size.width - leadingInset - inset).coerceAtLeast(0f)
         val height = size.height - labelHeight.toPx() - inset * 2
-        fun x(fraction: Float) = inset + width * fraction
+        fun x(fraction: Float) = leadingInset + width * fraction
         fun y(value: Double) = inset + height * (1 - value / maximum).toFloat()
         fun position(point: TrendPoint) = Offset(x(axis.fraction(point.seconds)), y(point.value))
 
@@ -149,18 +155,18 @@ private fun ProgressLineChart(points: List<TrendPoint>, target: Double?, measure
             val tickX = x(fraction)
             drawLine(colors.outlineVariant, Offset(tickX, inset), Offset(tickX, y(0.0)), strokeWidth = 1.dp.toPx())
             if (tickX >= nextLabelStart) {
-                val label = textMeasurer.measure("${month.year}年${month.monthValue}月", labelStyle, maxLines = 1)
+                val label = measureMonth(month)
                 val lastLabelStart = size.width - label.size.width
                 val labelX = (tickX - label.size.width / 2f).coerceAtLeast(0f).coerceAtMost(lastLabelStart)
                 if (labelX >= nextLabelStart) {
                     drawText(label, color = colors.onSurfaceVariant, topLeft = Offset(labelX, y(0.0) + inset))
-                    nextLabelStart = labelX + label.size.width + inset
+                    nextLabelStart = labelX + label.size.width + labelGap
                 }
             }
         }
-        drawLine(colors.outline, Offset(inset, y(0.0)), Offset(inset + width, y(0.0)))
+        drawLine(colors.outline, Offset(x(0f), y(0.0)), Offset(x(1f), y(0.0)))
         target?.let {
-            drawLine(colors.outline, Offset(inset, y(it)), Offset(inset + width, y(it)),
+            drawLine(colors.outline, Offset(x(0f), y(it)), Offset(x(1f), y(it)),
                 pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
         }
         points.zipWithNext().forEach { (a, b) ->

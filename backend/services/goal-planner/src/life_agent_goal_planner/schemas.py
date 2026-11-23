@@ -61,7 +61,11 @@ def unique_answers(value: list[GoalAnswer]) -> list[GoalAnswer]:
 GoalAnswers = Annotated[list[GoalAnswer], Field(max_length=8), AfterValidator(unique_answers)]
 
 
-class GoalPlanRequest(GoalInput):
+class GoalQuestionsRequest(GoalInput):
+    milestone_checklist_enabled: bool = Field(default=False, strict=True)
+
+
+class GoalPlanRequest(GoalQuestionsRequest):
     metric_types_enabled: bool = Field(default=False, strict=True)
     answers: GoalAnswers = Field(default_factory=list)
 
@@ -109,12 +113,12 @@ class GeneratedPlan(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     metrics: list[MetricDraft] = Field(min_length=1, max_length=3)
-    milestones: list[MilestoneDraft] = Field(min_length=3, max_length=5)
+    milestones: list[MilestoneDraft] = Field(max_length=5)
 
 
 class GoalPlan(GoalInput):
     metrics: list[MetricDraft] = Field(min_length=1, max_length=10)
-    milestones: list[MilestoneDraft] = Field(min_length=1, max_length=10)
+    milestones: list[MilestoneDraft] = Field(max_length=10)
 
     @model_validator(mode="after")
     def validate_milestone_dates(self) -> "GoalPlan":

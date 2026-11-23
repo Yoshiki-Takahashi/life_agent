@@ -10,7 +10,7 @@ from life_agent_goal_planner.config import Settings
 from life_agent_goal_planner.planner import OpenAIGoalPlanner
 from life_agent_goal_planner.progress import OpenAIAdvisor, OpenAIProgressParser
 from life_agent_goal_planner.replan import OpenAIReplanner
-from life_agent_goal_planner.schemas import GoalAnswer, GoalInput, GoalPlanRequest
+from life_agent_goal_planner.schemas import GoalAnswer, GoalPlanRequest, GoalQuestionsRequest
 
 pytestmark = [
     pytest.mark.live_ai,
@@ -29,7 +29,11 @@ pytestmark = [
 def test_three_domain_regression(title, name, unit, body):
     settings = Settings()
     planner = OpenAIGoalPlanner(settings)
-    goal_input = GoalInput(title=title, target_date=date.today() + timedelta(days=90))
+    goal_input = GoalQuestionsRequest(
+        title=title,
+        target_date=date.today() + timedelta(days=90),
+        milestone_checklist_enabled=True,
+    )
     questions = planner.questions(goal_input)
     assert 3 <= len(questions.questions) <= 8
     assert all("?" in q or "？" in q or "か" in q for q in questions.questions)
@@ -42,7 +46,7 @@ def test_three_domain_regression(title, name, unit, body):
             ],
         )
     )
-    assert plan.metrics and plan.milestones
+    assert plan.metrics and not plan.milestones
     # Known incompatible observation/rate metrics cannot be recorded as positive increments.
     # This catches past failures, rather than replacing a review of generated content.
     for metric in plan.metrics:
@@ -64,6 +68,7 @@ def test_three_domain_regression(title, name, unit, body):
         [GoalAnswer(question=q, answer=index % 2 == 0) for index, q in enumerate(replan_questions)],
     )
     assert replan.diff
+    assert not replan.proposed_plan.milestones
 
 
 @pytest.mark.parametrize(

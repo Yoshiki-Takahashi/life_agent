@@ -248,12 +248,8 @@ fun LifeAgentApp(repository: GoalRepository, userId: String, onSignOut: () -> Un
                     onMetricUnitChange = planViewModel::updateMetricUnit,
                     onMetricKindChange = planViewModel::updateMetricKind,
                     onChecklistChange = planViewModel::updateChecklist,
-                    onMilestoneTitleChange = planViewModel::updateMilestoneTitle,
-                    onMilestoneDateChange = planViewModel::updateMilestoneDate,
                     onAddMetric = planViewModel::addMetric,
                     onRemoveMetric = planViewModel::removeMetric,
-                    onAddMilestone = planViewModel::addMilestone,
-                    onRemoveMilestone = planViewModel::removeMilestone,
                     onConfirm = planViewModel::confirmGoal,
                 )
             }

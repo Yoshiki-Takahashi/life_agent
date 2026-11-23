@@ -97,6 +97,54 @@ def test_mixed_types_preserve_meaning_and_retries(client):
     assert save(client, goal, "closed", [dict(metric_id=ids[2], value=21)]).status_code == 409
 
 
+def test_milestone_checklist_uses_equal_metric_weights_and_saved_measurements(client):
+    goal = make_goal(client)
+    path = f"/api/v1/goals/{goal['id']}"
+    pages, gym, body_fat, trip = [metric["id"] for metric in goal["metrics"]]
+    assert goal["achievement_percent"] == 0
+    assert goal["milestone_checklist"][2]["items"] == [
+        {"label": "15 % に到達", "completed": False},
+    ]
+
+    first = save(
+        client,
+        goal,
+        "first-checks",
+        [
+            dict(metric_id=pages, value=25),
+            dict(metric_id=gym, value=1, activity_date=str(date.today())),
+            dict(metric_id=body_fat, value=25),
+            dict(
+                metric_id=trip,
+                value=1,
+                completed_items=["宿を予約する"],
+                expected_completed_items=[],
+            ),
+        ],
+    ).json()
+    assert first["achievement_percent"] == 18.75  # Average of 25%, 0%, 0%, 50%.
+    assert first["milestone_checklist"][3]["items"] == [
+        {"label": "日付を決める", "completed": False},
+        {"label": "宿を予約する", "completed": True},
+    ]
+
+    saved = save(client, goal, "towards-target", [dict(metric_id=body_fat, value=20)]).json()
+    assert saved["milestone_checklist"][2]["items"] == [
+        {"label": "22.5 %以下", "completed": True},
+        {"label": "20 %以下", "completed": True},
+        {"label": "17.5 %以下", "completed": False},
+        {"label": "15 %以下", "completed": False},
+    ]
+    assert saved["achievement_percent"] == 31.25
+    assert client.get(path).json() == saved
+    assert client.get("/api/v1/goals").json()[0]["achievement_percent"] == 31.25
+
+    regressed = save(client, goal, "away-from-target", [dict(metric_id=body_fat, value=23)]).json()
+    assert not any(item["completed"] for item in regressed["milestone_checklist"][2]["items"])
+    assert regressed["achievement_percent"] == 18.75
+    assert client.get("/api/v1/goals").json()[0]["achievement_percent"] == 18.75
+
+
 @pytest.mark.parametrize(
     "invalid",
     [

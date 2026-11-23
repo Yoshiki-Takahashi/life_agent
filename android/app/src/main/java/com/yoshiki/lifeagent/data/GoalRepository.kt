@@ -57,11 +57,12 @@ class HttpGoalRepository(
         targetDate: String,
         answers: List<GoalAnswer>,
     ): GoalPlan = api.previewGoal(
-        authorization(), GoalPreviewRequest(title, description, targetDate, answers, metricTypesEnabled = true)
+        authorization(), GoalPreviewRequest(title, description, targetDate, answers,
+            metricTypesEnabled = true, milestoneChecklistEnabled = true),
     ).toGoalPlan()
 
     override suspend fun goalQuestions(title: String, description: String?, targetDate: String): GoalQuestions =
-        api.goalQuestions(authorization(), GoalQuestionsRequest(title, description, targetDate))
+        api.goalQuestions(authorization(), GoalQuestionsRequest(title, description, targetDate, milestoneChecklistEnabled = true))
 
     override suspend fun confirmGoal(plan: GoalPlan): Goal = api.confirmGoal(
         authorization(),
@@ -70,7 +71,6 @@ class HttpGoalRepository(
             description = plan.description,
             targetDate = plan.targetDate,
             metrics = plan.metrics.map { MetricPayload(it.name, it.targetValue, it.unit, it.kind, it.checklistItems) },
-            milestones = plan.milestones.map { MilestonePayload(it.title, it.targetDate) },
         )
     ).toGoal()
 
@@ -82,10 +82,11 @@ class HttpGoalRepository(
     override suspend fun getAdvice(goalId: String): Advice = api.getAdvice(authorization(), goalId)
 
     override suspend fun replanQuestions(goalId: String, reason: String): GoalQuestions =
-        api.replanQuestions(authorization(), goalId, ReplanQuestionsRequest(reason))
+        api.replanQuestions(authorization(), goalId, ReplanQuestionsRequest(reason, milestoneChecklistEnabled = true))
 
     override suspend fun previewReplan(goalId: String, reason: String, answers: List<GoalAnswer>): ReplanProposal =
-        api.previewReplan(authorization(), goalId, ReplanPreviewRequest(reason, answers)).toReplanProposal()
+        api.previewReplan(authorization(), goalId,
+            ReplanPreviewRequest(reason, answers, milestoneChecklistEnabled = true)).toReplanProposal()
 
     override suspend fun applyReplan(goalId: String, proposalId: String, excludedChangeIds: List<String>): Goal =
         api.applyReplan(authorization(), goalId, ReplanApplyRequest(proposalId, excludedChangeIds)).toGoal()
@@ -194,9 +195,9 @@ data class GoalSummaryResponse(
     @SerialName("target_date") val targetDate: String,
     val status: String,
     @SerialName("metric_count") val metricCount: Int,
-    @SerialName("milestone_count") val milestoneCount: Int,
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
+    @SerialName("achievement_percent") val achievementPercent: Double? = null,
 ) {
     fun toGoalSummary() = GoalSummary(
         id = id,
@@ -204,9 +205,9 @@ data class GoalSummaryResponse(
         targetDate = targetDate,
         status = status,
         metricCount = metricCount,
-        milestoneCount = milestoneCount,
         createdAt = createdAt,
         updatedAt = updatedAt,
+        achievementPercent = achievementPercent,
     )
 }
 
@@ -215,6 +216,7 @@ data class GoalQuestionsRequest(
     val title: String,
     val description: String? = null,
     @SerialName("target_date") val targetDate: String,
+    @SerialName("milestone_checklist_enabled") val milestoneChecklistEnabled: Boolean = false,
 )
 
 @Serializable
@@ -230,6 +232,7 @@ data class GoalPreviewRequest(
     @SerialName("target_date") val targetDate: String,
     val answers: List<GoalAnswer> = emptyList(),
     @SerialName("metric_types_enabled") val metricTypesEnabled: Boolean = false,
+    @SerialName("milestone_checklist_enabled") val milestoneChecklistEnabled: Boolean = false,
 )
 
 @Serializable
@@ -238,7 +241,6 @@ data class GoalConfirmRequest(
     val description: String? = null,
     @SerialName("target_date") val targetDate: String,
     val metrics: List<MetricPayload>,
-    val milestones: List<MilestonePayload>,
 )
 
 @Serializable
@@ -251,25 +253,17 @@ data class MetricPayload(
 )
 
 @Serializable
-data class MilestonePayload(
-    val title: String,
-    @SerialName("target_date") val targetDate: String,
-)
-
-@Serializable
 data class GoalPlanResponse(
     val title: String,
     val description: String? = null,
     @SerialName("target_date") val targetDate: String,
     val metrics: List<MetricPayload>,
-    val milestones: List<MilestonePayload>,
 ) {
     fun toGoalPlan() = GoalPlan(
         title = title,
         description = description,
         targetDate = targetDate,
         metrics = metrics.mapIndexed { index, item -> item.toMetric(index) },
-        milestones = milestones.mapIndexed { index, item -> item.toMilestone(index) },
     )
 }
 
@@ -282,10 +276,10 @@ data class GoalResponse(
     @SerialName("plan_revision") val planRevision: Int = 1,
     val status: String,
     val metrics: List<MetricResponse>,
-    val milestones: List<MilestoneResponse>,
     @SerialName("progress_logs") val progressLogs: List<ProgressLogResponse> = emptyList(),
     @SerialName("created_at") val createdAt: String,
     @SerialName("updated_at") val updatedAt: String,
+    @SerialName("milestone_checklist") val milestoneChecklist: List<MilestoneChecklist> = emptyList(),
 ) {
     fun toGoal() = Goal(
         id = id,
@@ -296,9 +290,9 @@ data class GoalResponse(
         createdAt = createdAt,
         planRevision = planRevision,
         metrics = metrics.map { it.toMetric() },
-        milestones = milestones.map { it.toMilestone() },
         updatedAt = updatedAt,
         progressLogs = progressLogs.map { it.toProgressLog() },
+        milestoneChecklist = milestoneChecklist,
     )
 }
 
@@ -316,17 +310,6 @@ data class MetricResponse(
     @SerialName("created_at") val createdAt: String,
 ) {
     fun toMetric() = Metric(name, targetValue, unit, position, id, currentValue, kind, checklistItems, completedItems)
-}
-
-@Serializable
-data class MilestoneResponse(
-    val id: String,
-    val title: String,
-    @SerialName("target_date") val targetDate: String,
-    val position: Int,
-    @SerialName("created_at") val createdAt: String,
-) {
-    fun toMilestone() = Milestone(title, targetDate, position)
 }
 
 @Serializable
@@ -378,8 +361,6 @@ data class ProgressMetricUpdateResponse(
 
 private fun MetricPayload.toMetric(position: Int) = Metric(name, targetValue, unit, position, kind = kind, checklistItems = checklistItems)
 
-private fun MilestonePayload.toMilestone(position: Int) = Milestone(title, targetDate, position)
-
 @Serializable
 data class ProgressPreviewRequest(val body: String)
 
@@ -396,10 +377,17 @@ data class Advice(
 )
 
 @Serializable
-data class ReplanQuestionsRequest(val reason: String)
+data class ReplanQuestionsRequest(
+    val reason: String,
+    @SerialName("milestone_checklist_enabled") val milestoneChecklistEnabled: Boolean = false,
+)
 
 @Serializable
-data class ReplanPreviewRequest(val reason: String, val answers: List<GoalAnswer> = emptyList())
+data class ReplanPreviewRequest(
+    val reason: String,
+    val answers: List<GoalAnswer> = emptyList(),
+    @SerialName("milestone_checklist_enabled") val milestoneChecklistEnabled: Boolean = false,
+)
 
 @Serializable
 data class ReplanApplyRequest(

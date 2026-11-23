@@ -75,7 +75,9 @@ class FakeReplanner:
         questions = [
             f"「{context.title[:120]}」の目標期限を延ばせますか？",
             f"「{context.metrics[0].name}」の目標値を調整できますか？",
-            "中間目標を見直し、次に取り組むことを明確にしますか？",
+            "中間目標を見直し、次に取り組むことを明確にしますか？"
+            if context.milestones
+            else "期限は維持して、測定項目を中心に見直しますか？",
         ]
         if len(context.metrics) > 1:
             questions.append(f"末尾の測定項目「{context.metrics[-1].name}」を外しますか？")
@@ -86,13 +88,14 @@ class FakeReplanner:
     ) -> ReplanCandidate:
         today = date.today()
         choices = {answer.question: answer.answer for answer in answers}
-        deadline, target, milestones, *additional = self.questions(context, reason).questions
+        deadline, target, third_question, *additional = self.questions(context, reason).questions
         extra_metrics = context.metrics[1:] if answers else []
         if additional and choices.get(additional[0]):
             extra_metrics = extra_metrics[:-1]
         target_date = (
             max(context.target_date + timedelta(days=14), today + timedelta(days=21))
             if choices.get(deadline, True)
+            and (context.milestones or not choices.get(third_question, False))
             else max(context.target_date, today)
         )
         metric = context.metrics[0]
@@ -119,7 +122,9 @@ class FakeReplanner:
             ),
             MilestoneDraft(title="更新後のGoal期限を迎える", target_date=target_date),
         ]
-        if not choices.get(milestones, True):
+        if not context.milestones:
+            proposed_milestones = []
+        elif not choices.get(third_question, True):
             proposed_milestones = [
                 MilestoneDraft(title=item.title, target_date=max(item.target_date, today))
                 for item in context.milestones
@@ -188,9 +193,10 @@ def replan_questions(
     require_active(goal)
     reserve_ai_call(db, user_id)
     try:
-        return GoalQuestions.model_validate(
-            replanner.questions(goal_response(goal), payload.reason)
-        )
+        context = goal_response(goal)
+        if payload.milestone_checklist_enabled:
+            context = context.model_copy(update={"milestones": []})
+        return GoalQuestions.model_validate(replanner.questions(context, payload.reason))
     except (AIUnavailableError, ValueError, TypeError) as error:
         raise HTTPException(
             status_code=503, detail="再計画の質問を生成できませんでした。再試行してください"
@@ -208,12 +214,17 @@ def preview_replan(
     goal = load_goal(goal_id, db, user_id)
     require_active(goal)
     context = goal_response(goal)
+    if payload.milestone_checklist_enabled:
+        context = context.model_copy(update={"milestones": []})
     reserve_ai_call(db, user_id)
     try:
         candidate = validate_replan(
             replanner.propose(context, payload.reason, payload.answers), context
         )
-        changes = plan_changes(context, candidate.proposed_plan)
+        proposed = candidate.proposed_plan
+        if not context.milestones:
+            proposed = proposed.model_copy(update={"milestones": []})
+        changes = plan_changes(context, proposed)
         if not changes:
             if payload.answers:
                 raise HTTPException(
@@ -230,7 +241,7 @@ def preview_replan(
         owner_id=user_id,
         base_plan_revision=context.plan_revision,
         reason=payload.reason,
-        proposed_plan=candidate.proposed_plan.model_dump(mode="json"),
+        proposed_plan=proposed.model_dump(mode="json"),
         diff=[item.model_dump(mode="json") for item in changes],
     )
     (
@@ -316,7 +327,12 @@ def plan_changes(context: GoalResponse, proposed: GoalPlan) -> list[ReplanChange
             )
     for target, old, new, draft_type in (
         ("metric", context.metrics, proposed.metrics, MetricDraft),
-        ("milestone", context.milestones, proposed.milestones, MilestoneDraft),
+        (
+            "milestone",
+            context.milestones if proposed.milestones else [],
+            proposed.milestones,
+            MilestoneDraft,
+        ),
     ):
         for index in range(max(len(old), len(new))):
             before = (
@@ -371,7 +387,7 @@ def apply_plan(goal: Goal, proposed: GoalPlan, excluded: set[str]) -> None:
     selected_metrics = []
     selected_milestones = []
     active = sorted((m for m in goal.metrics if m.archived_at is None), key=lambda m: m.position)
-    milestones = sorted(goal.milestones, key=lambda m: m.position)
+    milestones = sorted(goal.milestones, key=lambda m: m.position) if proposed.milestones else []
     # Keep source objects alongside drafts so excluding an earlier addition/removal never
     # assigns another Metric's saved progress or history to the remaining position.
     for target, current, candidates, draft_type, selected in (
@@ -440,10 +456,11 @@ def apply_plan(goal: Goal, proposed: GoalPlan, excluded: set[str]) -> None:
             metric.position = len(metrics)
             metrics.append(metric)
     goal.metrics = metrics
-    goal.milestones = []
-    for position, (draft, original) in enumerate(selected_milestones):
-        milestone = original or Milestone(**draft.model_dump(), position=position)
-        milestone.title = draft.title
-        milestone.target_date = draft.target_date
-        milestone.position = position
-        goal.milestones.append(milestone)
+    if proposed.milestones:
+        goal.milestones = []
+        for position, (draft, original) in enumerate(selected_milestones):
+            milestone = original or Milestone(**draft.model_dump(), position=position)
+            milestone.title = draft.title
+            milestone.target_date = draft.target_date
+            milestone.position = position
+            goal.milestones.append(milestone)

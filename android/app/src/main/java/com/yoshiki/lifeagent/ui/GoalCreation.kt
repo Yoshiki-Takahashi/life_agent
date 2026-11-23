@@ -48,7 +48,6 @@ import com.yoshiki.lifeagent.data.GoalQuestionsRequest
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.Metric
 import com.yoshiki.lifeagent.data.metricKinds
-import com.yoshiki.lifeagent.data.Milestone
 import com.yoshiki.lifeagent.data.validProgressValue
 import java.time.LocalDate
 import java.time.ZoneId
@@ -77,12 +76,6 @@ data class MetricEdit(
         kind = kind, checklistItems = if (kind == "checklist") checklistItems else emptyList())
 }
 
-data class MilestoneEdit(
-    val title: String,
-    val targetDate: String,
-    val id: String = UUID.randomUUID().toString(),
-)
-
 data class QuestionEdit(val question: String, val answer: Boolean? = null)
 enum class DraftReplacement { QUESTIONS, PLAN }
 
@@ -92,7 +85,6 @@ data class GoalUiState(
     val targetDate: String = "",
     val questions: List<QuestionEdit> = emptyList(),
     val metrics: List<MetricEdit> = emptyList(),
-    val milestones: List<MilestoneEdit> = emptyList(),
     val isLoadingQuestions: Boolean = false,
     val isPreviewing: Boolean = false,
     val isConfirming: Boolean = false,
@@ -205,7 +197,6 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
                     metrics = plan.metrics.map { metric ->
                         MetricEdit(metric.name, formatNumber(metric.targetValue), metric.unit, kind = metric.kind, checklistText = metric.checklistItems.joinToString("\n"))
                     },
-                    milestones = plan.milestones.map { MilestoneEdit(it.title, it.targetDate) },
                     isPreviewing = false, planError = null, navigateToPreview = true,
                 ) }
             } catch (error: CancellationException) { throw error
@@ -226,20 +217,11 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
     }
     fun updateChecklist(index: Int, value: String) = updateMetric(index) { it.copy(checklistText = value) }
     fun updateMetricUnit(index: Int, value: String) = updateMetric(index) { it.copy(unit = value) }
-    fun updateMilestoneTitle(index: Int, value: String) = updateMilestone(index) { it.copy(title = value) }
-    fun updateMilestoneDate(index: Int, value: String) = updateMilestone(index) { it.copy(targetDate = value) }
     fun addMetric() = edit {
         if (it.metrics.size >= 10) it else it.copy(metrics = it.metrics + MetricEdit("", "", ""), planError = null)
     }
     fun removeMetric(index: Int) = edit {
         if (it.metrics.size <= 1) it else it.copy(metrics = it.metrics.filterIndexed { i, _ -> i != index }, planError = null)
-    }
-    fun addMilestone() = edit {
-        if (it.milestones.size >= 10) it else it.copy(
-            milestones = it.milestones + MilestoneEdit("", it.milestones.lastOrNull()?.targetDate ?: it.targetDate), planError = null)
-    }
-    fun removeMilestone(index: Int) = edit {
-        if (it.milestones.size <= 1) it else it.copy(milestones = it.milestones.filterIndexed { i, _ -> i != index }, planError = null)
     }
 
     fun confirmGoal() {
@@ -258,7 +240,6 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
             state.metrics.mapIndexed { index, item ->
                 item.toMetric(index)
             },
-            state.milestones.mapIndexed { index, item -> Milestone(item.title.trim(), item.targetDate, index) },
         )
         val version = draftVersion
         _uiState.update { it.copy(isConfirming = true, planError = null) }
@@ -288,9 +269,6 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
     private fun updateMetric(index: Int, transform: (MetricEdit) -> MetricEdit) = edit { state ->
         state.copy(metrics = state.metrics.mapIndexed { i, item -> if (i == index) transform(item) else item }, planError = null)
     }
-    private fun updateMilestone(index: Int, transform: (MilestoneEdit) -> MilestoneEdit) = edit { state ->
-        state.copy(milestones = state.milestones.mapIndexed { i, item -> if (i == index) transform(item) else item }, planError = null)
-    }
 
     companion object {
         fun factory(repository: GoalRepository): ViewModelProvider.Factory =
@@ -307,21 +285,13 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
 
         private fun validatePlan(state: GoalUiState): String? {
             validateGoalInput(state.title.trim(), state.description.trim(), state.targetDate)?.let { return it }
-            if (state.metrics.size !in 1..10 || state.milestones.size !in 1..10) return "MetricとMilestoneはそれぞれ1〜10件にしてください"
+            if (state.metrics.size !in 1..10) return "Metricは1〜10件にしてください"
             if (state.metrics.any { it.name.trim().isEmpty() || it.name.length > 100 }) return "Metric名を100文字以内で入力してください"
             if (state.metrics.any { it.kind != "checklist" && (!validProgressValue(it.targetValue) || it.targetValue.toDouble() <= 0) }) return "Metric目標値は正数（小数2桁まで）で入力してください"
             if (state.metrics.any { it.kind != "checklist" && (it.unit.trim().isEmpty() || it.unit.length > 30) }) return "Metric単位を30文字以内で入力してください"
             if (state.metrics.any { it.kind == "occurrence" && it.targetValue.toDoubleOrNull()?.rem(1.0) != 0.0 }) return "実行日数の目標は整数にしてください"
             if (state.metrics.any { it.kind == "checklist" && (it.checklistItems.size !in 1..20 ||
                 it.checklistItems.distinct().size != it.checklistItems.size || it.checklistItems.any { label -> label.length > 120 }) }) return "チェック項目は重複なし・各120文字以内で1〜20件にしてください"
-            if (state.milestones.any { it.title.trim().isEmpty() || it.title.length > 120 }) return "Milestone名を120文字以内で入力してください"
-            val goalDate = requireNotNull(parseDate(state.targetDate))
-            var previous = LocalDate.now()
-            for (milestone in state.milestones) {
-                val milestoneDate = parseDate(milestone.targetDate) ?: return "Milestone期限をカレンダーから選んでください"
-                if (milestoneDate < LocalDate.now() || milestoneDate > goalDate || milestoneDate < previous) return "Milestone期限を今日からGoal期限までの順番で選んでください"
-                previous = milestoneDate
-            }
             return null
         }
         private fun formatNumber(value: Double): String =
@@ -334,7 +304,7 @@ private fun parseDate(value: String): LocalDate? = runCatching { LocalDate.parse
 /** LocalDate is converted in the device zone; dates never shift through UTC. */
 @Composable
 private fun GoalDateField(label: String, value: String, enabled: Boolean,
-    onChange: (String) -> Unit, min: LocalDate = LocalDate.now(), max: LocalDate? = null) {
+    onChange: (String) -> Unit) {
     val context = LocalContext.current
     var showPicker by remember { mutableStateOf(false) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -344,12 +314,12 @@ private fun GoalDateField(label: String, value: String, enabled: Boolean,
         }
     }
     if (showPicker) DisposableEffect(Unit) {
-        val initial = (parseDate(value) ?: min).coerceAtLeast(min).let { if (max != null) it.coerceAtMost(max) else it }
+        val min = LocalDate.now()
+        val initial = (parseDate(value) ?: min).coerceAtLeast(min)
         val dialog = DatePickerDialog(context, { _, year, month, day ->
             onChange(LocalDate.of(year, month + 1, day).toString())
         }, initial.year, initial.monthValue - 1, initial.dayOfMonth)
         dialog.datePicker.minDate = min.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        max?.let { dialog.datePicker.maxDate = it.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli() }
         dialog.setOnDismissListener { showPicker = false }
         dialog.show()
         onDispose { dialog.dismiss() }
@@ -440,9 +410,7 @@ fun GoalReplacementDialog(state: GoalUiState, onConfirm: () -> Unit, onDismiss: 
 @Composable
 fun GoalPreviewScreen(state: GoalUiState, onBack: () -> Unit,
     onMetricNameChange: (Int, String) -> Unit, onMetricValueChange: (Int, String) -> Unit,
-    onMetricUnitChange: (Int, String) -> Unit, onMilestoneTitleChange: (Int, String) -> Unit,
-    onMilestoneDateChange: (Int, String) -> Unit, onAddMetric: () -> Unit,
-    onRemoveMetric: (Int) -> Unit, onAddMilestone: () -> Unit, onRemoveMilestone: (Int) -> Unit,
+    onMetricUnitChange: (Int, String) -> Unit, onAddMetric: () -> Unit, onRemoveMetric: (Int) -> Unit,
     onConfirm: () -> Unit, onMetricKindChange: (Int, String) -> Unit = { _, _ -> },
     onChecklistChange: (Int, String) -> Unit = { _, _ -> }) {
     BackHandler { onBack() }
@@ -453,7 +421,6 @@ fun GoalPreviewScreen(state: GoalUiState, onBack: () -> Unit,
             Text(state.title, style = MaterialTheme.typography.headlineSmall)
             Text("期限  ${parseDate(state.targetDate)?.format(DateTimeFormatter.ofPattern("yyyy年M月d日"))}")
             Text("達成を測るMetric（${state.metrics.size} / 10）", style = MaterialTheme.typography.titleLarge)
-            Text("MetricとMilestoneは、それぞれ1〜10件に調整できます。")
             state.metrics.forEachIndexed { index, metric -> key(metric.id) {
                 Card(Modifier.fillMaxWidth().testTag("metric-$index")) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -475,19 +442,6 @@ fun GoalPreviewScreen(state: GoalUiState, onBack: () -> Unit,
                 }
             } }
             OutlinedButton(onAddMetric, Modifier.fillMaxWidth(), enabled = !state.isBusy && state.metrics.size < 10) { Text("Metricを追加") }
-            Text("達成までのMilestone（${state.milestones.size} / 10）", style = MaterialTheme.typography.titleLarge)
-            state.milestones.forEachIndexed { index, milestone -> key(milestone.id) {
-                Card(Modifier.fillMaxWidth().testTag("milestone-$index")) {
-                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Text("STEP ${index + 1}", color = MaterialTheme.colorScheme.primary)
-                        OutlinedTextField(milestone.title, { onMilestoneTitleChange(index, it) }, Modifier.fillMaxWidth(), label = { Text("Milestone名") }, enabled = !state.isBusy, singleLine = true)
-                        GoalDateField("期限", milestone.targetDate, !state.isBusy, { onMilestoneDateChange(index, it) },
-                            max = parseDate(state.targetDate)?.coerceAtLeast(LocalDate.now()))
-                        TextButton({ onRemoveMilestone(index) }, enabled = !state.isBusy && state.milestones.size > 1) { Text("Milestoneを削除") }
-                    }
-                }
-            } }
-            OutlinedButton(onAddMilestone, Modifier.fillMaxWidth(), enabled = !state.isBusy && state.milestones.size < 10) { Text("Milestoneを追加") }
             state.planError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             Button(onConfirm, Modifier.fillMaxWidth(), enabled = !state.isBusy) {
                 if (state.isConfirming) CircularProgressIndicator() else Text("この計画で保存する")

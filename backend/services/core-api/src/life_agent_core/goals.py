@@ -1,6 +1,8 @@
 import uuid
+from collections.abc import Iterator
 from datetime import UTC, date, datetime, timedelta
 from functools import lru_cache
+from itertools import groupby
 from typing import Annotated, Protocol
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -18,13 +20,25 @@ from life_agent_core.database import (
     read_in_transaction,
     run_transaction,
 )
-from life_agent_core.models import Goal, GoalStatus, Metric, Milestone, ProgressLog
+from life_agent_core.milestone_checklist import (
+    achievement_percent,
+    measurement_starts,
+    milestone_checklist,
+)
+from life_agent_core.models import (
+    Goal,
+    GoalStatus,
+    Metric,
+    Milestone,
+    ProgressLog,
+    ProgressMetricUpdate,
+)
 from life_agent_core.schemas import (
     GoalConfirmRequest,
-    GoalInput,
     GoalPlan,
     GoalPreviewRequest,
     GoalQuestions,
+    GoalQuestionsRequest,
     GoalResponse,
     GoalSummary,
     MetricDraft,
@@ -40,18 +54,23 @@ router = APIRouter()
 class GoalPlanner(Protocol):
     def generate(self, payload: GoalPreviewRequest) -> GoalPlan: ...
 
-    def questions(self, payload: GoalInput) -> GoalQuestions: ...
+    def questions(self, payload: GoalQuestionsRequest) -> GoalQuestions: ...
 
 
 class FakeGoalPlanner:
     def generate(self, payload: GoalPreviewRequest) -> GoalPlan:
         return create_fake_plan(payload)
 
-    def questions(self, payload: GoalInput) -> GoalQuestions:
+    def questions(self, payload: GoalQuestionsRequest) -> GoalQuestions:
+        tracking_question = (
+            "取り組んだ日数も記録したいですか？"
+            if payload.milestone_checklist_enabled
+            else "途中で成果を確認する節目を多めに設けたいですか？"
+        )
         return GoalQuestions(
             questions=[
                 f"「{payload.title}」で取り組んだ時間も記録したいですか？",
-                "途中で成果を確認する節目を多めに設けたいですか？",
+                tracking_question,
                 "すでに取り組みを始めていますか？",
             ]
         )
@@ -107,6 +126,15 @@ def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None
     metrics = [metric]
     if any(item.answer and "時間も記録" in item.question for item in payload.answers):
         metrics.append(MetricDraft(name="取り組んだ時間", target_value=60, unit="分"))
+    if (
+        payload.milestone_checklist_enabled
+        and payload.metric_types_enabled
+        and metric.kind != "occurrence"
+        and any(item.answer and "日数も記録" in item.question for item in payload.answers)
+    ):
+        metrics.append(
+            MetricDraft(name="取り組んだ日数", target_value=12, unit="日", kind="occurrence")
+        )
     if any(item.answer and "節目を多め" in item.question for item in payload.answers):
         titles = (titles[0], "最初の成果を確認する", titles[1], "仕上げの準備をする", titles[2])
     if any(item.answer and "始めていますか" in item.question for item in payload.answers):
@@ -122,7 +150,7 @@ def create_fake_plan(payload: GoalPreviewRequest, start_date: date | None = None
         description=payload.description,
         target_date=payload.target_date,
         metrics=metrics,
-        milestones=milestones,
+        milestones=[] if payload.milestone_checklist_enabled else milestones,
     )
 
 
@@ -133,7 +161,7 @@ class HttpGoalPlanner:
     def generate(self, payload: GoalPreviewRequest) -> GoalPlan:
         return self.client.generate("goal-plans", payload.model_dump(mode="json"), GoalPlan)
 
-    def questions(self, payload: GoalInput) -> GoalQuestions:
+    def questions(self, payload: GoalQuestionsRequest) -> GoalQuestions:
         return self.client.generate(
             "goal-questions", payload.model_dump(mode="json"), GoalQuestions
         )
@@ -152,7 +180,7 @@ Planner = Annotated[GoalPlanner, Depends(get_goal_planner)]
 
 @router.post("/api/v1/goals/questions", response_model=GoalQuestions)
 def goal_questions(
-    payload: GoalInput, planner: Planner, user_id: CurrentUserId, db: Database
+    payload: GoalQuestionsRequest, planner: Planner, user_id: CurrentUserId, db: Database
 ) -> GoalQuestions:
     reserve_ai_call(db, user_id)
     try:
@@ -173,7 +201,11 @@ def preview_goal(
         plan = planner.generate(payload)
         if not payload.metric_types_enabled and any(m.kind != "cumulative" for m in plan.metrics):
             raise AIUnavailableError("Legacy client requires cumulative metrics")
-        return plan
+        return (
+            plan.model_copy(update={"milestones": []})
+            if payload.milestone_checklist_enabled
+            else plan
+        )
     except AIUnavailableError as error:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -214,21 +246,47 @@ def list_goals(
         .order_by("id", direction=firestore.Query.DESCENDING)
         .stream()
     )
-    goals = [Goal.model_validate(decode(snapshot.to_dict())) for snapshot in snapshots]
-    return [
-        GoalSummary(
-            id=goal.id,
-            title=goal.title,
-            target_date=goal.target_date,
-            status=goal.status,
-            metric_count=sum(1 for metric in goal.metrics if metric.archived_at is None),
-            milestone_count=len(goal.milestones),
-            created_at=goal.created_at,
-            updated_at=goal.updated_at,
+    # Finish the Goal query before opening the snapshot-consistent history reads.
+    summaries = []
+    for snapshot in list(snapshots):
+        goal = Goal.model_validate(decode(snapshot.to_dict()))
+        if status is not None and goal.status != status:
+            continue
+        metrics = [metric for metric in goal.metrics if metric.archived_at is None]
+        starts = measurement_starts(
+            {m.id for m in metrics if m.kind == "measurement" and m.last_recorded_at is not None},
+            oldest_progress_updates(snapshot),
         )
-        for goal in goals
-        if status is None or goal.status == status
-    ]
+        summaries.append(
+            GoalSummary(
+                id=goal.id,
+                title=goal.title,
+                target_date=goal.target_date,
+                status=goal.status,
+                metric_count=len(metrics),
+                milestone_count=len(goal.milestones),
+                achievement_percent=achievement_percent(milestone_checklist(metrics, starts)),
+                created_at=goal.created_at,
+                updated_at=goal.updated_at,
+            )
+        )
+    return summaries
+
+
+def oldest_progress_updates(snapshot) -> Iterator[list[ProgressMetricUpdate]]:
+    query = (
+        snapshot.reference.collection("progress_logs")
+        .order_by("recorded_at")
+        .select(["recorded_at", "id", "metric_updates"])
+    )
+    logs = query.stream(read_time=snapshot.read_time)
+    # Match the detail query's ID tie-break without another composite index.
+    for _, entries in groupby(logs, key=lambda item: item.get("recorded_at")):
+        for entry in sorted(entries, key=lambda item: item.get("id")):
+            yield [
+                ProgressMetricUpdate.model_validate(decode(update))
+                for update in entry.get("metric_updates")
+            ]
 
 
 @router.post("/api/v1/goals/{goal_id}/complete", response_model=GoalResponse)
@@ -304,6 +362,12 @@ def load_goal_with_details(
 
 
 def goal_response(goal: Goal) -> GoalResponse:
+    metrics = [metric for metric in goal.metrics if metric.archived_at is None]
+    starts = measurement_starts(
+        {metric.id for metric in metrics if metric.kind == "measurement"},
+        (log.metric_updates for log in reversed(goal.progress_logs)),
+    )
+    checklist = milestone_checklist(metrics, starts)
     return GoalResponse(
         id=goal.id,
         title=goal.title,
@@ -311,12 +375,10 @@ def goal_response(goal: Goal) -> GoalResponse:
         target_date=goal.target_date,
         plan_revision=goal.plan_revision,
         status=goal.status,
-        metrics=[
-            MetricResponse.model_validate(metric)
-            for metric in goal.metrics
-            if metric.archived_at is None
-        ],
+        metrics=[MetricResponse.model_validate(metric) for metric in metrics],
         milestones=[MilestoneResponse.model_validate(milestone) for milestone in goal.milestones],
+        milestone_checklist=checklist,
+        achievement_percent=achievement_percent(checklist),
         progress_logs=[
             ProgressLogResponse.model_validate(progress_log) for progress_log in goal.progress_logs
         ],

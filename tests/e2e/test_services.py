@@ -80,16 +80,22 @@ def test_typed_plan_parser_advice_replan_boundary(title, body, kind):
     with httpx.Client(
         base_url=url, headers={"Authorization": f"Bearer {uuid4()}"}, timeout=60
     ) as client:
+        goal_input = dict(
+            title=title,
+            target_date=str(date.today() + timedelta(days=90)),
+            milestone_checklist_enabled=True,
+        )
+        questions = client.post("/api/v1/goals/questions", json=goal_input)
+        assert questions.status_code == 200, questions.text
+        assert any("日数も記録" in question for question in questions.json()["questions"])
         plan = client.post(
-            "/api/v1/goals/preview",
-            json=dict(
-                title=title,
-                target_date=str(date.today() + timedelta(days=90)),
-                metric_types_enabled=True,
-            ),
+            "/api/v1/goals/preview", json={**goal_input, "metric_types_enabled": True}
         ).json()
+        assert plan.pop("milestones") == []
         assert plan["metrics"][0]["kind"] == kind
         goal = client.post("/api/v1/goals/confirm", json=plan).json()
+        assert goal["milestone_checklist"][0]["metric_id"] == goal["metrics"][0]["id"]
+        assert goal["achievement_percent"] == 0
         path = f"/api/v1/goals/{goal['id']}"
         result = client.post(path + "/progress/preview", json=dict(body=body))
         assert result.status_code == 200, result.text
@@ -108,9 +114,15 @@ def test_typed_plan_parser_advice_replan_boundary(title, body, kind):
         assert saved.json()["progress_logs"][0]["metric_updates"][0]["kind"] == kind
         advice = client.post(path + "/advice")
         assert advice.status_code == 200, advice.text
-        proposal = client.post(path + "/replan/preview", json=dict(reason="期限を延ばしたい"))
+        replan_request = dict(reason="期限を延ばしたい", milestone_checklist_enabled=True)
+        replan_questions = client.post(path + "/replan/questions", json=replan_request)
+        assert replan_questions.status_code == 200, replan_questions.text
+        assert all("中間目標" not in question for question in replan_questions.json()["questions"])
+        proposal = client.post(path + "/replan/preview", json=replan_request)
         assert proposal.status_code == 200, proposal.text
         assert proposal.json()["proposed_plan"]["metrics"][0]["kind"] == kind
+        assert proposal.json()["proposed_plan"]["milestones"] == []
+        assert all(change["target_type"] != "milestone" for change in proposal.json()["diff"])
         applied = client.post(
             path + "/replan/apply",
             json=dict(proposal_id=proposal.json()["proposal_id"]),
@@ -120,3 +132,4 @@ def test_typed_plan_parser_advice_replan_boundary(title, body, kind):
             applied.json()["metrics"][0]["current_value"]
             == saved.json()["metrics"][0]["current_value"]
         )
+        assert applied.json()["milestone_checklist"][0]["metric_id"] == goal["metrics"][0]["id"]

@@ -27,10 +27,10 @@ from life_agent_goal_planner.schemas import (
     CoachAIRequest,
     CoachReply,
     GeneratedReplan,
-    GoalInput,
     GoalPlan,
     GoalPlanRequest,
     GoalQuestions,
+    GoalQuestionsRequest,
     ProgressPreview,
     ProgressPreviewAIRequest,
     ReplanAIRequest,
@@ -91,7 +91,7 @@ def health() -> dict[str, str]:
 
 
 @app.post("/internal/v1/goal-questions", response_model=GoalQuestions)
-def create_goal_questions(payload: GoalInput, planner: Planner) -> GoalQuestions:
+def create_goal_questions(payload: GoalQuestionsRequest, planner: Planner) -> GoalQuestions:
     try:
         return GoalQuestions.model_validate(planner.questions(payload))
     except (AIUnavailableError, ValueError, TypeError) as error:

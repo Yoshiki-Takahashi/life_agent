@@ -2,36 +2,42 @@ package com.yoshiki.lifeagent.ui
 
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Box
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.setValue
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.ui.Alignment
-import java.time.LocalDate
-import java.time.YearMonth
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Card
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.PathEffect
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.drawText
+import androidx.compose.ui.text.rememberTextMeasurer
 import androidx.compose.ui.unit.dp
 import com.yoshiki.lifeagent.data.Metric
 import com.yoshiki.lifeagent.data.ProgressLog
 import java.math.BigDecimal
+import java.time.Instant
+import java.time.LocalDate
 import java.time.OffsetDateTime
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 
 data class TrendPoint(val time: String, val seconds: Long, val value: Double)
 
@@ -58,6 +64,28 @@ fun metricTrend(metric: Metric, logs: List<ProgressLog>): List<TrendPoint> {
     return points
 }
 
+internal class ProgressTimeAxis(firstTimestamp: Long, lastTimestamp: Long, private val zone: ZoneId) {
+    val firstMonth = monthAt(firstTimestamp)
+    private val lastMonth = monthAt(lastTimestamp)
+    private val start = monthStart(firstMonth)
+    private val span = monthStart(lastMonth.plusMonths(1)) - start
+
+    fun fraction(timestamp: Long): Float = ((timestamp - start).toDouble() / span).toFloat()
+
+    fun gridMonths(maxLines: Int): Sequence<Pair<YearMonth, Float>> {
+        val count = ChronoUnit.MONTHS.between(firstMonth, lastMonth) + 1
+        val limit = maxLines.coerceAtLeast(1)
+        val step = (count + limit - 1) / limit
+        return generateSequence(firstMonth) { it.plusMonths(step) }
+            .takeWhile { it <= lastMonth }
+            .map { it to fraction(monthStart(it)) }
+    }
+
+    private fun monthAt(timestamp: Long) = YearMonth.from(Instant.ofEpochSecond(timestamp).atZone(zone))
+
+    private fun monthStart(month: YearMonth) = month.atDay(1).atStartOfDay(zone).toEpochSecond()
+}
+
 @Composable
 fun MetricTrendCard(metric: Metric, logs: List<ProgressLog>) {
     if (metric.kind == "occurrence") { ActivityCalendar(metric, logs); return }
@@ -76,8 +104,6 @@ fun MetricTrendCard(metric: Metric, logs: List<ProgressLog>) {
     }
     val measurement = metric.kind == "measurement"
     val points = metricTrend(metric, logs)
-    val primary = MaterialTheme.colorScheme.primary
-    val outline = MaterialTheme.colorScheme.outline
     val target = metric.targetValue.takeIf { it.isFinite() && it > 0 }
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -89,32 +115,64 @@ fun MetricTrendCard(metric: Metric, logs: List<ProgressLog>) {
                     "まだ記録がありません" else "履歴と現在値を確認できないため推移を表示できません")
             } else {
                 target?.takeIf { !measurement }?.let { Text("達成率 ${java.math.BigDecimal.valueOf(metric.currentValue / it * 100).setScale(1, java.math.RoundingMode.HALF_UP)}%") }
-                val description = points.joinToString("、") { "${it.time}: ${it.value} ${metric.unit}" }
-                Canvas(Modifier.fillMaxWidth().height(140.dp).semantics {
-                    contentDescription = "${if (measurement) "測定値" else "累積"}の推移。$description"
-                }) {
-                    val inset = 8.dp.toPx()
-                    val width = (size.width - inset * 2).coerceAtLeast(1f)
-                    val height = (size.height - inset * 2).coerceAtLeast(1f)
-                    val maximum = maxOf(target ?: 0.0, points.maxOf { it.value }, 1.0)
-                    fun y(value: Double) = inset + height * (1 - value / maximum).toFloat()
-                    val start = points.first().seconds
-                    val span = (points.last().seconds - start).coerceAtLeast(1)
-                    fun position(point: TrendPoint) = Offset(
-                        inset + width * ((point.seconds - start).toDouble() / span).toFloat(), y(point.value))
-                    drawLine(outline, Offset(inset, y(0.0)), Offset(inset + width, y(0.0)))
-                    target?.let { drawLine(outline, Offset(inset, y(it)), Offset(inset + width, y(it)),
-                        pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))) }
-                    points.zipWithNext().forEach { (a, b) ->
-                        drawLine(primary, position(a), position(b), strokeWidth = 2.dp.toPx())
-                    }
-                    points.forEach { drawCircle(primary, 4.dp.toPx(), position(it)) }
-                }
+                ProgressLineChart(points, target, measurement, metric.unit)
                 Text("縦軸: ${if (measurement) "測定値" else "累積"}（${metric.unit}）、横軸: 記録日時")
-                Text("最初: ${points.first().time}", style = MaterialTheme.typography.bodySmall)
-                Text("最新: ${points.last().time}", style = MaterialTheme.typography.bodySmall)
             }
         }
+    }
+}
+
+@Composable
+private fun ProgressLineChart(points: List<TrendPoint>, target: Double?, measurement: Boolean, unit: String) {
+    val colors = MaterialTheme.colorScheme
+    val labelStyle = MaterialTheme.typography.labelMedium
+    val textMeasurer = rememberTextMeasurer()
+    val labelHeight = with(LocalDensity.current) { labelStyle.lineHeight.toDp() }
+    val axis = ProgressTimeAxis(points.first().seconds, points.last().seconds, ZoneId.systemDefault())
+    val description = points.joinToString("、") { "${it.time}: ${it.value} $unit" }
+    val maximum = maxOf(target ?: 0.0, points.maxOf { it.value }, 1.0)
+
+    Canvas(Modifier.fillMaxWidth().height(140.dp + labelHeight).semantics {
+        contentDescription = "${if (measurement) "測定値" else "累積"}の推移。$description"
+    }) {
+        fun measureMonth(month: YearMonth) =
+            textMeasurer.measure("${month.year}年${month.monthValue}月", labelStyle, maxLines = 1)
+
+        val inset = 8.dp.toPx()
+        val labelGap = 4.dp.toPx()
+        val leadingInset = maxOf(inset, measureMonth(axis.firstMonth).size.width / 2f)
+            .coerceAtMost(size.width / 2f)
+        val width = (size.width - leadingInset - inset).coerceAtLeast(0f)
+        val height = size.height - labelHeight.toPx() - inset * 2
+        fun x(fraction: Float) = leadingInset + width * fraction
+        fun y(value: Double) = inset + height * (1 - value / maximum).toFloat()
+        fun position(point: TrendPoint) = Offset(x(axis.fraction(point.seconds)), y(point.value))
+
+        // At zoomed-out ranges, draw only the month lines that can be distinguished.
+        val maxGridLines = (width / 6.dp.toPx()).toInt().coerceAtLeast(1)
+        var nextLabelStart = 0f
+        axis.gridMonths(maxGridLines).forEach { (month, fraction) ->
+            val tickX = x(fraction)
+            drawLine(colors.outlineVariant, Offset(tickX, inset), Offset(tickX, y(0.0)), strokeWidth = 1.dp.toPx())
+            if (tickX >= nextLabelStart) {
+                val label = measureMonth(month)
+                val lastLabelStart = size.width - label.size.width
+                val labelX = (tickX - label.size.width / 2f).coerceAtLeast(0f).coerceAtMost(lastLabelStart)
+                if (labelX >= nextLabelStart) {
+                    drawText(label, color = colors.onSurfaceVariant, topLeft = Offset(labelX, y(0.0) + inset))
+                    nextLabelStart = labelX + label.size.width + labelGap
+                }
+            }
+        }
+        drawLine(colors.outline, Offset(x(0f), y(0.0)), Offset(x(1f), y(0.0)))
+        target?.let {
+            drawLine(colors.outline, Offset(x(0f), y(it)), Offset(x(1f), y(it)),
+                pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f)))
+        }
+        points.zipWithNext().forEach { (a, b) ->
+            drawLine(colors.primary, position(a), position(b), strokeWidth = 2.dp.toPx())
+        }
+        points.forEach { drawCircle(colors.primary, 4.dp.toPx(), position(it)) }
     }
 }
 

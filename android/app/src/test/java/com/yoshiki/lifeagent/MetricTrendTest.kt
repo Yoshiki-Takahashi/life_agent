@@ -1,7 +1,12 @@
 package com.yoshiki.lifeagent
 
 import com.yoshiki.lifeagent.data.*
+import com.yoshiki.lifeagent.ui.ProgressTimeAxis
 import com.yoshiki.lifeagent.ui.metricTrend
+import java.time.Instant
+import java.time.YearMonth
+import java.time.ZoneId
+import java.time.ZoneOffset
 import org.junit.Assert.*
 import org.junit.Test
 
@@ -33,6 +38,43 @@ class MetricTrendTest {
         assertEquals(1, metricTrend(metric.copy(targetValue = 0.0),
             listOf(log("a", "2026-10-25T10:00:00Z", 0.3))).size)
     }
+}
+
+class ProgressTimeAxisTest {
+    @Test fun recordsAndMonthStartsShareTheSameLocalCalendarScale() {
+        val first = timestamp("2026-09-30T15:00:00Z")
+        val last = timestamp("2026-12-15T15:00:00Z")
+        val axis = ProgressTimeAxis(first, last, ZoneId.of("Asia/Tokyo"))
+        val grid = axis.gridMonths(maxLines = 10).toList()
+
+        assertEquals(listOf(YearMonth.of(2026, 10), YearMonth.of(2026, 11), YearMonth.of(2026, 12)),
+            grid.map { it.first })
+        assertEquals(0f, axis.fraction(first), 0f)
+        assertEquals(31f / 92, grid[1].second, 0.00001f)
+        assertEquals(61f / 92, grid[2].second, 0.00001f)
+        assertEquals(76f / 92, axis.fraction(last), 0.00001f)
+    }
+
+    @Test fun aSingleRecordKeepsItsPositionWithinTheMonth() {
+        val record = timestamp("2026-06-16T00:00:00Z")
+        val axis = ProgressTimeAxis(record, record, ZoneOffset.UTC)
+
+        assertEquals(YearMonth.of(2026, 6) to 0f, axis.gridMonths(maxLines = 10).single())
+        assertEquals(0.5f, axis.fraction(record), 0f)
+    }
+
+    @Test fun longHistoriesLimitTheGridToReadableMonthStarts() {
+        val axis = ProgressTimeAxis(timestamp("2010-03-15T00:00:00Z"), timestamp("2026-06-30T00:00:00Z"), ZoneOffset.UTC)
+        val grid = axis.gridMonths(maxLines = 6).toList()
+
+        assertEquals(6, grid.size)
+        assertTrue(grid.zipWithNext().all { (left, right) -> left.second < right.second })
+        grid.forEach { (month, fraction) ->
+            assertEquals(axis.fraction(month.atDay(1).atStartOfDay().toEpochSecond(ZoneOffset.UTC)), fraction, 0f)
+        }
+    }
+
+    private fun timestamp(value: String) = Instant.parse(value).epochSecond
 }
 
 class TypedMetricTrendTest {

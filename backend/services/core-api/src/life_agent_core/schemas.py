@@ -64,7 +64,11 @@ def unique_answers(value: list[GoalAnswer]) -> list[GoalAnswer]:
 GoalAnswers = Annotated[list[GoalAnswer], Field(max_length=8), AfterValidator(unique_answers)]
 
 
-class GoalPreviewRequest(GoalInput):
+class GoalQuestionsRequest(GoalInput):
+    milestone_checklist_enabled: bool = Field(default=False, strict=True)
+
+
+class GoalPreviewRequest(GoalQuestionsRequest):
     metric_types_enabled: bool = Field(default=False, strict=True)
     answers: GoalAnswers = Field(default_factory=list)
 
@@ -111,7 +115,7 @@ class GoalPlan(BaseModel):
     description: str | None
     target_date: date
     metrics: list[MetricDraft] = Field(min_length=1, max_length=10)
-    milestones: list[MilestoneDraft] = Field(min_length=1, max_length=10)
+    milestones: list[MilestoneDraft] = Field(max_length=10)
 
     @model_validator(mode="after")
     def validate_milestone_dates(self) -> "GoalPlan":
@@ -123,6 +127,7 @@ class ReplanReason(BaseModel):
     model_config = ConfigDict(extra="forbid", str_strip_whitespace=True)
 
     reason: str = Field(min_length=1, max_length=2000)
+    milestone_checklist_enabled: bool = Field(default=False, strict=True)
 
 
 class ReplanRequest(ReplanReason):
@@ -173,7 +178,7 @@ class ReplanApplyRequest(BaseModel):
 
 class GoalConfirmRequest(GoalInput):
     metrics: list[MetricDraft] = Field(min_length=1, max_length=10)
-    milestones: list[MilestoneDraft] = Field(min_length=1, max_length=10)
+    milestones: list[MilestoneDraft] = Field(default_factory=list, max_length=10)
 
     @model_validator(mode="after")
     def validate_milestone_dates(self) -> "GoalConfirmRequest":
@@ -208,6 +213,17 @@ class MilestoneResponse(MilestoneDraft):
     created_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+
+class MilestoneCheck(BaseModel):
+    label: str
+    completed: bool
+
+
+class MetricMilestoneChecklist(BaseModel):
+    metric_id: uuid.UUID
+    metric_name: str
+    items: list[MilestoneCheck]
 
 
 class ProgressMetricUpdateRequest(BaseModel):
@@ -271,6 +287,8 @@ class GoalResponse(BaseModel):
     status: GoalStatus
     metrics: list[MetricResponse]
     milestones: list[MilestoneResponse]
+    milestone_checklist: list[MetricMilestoneChecklist] = Field(default_factory=list)
+    achievement_percent: float = Field(default=0, ge=0, le=100)
     progress_logs: list[ProgressLogResponse] = []
     created_at: datetime
     updated_at: datetime
@@ -285,6 +303,7 @@ class GoalSummary(BaseModel):
     status: GoalStatus
     metric_count: int
     milestone_count: int
+    achievement_percent: float = Field(ge=0, le=100)
     created_at: datetime
     updated_at: datetime
 

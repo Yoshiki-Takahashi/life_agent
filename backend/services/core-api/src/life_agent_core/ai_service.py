@@ -54,6 +54,10 @@ class InternalAIClient:
             raise AIUnavailableError("Internal AI result unavailable") from error
 
 
+def ai_goal_context(context: GoalResponse) -> dict[str, Any]:
+    return context.model_dump(mode="json", exclude={"milestone_checklist", "achievement_percent"})
+
+
 class HttpProgressParser:
     def __init__(self, settings: Settings):
         self.client = InternalAIClient(settings)
@@ -61,7 +65,7 @@ class HttpProgressParser:
     def parse(self, context: GoalResponse, body: str) -> ProgressPreview:
         return self.client.generate(
             "progress-preview",
-            {"goal": context.model_dump(mode="json"), "body": body},
+            {"goal": ai_goal_context(context), "body": body},
             ProgressPreview,
         )
 
@@ -71,7 +75,7 @@ class HttpAdvisor:
         self.client = InternalAIClient(settings)
 
     def advise(self, context: GoalResponse) -> Advice:
-        return self.client.generate("advice", {"goal": context.model_dump(mode="json")}, Advice)
+        return self.client.generate("advice", {"goal": ai_goal_context(context)}, Advice)
 
 
 class HttpReplanner:
@@ -81,14 +85,14 @@ class HttpReplanner:
     def questions(self, context: GoalResponse, reason: str) -> GoalQuestions:
         return self.client.generate(
             "replan-questions",
-            {"goal": context.model_dump(mode="json"), "reason": reason},
+            {"goal": ai_goal_context(context), "reason": reason},
             GoalQuestions,
         )
 
     def propose(
         self, context: GoalResponse, reason: str, answers: Sequence[GoalAnswer] = ()
     ) -> ReplanCandidate:
-        payload = {"goal": context.model_dump(mode="json"), "reason": reason}
+        payload = {"goal": ai_goal_context(context), "reason": reason}
         if answers:
             payload["answers"] = [answer.model_dump(mode="json") for answer in answers]
         return self.client.generate("replan", payload, ReplanCandidate)

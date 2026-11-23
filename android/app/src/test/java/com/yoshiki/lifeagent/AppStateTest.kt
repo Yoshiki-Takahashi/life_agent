@@ -259,9 +259,8 @@ class AppStateTest {
         creation.uiState.value.questions.indices.forEach { creation.answerQuestion(it, true) }
         creation.previewGoal()
         advanceUntilIdle()
-        repeat(12) { creation.addMetric(); creation.addMilestone() }
+        repeat(12) { creation.addMetric() }
         assertEquals(10, creation.uiState.value.metrics.size)
-        assertEquals(10, creation.uiState.value.milestones.size)
         val remainingId = creation.uiState.value.metrics[1].id
         creation.updateMetricName(1, "残す項目")
         creation.removeMetric(0)
@@ -274,10 +273,6 @@ class AppStateTest {
             creation.updateMetricUnit(it, "件")
             creation.updateMetricValue(it, "12")
         }
-        creation.uiState.value.milestones.indices.forEach {
-            creation.updateMilestoneTitle(it, "到達点$it")
-            creation.updateMilestoneDate(it, date)
-        }
         repository.failConfirm = true
         val edited = creation.uiState.value.metrics
         creation.confirmGoal()
@@ -287,10 +282,8 @@ class AppStateTest {
         creation.confirmGoal()
         advanceUntilIdle()
         assertEquals((0..8).toList(), repository.confirmed!!.metrics.map { it.position })
-        assertEquals((0..9).toList(), repository.confirmed!!.milestones.map { it.position })
-        repeat(12) { creation.removeMetric(0); creation.removeMilestone(0) }
+        repeat(12) { creation.removeMetric(0) }
         assertEquals(1, creation.uiState.value.metrics.size)
-        assertEquals(1, creation.uiState.value.milestones.size)
     }
 
     @Test fun resetDiscardsDelayedQuestionResults() = runTest(dispatcher) {
@@ -402,8 +395,7 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
     private fun goal(id: String, metricId: String, unit: String) = Goal(id, id, null, date,
         "active", "2026-01-01T00:00:00Z", listOf(Metric(metricId, 12.0, unit, id=metricId)) +
             if (extraMetrics) listOf(Metric("読書時間", 60.0, "分", id="minutes"),
-                Metric("読んだページ", 100.0, "ページ", id="pages")) else emptyList(),
-        List(3) { Milestone("中間目標", date) })
+                Metric("読んだページ", 100.0, "ページ", id="pages")) else emptyList())
     override suspend fun coachMessage(body: String, history: List<CoachMessage>): CoachReply {
         this.history = history
         pendingReply?.let { return it.await() }
@@ -412,7 +404,7 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
     }
     override suspend fun getGoal(goalId: String) = goals.getValue(goalId)
     override suspend fun listGoals() = goals.values.map {
-        GoalSummary(it.id, it.title, date, it.status, 1, 3, it.createdAt, it.updatedAt) }
+        GoalSummary(it.id, it.title, date, it.status, 1, it.createdAt, it.updatedAt) }
     override suspend fun previewProgress(goalId: String, body: String) = ProgressPreview(
         previewUpdates ?: listOf(ProgressMetricUpdatePayload(getGoal(goalId).metrics.first().id, 1.0)), emptyList())
     override suspend fun recordProgress(goalId: String, body: String,
@@ -440,7 +432,7 @@ private class TestGoals(private val extraMetrics: Boolean = false) : GoalReposit
         answers: List<GoalAnswer>): GoalPlan {
         previewRequests += GoalPreviewRequest(title, description, targetDate, answers)
         if (failPreview) { failPreview = false; error("unavailable") }
-        return getGoal("reading").let { GoalPlan(title, description, targetDate, it.metrics, it.milestones) }
+        return GoalPlan(title, description, targetDate, getGoal("reading").metrics)
     }
     override suspend fun confirmGoal(plan: GoalPlan): Goal {
         confirmCalls++

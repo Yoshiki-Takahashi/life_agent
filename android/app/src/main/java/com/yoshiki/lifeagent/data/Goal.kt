@@ -1,6 +1,8 @@
 package com.yoshiki.lifeagent.data
 
 import java.math.BigDecimal
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 data class Goal(
     val id: String,
@@ -10,10 +12,10 @@ data class Goal(
     val status: String,
     val createdAt: String,
     val metrics: List<Metric>,
-    val milestones: List<Milestone>,
     val updatedAt: String = createdAt,
     val progressLogs: List<ProgressLog> = emptyList(),
     val planRevision: Int = 1,
+    val milestoneChecklist: List<MilestoneChecklist> = emptyList(),
 )
 
 data class GoalSummary(
@@ -22,9 +24,9 @@ data class GoalSummary(
     val targetDate: String,
     val status: String,
     val metricCount: Int,
-    val milestoneCount: Int,
     val createdAt: String,
     val updatedAt: String,
+    val achievementPercent: Double? = null,
 )
 
 data class GoalPlan(
@@ -32,7 +34,6 @@ data class GoalPlan(
     val description: String?,
     val targetDate: String,
     val metrics: List<Metric>,
-    val milestones: List<Milestone>,
 )
 
 data class Metric(
@@ -47,10 +48,17 @@ data class Metric(
     val completedItems: List<String> = emptyList(),
 )
 
-data class Milestone(
-    val title: String,
-    val targetDate: String,
-    val position: Int = 0,
+@Serializable
+data class MilestoneChecklist(
+    @SerialName("metric_id") val metricId: String,
+    @SerialName("metric_name") val metricName: String,
+    val items: List<MilestoneChecklistItem>,
+)
+
+@Serializable
+data class MilestoneChecklistItem(
+    val label: String,
+    val completed: Boolean,
 )
 
 data class ProgressLog(

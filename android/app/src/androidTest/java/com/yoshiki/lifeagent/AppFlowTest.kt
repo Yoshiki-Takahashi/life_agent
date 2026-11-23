@@ -76,14 +76,6 @@ class AppFlowTest {
         field("metric-1", "Metric名").performScrollTo().performTextReplacement("読書準備")
         field("metric-1", "チェックリスト").performScrollTo().performClick()
         field("metric-1", "チェック項目（1行に1項目）").performScrollTo().performTextReplacement("本を選ぶ\n本を用意する")
-        repeat(2) { field("milestone-0", "Milestoneを削除").performScrollTo().performClick() }
-        field("milestone-0", "Milestoneを削除").assertIsNotEnabled()
-        compose.onNodeWithText("Milestoneを追加").performScrollTo().performClick()
-        field("milestone-1", "Milestone名").performScrollTo().performTextReplacement("読み方を振り返る")
-        // Milestone dates use the same calendar form as the Goal date.
-        compose.onNode(hasClickAction() and hasAnyAncestor(hasTestTag("milestone-1")) and
-            hasText("年", substring=true)).performScrollTo().performClick()
-        onView(withId(android.R.id.button1)).perform(click())
         runBlocking { assertTrue(api.listGoals().isEmpty()) }
         compose.onNodeWithText("この計画で保存する").performScrollTo().performClick()
         waitFor("保存できませんでした。編集内容を確認して再試行してください")
@@ -91,14 +83,16 @@ class AppFlowTest {
         compose.onNodeWithText("この計画で保存する").performScrollTo().performClick()
         waitFor("概要")
         runBlocking {
-            val saved = api.getGoal(api.listGoals().single().id)
+            val summary = api.listGoals().single()
+            val saved = api.getGoal(summary.id)
             assertEquals(listOf("読んだ時間", "読書準備"), saved.metrics.map { it.name })
             assertEquals(listOf("measurement", "checklist"), saved.metrics.map { it.kind })
             assertEquals(listOf("本を選ぶ", "本を用意する"), saved.metrics[1].checklistItems)
             assertEquals(60.0, saved.metrics.first().targetValue, 0.0)
-            assertEquals(2, saved.milestones.size)
-            assertEquals("読み方を振り返る", saved.milestones.last().title)
+            assertEquals(0.0, requireNotNull(summary.achievementPercent), 0.0)
         }
+        compose.onNodeWithText("本を選ぶ").performScrollTo().assertIsOff()
+        compose.onNodeWithText("本を用意する").performScrollTo().assertIsOff()
     }
 
     @Test fun replanCardsRejectRestoreAndSaveOnlyRemainingChanges() {
@@ -122,21 +116,21 @@ class AppFlowTest {
         waitFor(goal.title)
         compose.onNodeWithText(goal.title).performClick()
         waitFor("概要")
-        compose.onNodeWithText(goal.milestones.first().title).performScrollTo().assertIsDisplayed()
+        compose.onNodeWithText("マイルストーン").performScrollTo().assertIsDisplayed()
         compose.onNodeWithText("再計画").performClick()
-        compose.onNodeWithText(goal.milestones.first().title).assertDoesNotExist()
+        compose.onNodeWithText("マイルストーン").assertDoesNotExist()
         compose.onNodeWithText("見直し理由").performScrollTo().performTextReplacement("無理なく続けたい")
         compose.onNodeWithText("質問へ進む").performScrollTo().performClick()
         waitFor("見直しのための質問")
         compose.onNodeWithText("回答から再計画候補を作る").performScrollTo().assertIsNotEnabled()
         requireNotNull(questions).questions.indices.forEach { index ->
-            field("question-$index", "はい").performScrollTo().performClick()
+            field("question-$index", if (index == 2) "いいえ" else "はい").performScrollTo().performClick()
         }
         compose.onNodeWithText("回答から再計画候補を作る").performScrollTo().performClick()
         waitFor("変更候補を確認")
         compose.onNodeWithText("メトリクス（測定項目）").performScrollTo().assertIsDisplayed()
-        compose.onNodeWithText("マイルストン（中間目標）").performScrollTo().assertIsDisplayed()
         val changes = requireNotNull(proposal).diff
+        assertTrue(changes.none { it.targetType == "milestone" })
         compose.onNode(hasText("削除") and hasAnyAncestor(hasTestTag("replan-metric:1")))
             .performScrollTo().assertIsDisplayed()
         compose.onNode(hasText("変更") and hasAnyAncestor(hasTestTag("replan-metric:0")))
@@ -161,7 +155,7 @@ class AppFlowTest {
         runBlocking {
             val saved = api.getGoal(goal.id)
             assertEquals(goal.metrics, saved.metrics)
-            assertNotEquals(goal.milestones, saved.milestones)
+            assertEquals(goal.milestoneChecklist, saved.milestoneChecklist)
             assertEquals(goal.planRevision + 1, saved.planRevision)
         }
         compose.onNodeWithText("目標一覧").performClick()
@@ -181,7 +175,7 @@ class AppFlowTest {
         val date = LocalDate.now().plusDays(90).toString()
         val goal = runBlocking { api.confirmGoal(GoalPlan("読書の実績を残す", null, date,
             listOf(Metric("読了冊数", 12.0, "冊"), Metric("読書時間", 60.0, "分"),
-                Metric("読んだページ", 100.0, "ページ")), listOf(Milestone("振り返る", date)))) }
+                Metric("読んだページ", 100.0, "ページ")))) }
         compose.setContent { LifeAgentTheme { LifeAgentApp(api, owner, {},
             Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
         waitFor(goal.title)

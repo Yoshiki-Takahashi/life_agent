@@ -55,6 +55,38 @@ def apply(client, goal, proposal, excluded=()):
     )
 
 
+def test_checklist_replan_recomputes_achievement_for_remaining_metrics(client, create_goal):
+    goal = create_goal(extra_metric=True)
+    path = f"/api/v1/goals/{goal['id']}"
+    progress = client.post(
+        path + "/progress",
+        json=dict(
+            client_request_id="reading-progress",
+            metric_updates=[dict(metric_id=goal["metrics"][0]["id"], value=5)],
+        ),
+    )
+    assert progress.status_code == 200, progress.text
+    assert progress.json()["achievement_percent"] == 12.5
+
+    preview = client.post(
+        path + "/replan/preview",
+        json=dict(reason="負担を減らしたい", milestone_checklist_enabled=True),
+    )
+    assert preview.status_code == 200, preview.text
+    proposal = preview.json()
+    assert proposal["proposed_plan"]["milestones"] == []
+    assert all(change["target_type"] != "milestone" for change in proposal["diff"])
+    applied = apply(client, goal, proposal)
+    assert applied.status_code == 200, applied.text
+    saved = applied.json()
+    assert saved["milestones"] == goal["milestones"]  # Legacy clients still read this plan.
+    assert [group["metric_id"] for group in saved["milestone_checklist"]] == [
+        goal["metrics"][0]["id"]
+    ]
+    assert saved["achievement_percent"] == 50
+    assert client.get("/api/v1/goals").json()[0]["achievement_percent"] == 50
+
+
 def test_actual_diff_and_partial_rejection_preserve_plan_and_history(client, create_goal):
     goal = create_goal(extra_metric=True)
     path = f"/api/v1/goals/{goal['id']}"

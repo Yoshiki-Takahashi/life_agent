@@ -28,7 +28,7 @@ class MetricTypesFlowTest {
             Metric("ジム", 10.0, "日", kind = "occurrence"),
             Metric("体脂肪率", 15.0, "%", kind = "measurement"),
             Metric("旅行準備", 2.0, "項目", kind = "checklist", checklistItems = listOf("日付を決める", "宿を予約する")),
-        ), listOf(Milestone("振り返る", deadline)))) }
+        ))) }
         compose.setContent { LifeAgentTheme { LifeAgentApp(api, owner, {},
             Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
         waitFor("種別テスト")
@@ -67,7 +67,21 @@ class MetricTypesFlowTest {
         compose.onNodeWithText("OK").performClick()
         compose.onNodeWithText("コーチに話す").assertIsDisplayed()
         compose.waitUntil(10000) { runBlocking { api.getGoal(goal.id).metrics[2].currentValue == 20.0 } }
-        runBlocking { assertEquals(2, api.getGoal(goal.id).progressLogs.size) }
+        val saved = runBlocking { api.getGoal(goal.id) }
+        assertEquals(2, saved.progressLogs.size)
+        compose.onNodeWithText("目標一覧").performClick()
+        waitFor("達成率 25%")
+        compose.onNodeWithText("達成率 25%").assertIsDisplayed()
+        compose.onNodeWithText("種別テスト").performClick()
+        waitFor("マイルストーン")
+        val measurement = saved.milestoneChecklist.single { it.metricId == goal.metrics[2].id }
+        assertTrue(measurement.items.any { it.completed })
+        assertTrue(measurement.items.any { !it.completed })
+        compose.onNodeWithText(measurement.items.first { it.completed }.label)
+            .performScrollTo().assertIsOn().assertHasNoClickAction()
+        compose.onNodeWithText(measurement.items.last { !it.completed }.label).performScrollTo().assertIsOff()
+        compose.onNodeWithText("日付を決める").performScrollTo().assertIsOn()
+        compose.onNodeWithText("宿を予約する").performScrollTo().assertIsOff()
     }
 
     @Test fun realAiPlanCanBeEditedSavedAndReopened() {

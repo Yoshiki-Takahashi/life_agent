@@ -1,6 +1,5 @@
 package com.yoshiki.lifeagent.ui
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -24,6 +23,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -32,6 +34,8 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import com.yoshiki.lifeagent.data.GoalRepository
 import com.yoshiki.lifeagent.data.GoalSummary
+import java.math.BigDecimal
+import java.math.RoundingMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -154,19 +158,38 @@ private fun CenteredContent(
 
 @Composable
 private fun GoalSummaryCard(goal: GoalSummary, onClick: () -> Unit) {
+    val colors = MaterialTheme.colorScheme
+    val fraction = ((goal.achievementPercent ?: 0.0) / 100).toFloat().coerceIn(0f, 1f)
+    val fillColor = lerp(colors.surfaceContainer, colors.primary, 0.20f)
     Card(
-        modifier = Modifier.fillMaxWidth().clickable(onClick = onClick),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+        onClick = onClick,
+        modifier = Modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(containerColor = colors.surfaceContainer, contentColor = colors.onSurface),
     ) {
-        Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                Text(goal.title, style = MaterialTheme.typography.titleLarge)
-                Text(statusLabel(goal.status), color = MaterialTheme.colorScheme.primary)
+        Column(
+            Modifier.fillMaxWidth().drawBehind {
+                drawRect(color = fillColor, size = Size(size.width * fraction, size.height))
+            }.padding(18.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                Text(goal.title, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                Text(statusLabel(goal.status), style = MaterialTheme.typography.labelLarge)
             }
             Text("期限  ${goal.targetDate}")
-            Text("Metric ${goal.metricCount}件  ・  Milestone ${goal.milestoneCount}件")
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                Text("Metric ${goal.metricCount}件")
+                goal.achievementPercent?.let {
+                    Text(achievementLabel(it), style = MaterialTheme.typography.labelLarge)
+                }
+            }
         }
     }
+}
+
+private fun achievementLabel(percent: Double): String {
+    val display = BigDecimal.valueOf(percent).setScale(1, RoundingMode.DOWN).stripTrailingZeros()
+    return "達成率 ${display.toPlainString()}%"
 }
 
 private fun statusLabel(status: String) = if (status == "active") "進行中" else if (status == "completed") "完了済み" else status

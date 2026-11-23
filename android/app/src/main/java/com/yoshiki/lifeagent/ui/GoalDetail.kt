@@ -12,10 +12,15 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.IconButton
 import androidx.compose.ui.platform.testTag
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.role
 import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.toggleableState
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
@@ -509,32 +514,7 @@ private fun GoalDetail(
                 Text(goal.targetDate, style = MaterialTheme.typography.titleLarge)
             }
         }
-        Text("達成を測るMetric", style = MaterialTheme.typography.titleLarge)
-        goal.metrics.sortedBy { it.position }.forEach { metric ->
-            Card(Modifier.fillMaxWidth()) {
-                Row(
-                    Modifier.fillMaxWidth().padding(18.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(metric.name, style = MaterialTheme.typography.titleMedium)
-                    Text(
-                        if (metric.kind == "measurement" && goal.progressLogs.none { log -> log.metricUpdates.any { it.metricId == metric.id } }) "未測定 / 目標 ${formatNumber(metric.targetValue)} ${metric.unit}"
-                        else "${formatNumber(metric.currentValue)} / ${formatNumber(metric.targetValue)} ${metric.unit}",
-                        color = MaterialTheme.colorScheme.primary,
-                    )
-                }
-            }
-        }
-        Text("達成までのマイルストーン", style = MaterialTheme.typography.titleLarge)
-        goal.milestones.sortedBy { it.position }.forEach { milestone ->
-            Card(Modifier.fillMaxWidth()) {
-                Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                    Text(milestone.title, style = MaterialTheme.typography.titleMedium)
-                    Text(milestone.targetDate)
-                }
-            }
-        }
+        GoalMilestones(goal)
         Text("作成日時  ${goal.createdAt}", style = MaterialTheme.typography.bodySmall)
     }
     if (selectedTab == 1) {
@@ -588,6 +568,42 @@ private fun GoalDetail(
 }
 
 @Composable
+private fun GoalMilestones(goal: Goal) {
+    Text("マイルストーン", style = MaterialTheme.typography.titleLarge)
+    val checklists = goal.milestoneChecklist.associateBy { it.metricId }
+    goal.metrics.sortedBy { it.position }.forEach { metric ->
+        val checklist = checklists[metric.id]
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(checklist?.metricName ?: metric.name, style = MaterialTheme.typography.titleMedium)
+                val target = "${formatNumber(metric.targetValue)} ${metric.unit}"
+                val current = if (metric.kind == "measurement" && goal.progressLogs.none { log ->
+                        log.metricUpdates.any { it.metricId == metric.id }
+                    }) {
+                    "未測定 / 目標 $target"
+                } else {
+                    "${formatNumber(metric.currentValue)} / $target"
+                }
+                Text(current, color = MaterialTheme.colorScheme.primary)
+                checklist?.items?.forEach { item ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth().semantics(mergeDescendants = true) {
+                            role = Role.Checkbox
+                            toggleableState = ToggleableState(item.completed)
+                        },
+                        horizontalArrangement = Arrangement.spacedBy(12.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = item.completed, onCheckedChange = null)
+                        Text(item.label)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
 private fun ReplanEntry(
     state: GoalDetailUiState,
     onReplanReasonChange: (String) -> Unit,
@@ -626,7 +642,7 @@ private fun ReplanEntry(
             Column(Modifier.padding(18.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 Text("変更候補を確認", style = MaterialTheme.typography.titleMedium)
                 Text("まだ保存されていません。変更内容を確認してから適用してください。")
-                listOf("goal" to "目標", "metric" to "メトリクス（測定項目）", "milestone" to "マイルストン（中間目標）").forEach { (type, heading) ->
+                listOf("goal" to "目標", "metric" to "メトリクス（測定項目）").forEach { (type, heading) ->
                     val items = proposal.diff.filter { it.targetType == type }
                     if (items.isNotEmpty()) Text(heading, style = MaterialTheme.typography.titleMedium)
                     items.forEach { item ->

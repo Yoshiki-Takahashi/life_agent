@@ -712,7 +712,7 @@ private fun ProgressEntry(
                 modifier = Modifier.fillMaxWidth(),
             )
             state.metricProgress.forEachIndexed { index, item ->
-                MetricValueField(item.metric(), item.value, !state.isSavingProgress,
+                MetricValueField(item.metric(), item.value, !state.isSavingProgress, chooseActivityDate = true,
                     onChange = { onMetricProgressChange(index, it) })
             }
             state.progressError?.let { Text(it, color = MaterialTheme.colorScheme.error) }

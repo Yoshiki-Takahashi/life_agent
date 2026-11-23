@@ -1,6 +1,7 @@
 package com.yoshiki.lifeagent.data
 
 import java.math.BigDecimal
+import java.time.LocalDate
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -126,16 +127,19 @@ fun metricInput(metric: Metric, value: String): MetricProgressInput? {
         require(items.distinct().size == items.size && metric.checklistItems.containsAll(items))
         return MetricProgressInput(metric.id, items.size.toDouble(), items, expectedCompletedItems = metric.completedItems, kind = metric.kind)
     }
+    if (metric.kind == "occurrence") {
+        val date = if (value.toBigDecimalOrNull()?.compareTo(BigDecimal.ONE) == 0) LocalDate.now()
+            else LocalDate.parse(value)
+        return MetricProgressInput(metric.id, 1.0, activityDate = date.toString(), kind = metric.kind)
+    }
     val number = value.toBigDecimalOrNull() ?: error("数値を入力してください")
     require(number >= BigDecimal.ZERO && number <= BigDecimal("1000000000") && number.stripTrailingZeros().scale() <= 2)
     when (metric.kind) {
         "cumulative" -> require(validProgressValue(value))
-        "occurrence" -> require(number.compareTo(BigDecimal.ONE) == 0)
         "measurement" -> Unit
         else -> error("対応していない種別です")
     }
     return MetricProgressInput(metric.id, number.toDouble(),
-        activityDate = if (metric.kind == "occurrence") java.time.LocalDate.now().toString() else null,
         kind = metric.kind.takeUnless { it == "cumulative" })
 }
 

@@ -1,6 +1,5 @@
 package com.yoshiki.lifeagent.ui
 
-import android.app.DatePickerDialog
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -25,14 +24,12 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
@@ -50,7 +47,6 @@ import com.yoshiki.lifeagent.data.Metric
 import com.yoshiki.lifeagent.data.metricKinds
 import com.yoshiki.lifeagent.data.validProgressValue
 import java.time.LocalDate
-import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.UUID
 import kotlinx.coroutines.CancellationException
@@ -301,28 +297,19 @@ class GoalViewModel(private val repository: GoalRepository) : ViewModel() {
 
 private fun parseDate(value: String): LocalDate? = runCatching { LocalDate.parse(value) }.getOrNull()
 
-/** LocalDate is converted in the device zone; dates never shift through UTC. */
 @Composable
 private fun GoalDateField(label: String, value: String, enabled: Boolean,
     onChange: (String) -> Unit) {
-    val context = LocalContext.current
-    var showPicker by remember { mutableStateOf(false) }
+    val date = parseDate(value)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(label, style = MaterialTheme.typography.labelLarge)
-        OutlinedButton(onClick = { showPicker = true }, enabled = enabled, modifier = Modifier.fillMaxWidth()) {
-            Text(parseDate(value)?.format(DateTimeFormatter.ofPattern("yyyy年M月d日")) ?: "${label}を選ぶ")
-        }
-    }
-    if (showPicker) DisposableEffect(Unit) {
-        val min = LocalDate.now()
-        val initial = (parseDate(value) ?: min).coerceAtLeast(min)
-        val dialog = DatePickerDialog(context, { _, year, month, day ->
-            onChange(LocalDate.of(year, month + 1, day).toString())
-        }, initial.year, initial.monthValue - 1, initial.dayOfMonth)
-        dialog.datePicker.minDate = min.atStartOfDay(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        dialog.setOnDismissListener { showPicker = false }
-        dialog.show()
-        onDispose { dialog.dismiss() }
+        CalendarDateButton(
+            label = date?.format(DateTimeFormatter.ofPattern("yyyy年M月d日")) ?: "${label}を選ぶ",
+            selectedDate = date,
+            enabled = enabled,
+            allowPastDates = false,
+            onDateSelected = { onChange(it.toString()) },
+        )
     }
 }
 

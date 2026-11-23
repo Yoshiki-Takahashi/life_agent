@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.input.KeyboardType
 import com.yoshiki.lifeagent.data.Metric
 import com.yoshiki.lifeagent.data.metricNumber
@@ -21,16 +22,37 @@ import com.yoshiki.lifeagent.data.metricSavedValue
 import com.yoshiki.lifeagent.data.selectedItems
 import kotlinx.serialization.json.Json
 import java.time.LocalDate
+import java.time.format.DateTimeFormatter
 
 @Composable
-fun MetricValueField(metric: Metric, value: String, enabled: Boolean, onChange: (String) -> Unit) {
+fun MetricValueField(
+    metric: Metric,
+    value: String,
+    enabled: Boolean,
+    chooseActivityDate: Boolean = false,
+    onChange: (String) -> Unit,
+) {
     Column {
         Text("${metric.name}・${metricKinds[metric.kind] ?: metric.kind}")
         when (metric.kind) {
-            "occurrence" -> Row(Modifier.fillMaxWidth().toggleable(value == "1", enabled = enabled,
-                role = Role.Checkbox, onValueChange = { onChange(if (it) "1" else "") })) {
-                Checkbox(value == "1", null, enabled = enabled)
-                Text("今日（${LocalDate.now()}）実行した")
+            "occurrence" -> if (chooseActivityDate) {
+                val selectedDate = runCatching { LocalDate.parse(value) }.getOrNull()
+                val date = selectedDate ?: LocalDate.now()
+                val formattedDate = date.format(DateTimeFormatter.ofPattern("yyyy年M月d日"))
+                CalendarDateButton(
+                    label = if (selectedDate == null) "実行日を選ぶ（今日：$formattedDate）" else formattedDate,
+                    selectedDate = selectedDate,
+                    enabled = enabled,
+                    modifier = Modifier.testTag("activity-date-${metric.id}"),
+                    allowFutureDates = false,
+                    onDateSelected = { onChange(it.toString()) },
+                )
+            } else {
+                Row(Modifier.fillMaxWidth().toggleable(value == "1", enabled = enabled,
+                    role = Role.Checkbox, onValueChange = { onChange(if (it) "1" else "") })) {
+                    Checkbox(value == "1", null, enabled = enabled)
+                    Text("今日（${LocalDate.now()}）実行した")
+                }
             }
             "checklist" -> {
                 val selected = if (value.isBlank()) metric.completedItems else selectedItems(value)

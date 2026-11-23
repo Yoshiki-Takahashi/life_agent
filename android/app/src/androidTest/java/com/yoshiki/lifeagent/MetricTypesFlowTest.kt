@@ -1,7 +1,16 @@
 package com.yoshiki.lifeagent
 
+import android.view.View
+import android.widget.DatePicker
 import androidx.compose.ui.test.*
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.test.espresso.Espresso.closeSoftKeyboard
+import androidx.test.espresso.Espresso.onView
+import androidx.test.espresso.UiController
+import androidx.test.espresso.ViewAction
+import androidx.test.espresso.action.ViewActions.click
+import androidx.test.espresso.matcher.ViewMatchers.isAssignableFrom
+import androidx.test.espresso.matcher.ViewMatchers.withId
 import androidx.test.platform.app.InstrumentationRegistry
 import com.yoshiki.lifeagent.data.*
 import com.yoshiki.lifeagent.ui.LifeAgentApp
@@ -22,12 +31,14 @@ class MetricTypesFlowTest {
         val owner = "types-${UUID.randomUUID()}"
         val api = Network.createGoalRepository("http://127.0.0.1:18007/") { owner }
         val today = LocalDate.now()
+        val activityDate = today.minusMonths(1).withDayOfMonth(15)
         val deadline = today.plusDays(90).toString()
         val goal = runBlocking { api.confirmGoal(GoalPlan("種別テスト", null, deadline, listOf(
             Metric("ページ", 100.0, "ページ"),
             Metric("ジム", 10.0, "日", kind = "occurrence"),
             Metric("体脂肪率", 15.0, "%", kind = "measurement"),
             Metric("旅行準備", 2.0, "項目", kind = "checklist", checklistItems = listOf("日付を決める", "宿を予約する")),
+            Metric("散歩", 10.0, "日", kind = "occurrence"),
         ))) }
         compose.setContent { LifeAgentTheme { LifeAgentApp(api, owner, {},
             Network.createFeedbackRepository("http://127.0.0.1:18007/") { owner }) } }
@@ -37,18 +48,39 @@ class MetricTypesFlowTest {
         compose.onNodeWithText("記録", useUnmergedTree = true).performClick()
         compose.onNodeWithText("進捗メモ").performTextReplacement("今日は読書とジム、測定と旅行準備をした")
         compose.onNodeWithText("ページ の今回値").performScrollTo().performTextReplacement("2")
-        compose.onNodeWithText("今日（$today）実行した").performScrollTo().performClick()
+        closeSoftKeyboard()
+        val activityDateField = compose.onNodeWithTag("activity-date-${goal.metrics[1].id}")
+        activityDateField.performScrollTo().performClick()
+        val picker = onView(isAssignableFrom(DatePicker::class.java))
+        picker.check { view, error ->
+            error?.let { throw it }
+            val datePicker = view as DatePicker
+            assertEquals(today, LocalDate.of(datePicker.year, datePicker.month + 1, datePicker.dayOfMonth))
+        }
+        picker.perform(object : ViewAction {
+            override fun getConstraints() = isAssignableFrom(DatePicker::class.java)
+            override fun getDescription() = "Select $activityDate in the calendar"
+            override fun perform(uiController: UiController, view: View) {
+                (view as DatePicker).updateDate(activityDate.year, activityDate.monthValue - 1, activityDate.dayOfMonth)
+                uiController.loopMainThreadUntilIdle()
+            }
+        })
+        onView(withId(android.R.id.button1)).perform(click())
         compose.onNodeWithText("体脂肪率 の測定値").performScrollTo().performTextReplacement("25")
         compose.onNodeWithText("日付を決める").performScrollTo().performClick()
         compose.onNodeWithText("進捗を保存").performScrollTo().performClick()
         waitFor("進捗を保存しました")
         runBlocking {
             val saved = api.getGoal(goal.id)
-            assertEquals(listOf(2.0, 1.0, 25.0, 1.0), saved.metrics.map { it.currentValue })
+            assertEquals(listOf(2.0, 1.0, 25.0, 1.0, 0.0), saved.metrics.map { it.currentValue })
             assertEquals(listOf("日付を決める"), saved.metrics[3].completedItems)
+            val recordedActivity = saved.progressLogs.single().metricUpdates.single { it.kind == "occurrence" }
+            assertEquals(goal.metrics[1].id, recordedActivity.metricId)
+            assertEquals(activityDate.toString(), recordedActivity.activityDate)
         }
         compose.onNodeWithText("進捗", useUnmergedTree = true).performClick()
-        compose.onNodeWithContentDescription("$today 実行済み", useUnmergedTree = true)
+        compose.onAllNodesWithText("前月")[0].performScrollTo().performClick()
+        compose.onNodeWithContentDescription("$activityDate 実行済み", useUnmergedTree = true)
             .performScrollTo().assertIsDisplayed()
         screenshot("issue47-calendar.png")
         compose.onNodeWithText("縦軸: 測定値（%）、横軸: 記録日時").performScrollTo().assertIsDisplayed()
@@ -70,8 +102,8 @@ class MetricTypesFlowTest {
         val saved = runBlocking { api.getGoal(goal.id) }
         assertEquals(2, saved.progressLogs.size)
         compose.onNodeWithText("目標一覧").performClick()
-        waitFor("達成率 25%")
-        compose.onNodeWithText("達成率 25%").assertIsDisplayed()
+        waitFor("達成率 20%")
+        compose.onNodeWithText("達成率 20%").assertIsDisplayed()
         compose.onNodeWithText("種別テスト").performClick()
         waitFor("マイルストーン")
         val measurement = saved.milestoneChecklist.single { it.metricId == goal.metrics[2].id }

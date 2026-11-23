@@ -519,8 +519,6 @@ private fun GoalDetail(
     }
     if (selectedTab == 1) {
         TextButton(onClick = onReview) { Text("振り返り・通知設定") }
-        Text("進捗の推移", style = MaterialTheme.typography.titleLarge)
-        Text("種別に合う保存済みの記録を表示します。未記録期間の活動は推定しません。")
         goal.metrics.sortedBy { it.position }.forEach { metric ->
             MetricTrendCard(metric, goal.progressLogs)
         }
